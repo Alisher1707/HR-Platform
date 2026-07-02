@@ -84,7 +84,12 @@
       "Bash(docker exec hr_platform_db psql -U postgres -d hr_platform -c \"ALTER TABLE employees ADD COLUMN IF NOT EXISTS employee_number VARCHAR(50), ADD COLUMN IF NOT EXISTS position VARCHAR(100), ADD COLUMN IF NOT EXISTS telegram_username VARCHAR(100);\")",
       "Bash(docker exec hr_platform_db psql -U postgres -d hr_platform -c \"CREATE UNIQUE INDEX IF NOT EXISTS idx_employees_employee_number ON employees(employee_number) WHERE employee_number IS NOT NULL; CREATE INDEX IF NOT EXISTS idx_employees_telegram ON employees(telegram_username) WHERE telegram_username IS NOT NULL;\")",
       "Bash(curl -X POST http://localhost:5000/api/v1/auth/login -H 'Content-Type: application/json' -d '{\"\"email\"\":\"\"admin@hrplatform.com\"\",\"\"password\"\":\"\"Admin123\"\"}' -s)",
-      "Bash(curl -s http://localhost:5173/assets/index-CXZ5FVr1.css)"
+      "Bash(curl -s http://localhost:5173/assets/index-CXZ5FVr1.css)",
+      "Bash(tree -L 3 -I 'node_modules|dist|build' ./HR-Platform/apps)",
+      "Bash(docker logs hr_platform_frontend --tail 20)",
+      "Bash(curl -X POST http://localhost:5000/api/v1/auth/login -H 'Content-Type: application/json' -d '{\"\"email\"\":\"\"admin@hrplatform.com\"\",\"\"password\"\":\"\"Admin123!@#\"\"}' -s)",
+      "Bash(curl -X POST http://localhost:5000/api/v1/auth/login -H 'Content-Type: application/json' -d \"{\"\"email\"\":\"\"admin@hrplatform.com\"\",\"\"password\"\":\"\"Admin123!@#\"\"}\" -s)",
+      "Bash(curl -X POST http://localhost:5000/api/v1/auth/login -H \"Content-Type: application/json\" -d '{\"\"email\"\":\"\"admin@hrplatform.com\"\",\"\"password\"\":\"\"Admin123\"\"}' -s)"
     ],
     "deny": [],
     "ask": []
