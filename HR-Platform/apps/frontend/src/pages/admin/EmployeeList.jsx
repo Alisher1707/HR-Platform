@@ -183,9 +183,8 @@ export function EmployeeList() {
                     <th>Filial</th>
                     <th>Bo'lim</th>
                     <th>Lavozim</th>
-                    <th>Xodim raqami</th>
+                    <th>Tajriba</th>
                     <th>Holat</th>
-                    <th>Oylik</th>
                     <th>Telefon</th>
                     <th>Telegram</th>
                     <th>Manzil</th>
@@ -200,13 +199,12 @@ export function EmployeeList() {
                       <td>{emp.branch ? emp.branch.charAt(0).toUpperCase() + emp.branch.slice(1) : 'Yo\'q'}</td>
                       <td>{emp.department ? emp.department.charAt(0).toUpperCase() + emp.department.slice(1) : 'Yo\'q'}</td>
                       <td>{emp.position ? emp.position.charAt(0).toUpperCase() + emp.position.slice(1) : 'Yo\'q'}</td>
-                      <td>{emp.employee_number || 'Yo\'q'}</td>
+                      <td>{emp.experience || 0} yil</td>
                       <td>
                         <span className={`status-badge status-${emp.status?.toLowerCase().replace(/['\s]/g, '')}`}>
                           {emp.status || 'Faol'}
                         </span>
                       </td>
-                      <td>{emp.salary_amount ? `${emp.salary_amount.toLocaleString()} UZS` : 'Yo\'q'}</td>
                       <td>{emp.phone || 'Yo\'q'}</td>
                       <td>
                         {emp.telegram_username ? (
