@@ -134,9 +134,16 @@ export function KanbanPage() {
 
   // Apply filters in memory
   const filteredApps = applications.filter((app) => {
-    const fullName = `${app.firstName} ${app.lastName}`.toLowerCase();
-    const searchMatch = fullName.includes(search.toLowerCase()) || 
-      (app.phone && app.phone.includes(search));
+    const searchLower = search.toLowerCase();
+    const fullName = `${app.firstName || ''} ${app.lastName || ''}`.toLowerCase();
+    const position = (app.position || app.employeePosition || '').toLowerCase();
+    const phone = app.phone || '';
+
+    const searchMatch = !search ||
+      fullName.includes(searchLower) ||
+      position.includes(searchLower) ||
+      phone.includes(search);
+
     const positionMatch = !selectedPosition || app.position === selectedPosition;
     return searchMatch && positionMatch;
   });
