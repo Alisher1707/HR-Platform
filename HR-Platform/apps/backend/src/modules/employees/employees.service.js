@@ -20,9 +20,9 @@ export async function createEmployee(employeeData, createdBy) {
       `INSERT INTO employees (
         employee_number, first_name, last_name, branch, department, position,
         join_date, birth_date, pnfl, phone, email, address,
-        salary_type, salary_amount, status, kpi_template, experience, created_by
+        salary_type, salary_amount, status, kpi_template, experience, telegram_username, created_by
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
        RETURNING *`,
       [
         employeeData.employeeNumber || null,
@@ -42,6 +42,7 @@ export async function createEmployee(employeeData, createdBy) {
         employeeData.status || 'Faol',
         employeeData.kpiTemplate || null,
         employeeData.experience || 0,
+        employeeData.telegramUsername || null,
         createdBy,
       ]
     );
@@ -159,6 +160,7 @@ export async function getAllEmployees(filters = {}, pagination = {}) {
       salary_amount: row.salary_amount ? parseFloat(row.salary_amount) : null,
       status: row.status,
       kpi_template: row.kpi_template,
+      telegram_username: row.telegram_username,
       age: row.age,
       experience: row.experience,
       created_at: row.created_at,
@@ -222,6 +224,7 @@ export async function getEmployeeById(id) {
     salary_amount: row.salary_amount ? parseFloat(row.salary_amount) : null,
     status: row.status,
     kpi_template: row.kpi_template,
+    telegram_username: row.telegram_username,
     age: row.age,
     experience: row.experience,
     created_at: row.created_at,
@@ -242,7 +245,7 @@ export async function updateEmployee(id, updates) {
   const allowedFields = [
     'employee_number', 'first_name', 'last_name', 'branch', 'department', 'position',
     'join_date', 'birth_date', 'pnfl', 'phone', 'email', 'address',
-    'salary_type', 'salary_amount', 'status', 'kpi_template', 'experience'
+    'salary_type', 'salary_amount', 'status', 'kpi_template', 'experience', 'telegram_username'
   ];
   const setClauses = [];
   const params = [];

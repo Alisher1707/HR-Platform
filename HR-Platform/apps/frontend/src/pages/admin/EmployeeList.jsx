@@ -178,7 +178,8 @@ export function EmployeeList() {
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Ism Familiya</th>
+                    <th>Ism</th>
+                    <th>Familiya</th>
                     <th>Filial</th>
                     <th>Bo'lim</th>
                     <th>Lavozim</th>
@@ -186,6 +187,7 @@ export function EmployeeList() {
                     <th>Holat</th>
                     <th>Oylik</th>
                     <th>Telefon</th>
+                    <th>Telegram</th>
                     <th>Manzil</th>
                     <th style={{ textAlign: 'right' }}>Amallar</th>
                   </tr>
@@ -193,9 +195,8 @@ export function EmployeeList() {
                 <tbody>
                   {employees.map((emp) => (
                     <tr key={emp.id}>
-                      <td>
-                        <div className="font-semibold">{emp.first_name} {emp.last_name}</div>
-                      </td>
+                      <td><div className="font-semibold">{emp.first_name}</div></td>
+                      <td><div className="font-semibold">{emp.last_name}</div></td>
                       <td>{emp.branch ? emp.branch.charAt(0).toUpperCase() + emp.branch.slice(1) : 'Yo\'q'}</td>
                       <td>{emp.department ? emp.department.charAt(0).toUpperCase() + emp.department.slice(1) : 'Yo\'q'}</td>
                       <td>{emp.position ? emp.position.charAt(0).toUpperCase() + emp.position.slice(1) : 'Yo\'q'}</td>
@@ -207,6 +208,15 @@ export function EmployeeList() {
                       </td>
                       <td>{emp.salary_amount ? `${emp.salary_amount.toLocaleString()} UZS` : 'Yo\'q'}</td>
                       <td>{emp.phone || 'Yo\'q'}</td>
+                      <td>
+                        {emp.telegram_username ? (
+                          <span style={{ color: 'var(--accent)', fontWeight: '500' }}>
+                            {emp.telegram_username}
+                          </span>
+                        ) : (
+                          'Yo\'q'
+                        )}
+                      </td>
                       <td>
                         <div className="truncate" style={{ maxWidth: '150px' }}>
                           {emp.address || 'Yo\'q'}

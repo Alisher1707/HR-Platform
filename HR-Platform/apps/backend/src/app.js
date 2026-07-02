@@ -6,6 +6,7 @@ import { config, validateEnv } from './config/env.js';
 import { testConnection } from './config/database.js';
 import { generalLimiter } from './shared/middleware/rateLimiter.js';
 import { errorHandler, notFoundHandler } from './shared/middleware/errorHandler.js';
+import { startAutoPromotionCron } from './services/autoPromotionService.js';
 
 // Import routes
 import authRoutes from './modules/auth/auth.routes.js';
@@ -119,6 +120,9 @@ async function startServer() {
     // Test database connection
     await testConnection();
 
+    // Start auto-promotion cron job
+    startAutoPromotionCron();
+
     // Start listening
     app.listen(config.port, () => {
       console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -129,6 +133,7 @@ async function startServer() {
       console.log(`🔗 API Endpoint: http://localhost:${config.port}${API_PREFIX}`);
       console.log(`💚 Health Check: http://localhost:${config.port}/health`);
       console.log(`🎨 Frontend URL: ${config.frontendUrl}`);
+      console.log(`⏰ Auto-Promotion: Active (every 5 minutes)`);
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
     });
   } catch (error) {

@@ -15,7 +15,8 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
 
   const [formData, setFormData] = useState({
     employeeNumber: '27',
-    fullName: '',
+    firstName: '',
+    lastName: '',
     branch: '',
     department: '',
     position: '',
@@ -24,6 +25,9 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
     pnfl: '',
     phone: '',
     email: '',
+    address: '',
+    experience: '',
+    telegramUsername: '',
     salaryType: 'Oylik',
     salaryAmount: '',
     status: 'Faol',
@@ -92,7 +96,8 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
 
       setFormData({
         employeeNumber: employee.employee_number || '27',
-        fullName: `${employee.first_name || ''} ${employee.last_name || ''}`.trim(),
+        firstName: employee.first_name || '',
+        lastName: employee.last_name || '',
         branch: employee.branch || '',
         department: employee.department || '',
         position: employee.position || '',
@@ -101,6 +106,9 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
         pnfl: employee.pnfl || '',
         phone: employee.phone || '',
         email: employee.email || '',
+        address: employee.address || '',
+        experience: employee.experience || '',
+        telegramUsername: employee.telegram_username || '',
         salaryType: employee.salary_type || 'Oylik',
         salaryAmount: employee.salary_amount || '',
         status: employee.status || 'Faol',
@@ -166,8 +174,12 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
   const validateForm = () => {
     const errors = {};
 
-    if (!formData.fullName.trim()) {
-      errors.fullName = 'Ism Familiya kiritilishi shart';
+    if (!formData.firstName.trim()) {
+      errors.firstName = 'Ism kiritilishi shart';
+    }
+
+    if (!formData.lastName.trim()) {
+      errors.lastName = 'Familiya kiritilishi shart';
     }
 
     if (!formData.branch) {
@@ -212,15 +224,10 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
 
     setSubmitting(true);
     try {
-      // Split full name into first and last name
-      const nameParts = formData.fullName.trim().split(' ');
-      const firstName = nameParts[0] || '';
-      const lastName = nameParts.slice(1).join(' ') || '';
-
       const payload = {
         employeeNumber: formData.employeeNumber,
-        firstName: firstName,
-        lastName: lastName,
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
         branch: formData.branch,
         department: formData.department,
         position: formData.position,
@@ -229,6 +236,9 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
         pnfl: formData.pnfl || null,
         phone: formData.phone || null,
         email: formData.email || null,
+        address: formData.address || null,
+        experience: formData.experience ? parseInt(formData.experience) : 0,
+        telegramUsername: formData.telegramUsername || null,
         salaryType: formData.salaryType,
         salaryAmount: parseFloat(formData.salaryAmount),
         status: formData.status,
@@ -266,21 +276,58 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
 
   return (
     <form onSubmit={handleSubmit} className="employee-form">
+      {/* Full Width Row - Name and Employee Number */}
+      <div className="form-row-grid">
+        {/* Ism */}
+        <div className="form-field">
+          <label className="form-label">
+            Ism <span className="required">*</span>
+          </label>
+          <input
+            type="text"
+            name="firstName"
+            value={formData.firstName}
+            onChange={handleChange}
+            placeholder="Alisher"
+            className={`form-input ${formErrors.firstName ? 'input-error' : ''}`}
+          />
+          {formErrors.firstName && <span className="error-text">{formErrors.firstName}</span>}
+        </div>
+
+        {/* Familiya */}
+        <div className="form-field">
+          <label className="form-label">
+            Familiya <span className="required">*</span>
+          </label>
+          <input
+            type="text"
+            name="lastName"
+            value={formData.lastName}
+            onChange={handleChange}
+            placeholder="Karimov"
+            className={`form-input ${formErrors.lastName ? 'input-error' : ''}`}
+          />
+          {formErrors.lastName && <span className="error-text">{formErrors.lastName}</span>}
+        </div>
+
+        {/* Xodim raqami */}
+        <div className="form-field">
+          <label className="form-label">Xodim raqami</label>
+          <input
+            type="text"
+            name="employeeNumber"
+            value={formData.employeeNumber}
+            onChange={handleChange}
+            placeholder="27"
+            className="form-input"
+          />
+        </div>
+      </div>
+
       {/* Two Column Layout */}
       <div className="form-grid">
         {/* Left Column */}
         <div className="form-column">
-          {/* Xodim raqami */}
-          <div className="form-field">
-            <label className="form-label">Xodim raqami</label>
-            <input
-              type="text"
-              name="employeeNumber"
-              value={formData.employeeNumber}
-              onChange={handleChange}
-              className="form-input"
-            />
-          </div>
 
           {/* Filial */}
           <div className="form-field">
@@ -348,6 +395,34 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
             {formErrors.phone && <span className="error-text">{formErrors.phone}</span>}
           </div>
 
+          {/* Telegram Username */}
+          <div className="form-field">
+            <label className="form-label">Telegram username</label>
+            <input
+              type="text"
+              name="telegramUsername"
+              value={formData.telegramUsername}
+              onChange={handleChange}
+              placeholder="@username"
+              className="form-input"
+            />
+          </div>
+
+          {/* Tajriba */}
+          <div className="form-field">
+            <label className="form-label">Tajriba (yil)</label>
+            <input
+              type="number"
+              name="experience"
+              value={formData.experience}
+              onChange={handleChange}
+              placeholder="5"
+              min="0"
+              max="50"
+              className="form-input"
+            />
+          </div>
+
           {/* Maosh turi */}
           <div className="form-field">
             <label className="form-label">Maosh turi</label>
@@ -384,22 +459,6 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
 
         {/* Right Column */}
         <div className="form-column">
-          {/* Ism Familiya */}
-          <div className="form-field">
-            <label className="form-label">
-              Ism Familiya <span className="required">*</span>
-            </label>
-            <input
-              type="text"
-              name="fullName"
-              value={formData.fullName}
-              onChange={handleChange}
-              placeholder="Alisher Karimov"
-              className={`form-input ${formErrors.fullName ? 'input-error' : ''}`}
-            />
-            {formErrors.fullName && <span className="error-text">{formErrors.fullName}</span>}
-          </div>
-
           {/* Bo'lim */}
           <div className="form-field">
             <label className="form-label">Bo'lim</label>
@@ -459,6 +518,19 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
               className={`form-input ${formErrors.email ? 'input-error' : ''}`}
             />
             {formErrors.email && <span className="error-text">{formErrors.email}</span>}
+          </div>
+
+          {/* Manzil */}
+          <div className="form-field">
+            <label className="form-label">Manzil</label>
+            <input
+              type="text"
+              name="address"
+              value={formData.address}
+              onChange={handleChange}
+              placeholder="Toshkent shahar, Chilonzor tumani"
+              className="form-input"
+            />
           </div>
 
           {/* Maosh miqdori */}
@@ -554,6 +626,12 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
           gap: 1.5rem;
         }
 
+        .form-row-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 1rem;
+        }
+
         .form-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
@@ -628,6 +706,10 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
         }
 
         @media (max-width: 768px) {
+          .form-row-grid {
+            grid-template-columns: 1fr;
+          }
+
           .form-grid {
             grid-template-columns: 1fr;
           }

@@ -69,7 +69,22 @@
       "Bash(curl -s http://localhost:5000/api/v1/applications -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI5OTNiNzQ5NC1mYzBkLTQzZTEtOTc3OS05YTk3MjdhNzY1ZWQiLCJlbWFpbCI6ImFkbWluQGhycGxhdGZvcm0uY29tIiwicm9sZSI6IlNVUEVSX0FETUlOIiwiaWF0IjoxNzgyOTIzNzE2LCJleHAiOjE3ODI5MjQ2MTZ9.BDY6Gjk9FzkAf-VLk-CaPMaBBGBx_ZvOT5gi5zcu4QE\")",
       "Bash(curl -X PATCH http://localhost:5000/api/v1/applications/c7a32a66-5d38-4f7d-8083-2a2df0856388/status -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI5OTNiNzQ5NC1mYzBkLTQzZTEtOTc3OS05YTk3MjdhNzY1ZWQiLCJlbWFpbCI6ImFkbWluQGhycGxhdGZvcm0uY29tIiwicm9sZSI6IlNVUEVSX0FETUlOIiwiaWF0IjoxNzgyOTI0Mjk2LCJleHAiOjE3ODI5MjUxOTZ9.XbtKRYEIhJ9FzEKhBh7ufqmIzaolJPU7ePb67qmPTrM\" -H \"Content-Type: application/json\" -d \"{\"\"status\"\":\"\"SINOV_MUDDATI\"\",\"\"comment\"\":\"\"Sinov muddatiga chaqirildi\"\"}\" -s)",
       "Bash(docker exec hr_platform_db psql -U postgres -d hr_platform -c \"\\dT+ application_status\")",
-      "Bash(curl -s http://localhost:5000/api/v1/applications -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI5OTNiNzQ5NC1mYzBkLTQzZTEtOTc3OS05YTk3MjdhNzY1ZWQiLCJlbWFpbCI6ImFkbWluQGhycGxhdGZvcm0uY29tIiwicm9sZSI6IlNVUEVSX0FETUlOIiwiaWF0IjoxNzgyOTI0Mjk2LCJleHAiOjE3ODI5MjUxOTZ9.XbtKRYEIhJ9FzEKhBh7ufqmIzaolJPU7ePb67qmPTrM\")"
+      "Bash(curl -s http://localhost:5000/api/v1/applications -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI5OTNiNzQ5NC1mYzBkLTQzZTEtOTc3OS05YTk3MjdhNzY1ZWQiLCJlbWFpbCI6ImFkbWluQGhycGxhdGZvcm0uY29tIiwicm9sZSI6IlNVUEVSX0FETUlOIiwiaWF0IjoxNzgyOTI0Mjk2LCJleHAiOjE3ODI5MjUxOTZ9.XbtKRYEIhJ9FzEKhBh7ufqmIzaolJPU7ePb67qmPTrM\")",
+      "Bash(docker-compose stop frontend)",
+      "Bash(docker-compose rm -f frontend)",
+      "Bash(docker-compose build --no-cache frontend)",
+      "Bash(docker-compose up -d frontend)",
+      "Bash(docker logs hr_platform_backend --tail 25)",
+      "Bash(docker logs hr_platform_backend)",
+      "Bash(docker exec hr_platform_backend sh -c \"ps aux | grep node\")",
+      "Bash(timeout 10 bash -c 'until docker logs hr_platform_frontend --tail 10 2>&1 | grep -q \"\"ready in\\|Compiled\\|started server\"\"; do sleep 1; done')",
+      "Bash(docker exec hr_platform_frontend ls -la /app/src/assets/styles/)",
+      "Bash(docker exec hr_platform_frontend sh -c \"ls -la /app/src/assets/styles/\")",
+      "Bash(curl -s http://localhost:5173/assets/index-DBvaXiqa.css)",
+      "Bash(docker exec hr_platform_db psql -U postgres -d hr_platform -c \"ALTER TABLE employees ADD COLUMN IF NOT EXISTS employee_number VARCHAR(50), ADD COLUMN IF NOT EXISTS position VARCHAR(100), ADD COLUMN IF NOT EXISTS telegram_username VARCHAR(100);\")",
+      "Bash(docker exec hr_platform_db psql -U postgres -d hr_platform -c \"CREATE UNIQUE INDEX IF NOT EXISTS idx_employees_employee_number ON employees(employee_number) WHERE employee_number IS NOT NULL; CREATE INDEX IF NOT EXISTS idx_employees_telegram ON employees(telegram_username) WHERE telegram_username IS NOT NULL;\")",
+      "Bash(curl -X POST http://localhost:5000/api/v1/auth/login -H 'Content-Type: application/json' -d '{\"\"email\"\":\"\"admin@hrplatform.com\"\",\"\"password\"\":\"\"Admin123\"\"}' -s)",
+      "Bash(curl -s http://localhost:5173/assets/index-CXZ5FVr1.css)"
     ],
     "deny": [],
     "ask": []

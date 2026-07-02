@@ -183,14 +183,27 @@ export async function updateApplicationStatus(id, newStatus, changedBy, comment 
 
     const newOrderIndex = maxOrderResult.rows[0].new_order;
 
-    // Update application
-    const updateResult = await client.query(
-      `UPDATE applications
-       SET status = $1, order_index = $2, updated_at = NOW()
+    // If moving to SHARTNOMA, set start date for 1-hour timer before becoming employee
+    let updateQuery = '';
+    let updateParams = [];
+
+    if (newStatus === APPLICATION_STATUS.SHARTNOMA) {
+      updateQuery = `UPDATE applications
+       SET status = $1, order_index = $2, shartnoma_start_date = NOW(), updated_at = NOW()
        WHERE id = $3
-       RETURNING *`,
-      [newStatus, newOrderIndex, id]
-    );
+       RETURNING *`;
+      updateParams = [newStatus, newOrderIndex, id];
+    } else {
+      // Reset shartnoma_start_date if moving away from SHARTNOMA
+      updateQuery = `UPDATE applications
+       SET status = $1, order_index = $2, shartnoma_start_date = NULL, updated_at = NOW()
+       WHERE id = $3
+       RETURNING *`;
+      updateParams = [newStatus, newOrderIndex, id];
+    }
+
+    // Update application
+    const updateResult = await client.query(updateQuery, updateParams);
 
     // Log history
     await client.query(
