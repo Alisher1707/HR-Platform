@@ -152,6 +152,7 @@ export function RegisterPage() {
     birthDate: '',
     experience: '0',
     address: '',
+    telegramUsername: '',
     notes: '',
   });
 
@@ -220,6 +221,7 @@ export function RegisterPage() {
         birthDate: candidateData.birthDate,
         experience: parseInt(candidateData.experience),
         address: candidateData.address,
+        telegramUsername: candidateData.telegramUsername,
         notes: candidateData.notes,
       });
       setIsSubmitted(true);
@@ -406,6 +408,16 @@ export function RegisterPage() {
               onChange={handleCandidateChange}
               placeholder="Toshkent shahar, Chilonzor tumani"
               error={formErrors.address}
+            />
+
+            <Input
+              label="Telegram username"
+              type="text"
+              name="telegramUsername"
+              value={candidateData.telegramUsername}
+              onChange={handleCandidateChange}
+              placeholder="@username"
+              error={formErrors.telegramUsername}
             />
 
             <Textarea
