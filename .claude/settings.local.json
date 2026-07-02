@@ -89,7 +89,10 @@
       "Bash(docker logs hr_platform_frontend --tail 20)",
       "Bash(curl -X POST http://localhost:5000/api/v1/auth/login -H 'Content-Type: application/json' -d '{\"\"email\"\":\"\"admin@hrplatform.com\"\",\"\"password\"\":\"\"Admin123!@#\"\"}' -s)",
       "Bash(curl -X POST http://localhost:5000/api/v1/auth/login -H 'Content-Type: application/json' -d \"{\"\"email\"\":\"\"admin@hrplatform.com\"\",\"\"password\"\":\"\"Admin123!@#\"\"}\" -s)",
-      "Bash(curl -X POST http://localhost:5000/api/v1/auth/login -H \"Content-Type: application/json\" -d '{\"\"email\"\":\"\"admin@hrplatform.com\"\",\"\"password\"\":\"\"Admin123\"\"}' -s)"
+      "Bash(curl -X POST http://localhost:5000/api/v1/auth/login -H \"Content-Type: application/json\" -d '{\"\"email\"\":\"\"admin@hrplatform.com\"\",\"\"password\"\":\"\"Admin123\"\"}' -s)",
+      "Bash(docker exec hr_platform_db psql -U postgres -d hr_platform -c \"\\d applications\")",
+      "Bash(docker exec hr_platform_db psql -U postgres -d hr_platform -c \"SELECT a.id, a.status, a.employee_id, a.position, e.first_name, e.last_name, e.position as emp_position, e.join_date, e.status as emp_status FROM applications a LEFT JOIN employees e ON a.employee_id = e.id ORDER BY a.created_at DESC LIMIT 5;\")",
+      "Bash(docker exec hr_platform_db psql -U postgres -d hr_platform -c \"SELECT COUNT(*) as total_employees, COUNT(position) as with_position, COUNT(join_date) as with_join_date FROM employees WHERE status = ''Faol'';\")"
     ],
     "deny": [],
     "ask": []

@@ -254,6 +254,32 @@ export async function updateApplicationStatus(id, newStatus, changedBy, comment 
 
     // Update application
     const updateResult = await client.query(updateQuery, updateParams);
+    const application = updateResult.rows[0];
+
+    // If moving to SHARTNOMA, update employee record with complete information
+    if (newStatus === APPLICATION_STATUS.SHARTNOMA) {
+      // Get application details including position
+      const appDetailsResult = await client.query(
+        'SELECT employee_id, position FROM applications WHERE id = $1',
+        [id]
+      );
+
+      if (appDetailsResult.rows.length > 0) {
+        const employeeId = appDetailsResult.rows[0].employee_id;
+        const position = appDetailsResult.rows[0].position;
+
+        // Update employee with complete hiring information
+        await client.query(
+          `UPDATE employees
+           SET position = $1,
+               join_date = CURRENT_DATE,
+               status = 'Faol',
+               updated_at = NOW()
+           WHERE id = $2`,
+          [position, employeeId]
+        );
+      }
+    }
 
     // Log history
     await client.query(
@@ -264,7 +290,7 @@ export async function updateApplicationStatus(id, newStatus, changedBy, comment 
 
     await client.query('COMMIT');
 
-    return updateResult.rows[0];
+    return application;
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;

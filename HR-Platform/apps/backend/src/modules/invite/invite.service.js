@@ -280,8 +280,8 @@ export async function submitApplication(applicationData) {
 
     // 2. Insert employee
     const employeeResult = await client.query(
-      `INSERT INTO employees (first_name, last_name, phone, address, birth_date, experience, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO employees (first_name, last_name, phone, address, birth_date, experience, telegram_username, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id`,
       [
         applicationData.firstName,
@@ -290,6 +290,7 @@ export async function submitApplication(applicationData) {
         applicationData.address || null,
         applicationData.birthDate,
         applicationData.experience,
+        applicationData.telegramUsername || null,
         invite.created_by
       ]
     );
