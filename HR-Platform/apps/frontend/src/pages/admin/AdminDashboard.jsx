@@ -117,7 +117,7 @@ export function AdminDashboard() {
                 {recentEmployees.map((emp) => (
                   <tr key={emp.id}>
                     <td>
-                      <div className="font-semibold">{emp.firstName} {emp.lastName}</div>
+                      <div className="font-semibold">{emp.first_name} {emp.last_name}</div>
                     </td>
                     <td>{emp.position || 'Kiritilmagan'}</td>
                     <td>{emp.phone || 'Kiritilmagan'}</td>

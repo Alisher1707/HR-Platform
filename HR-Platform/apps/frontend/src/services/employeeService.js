@@ -19,7 +19,12 @@ export const employeeService = {
    */
   async getEmployees(params = {}) {
     const response = await api.get('/employees', { params });
-    return response.data;
+    // Backend returns: { success, message, data, pagination }
+    // We need to return the data array and pagination separately
+    return {
+      data: response.data.data,
+      pagination: response.data.pagination
+    };
   },
 
   /**
