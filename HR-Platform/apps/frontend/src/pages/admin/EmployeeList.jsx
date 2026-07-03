@@ -33,6 +33,8 @@ export function EmployeeList() {
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
 
   const fetchEmployees = async (page = 1, searchQuery = '') => {
     setLoading(true);
@@ -124,6 +126,22 @@ export function EmployeeList() {
   const handleModalClose = () => {
     setIsModalOpen(false);
     setEditingEmployee(null);
+  };
+
+  const handleDetailClick = (employee) => {
+    setSelectedEmployee(employee);
+    setIsDetailModalOpen(true);
+  };
+
+  const handleDetailModalClose = () => {
+    setIsDetailModalOpen(false);
+    setSelectedEmployee(null);
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Kiritilmagan';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
   return (
@@ -221,7 +239,15 @@ export function EmployeeList() {
                         </div>
                       </td>
                       <td>
-                        <div className="table-actions" style={{ justifyContent: 'flex-end' }}>
+                        <div className="table-actions" style={{ justifyContent: 'flex-end', gap: '0.75rem' }}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDetailClick(emp)}
+                            style={{ borderColor: '#ffffff' }}
+                          >
+                            Batafsil
+                          </Button>
                           <Button variant="outline" size="sm" onClick={() => handleEditClick(emp)}>
                             Tahrirlash
                           </Button>
@@ -287,6 +313,264 @@ export function EmployeeList() {
           onSubmitSuccess={handleFormSuccess}
           onCancel={handleModalClose}
         />
+      </Modal>
+
+      {/* Employee Detail Modal */}
+      <Modal
+        isOpen={isDetailModalOpen}
+        onClose={handleDetailModalClose}
+        title="Xodim haqida batafsil ma'lumot"
+        size="lg"
+      >
+        {selectedEmployee && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            {/* Header Card - Employee Name and Status */}
+            <div style={{
+              background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
+              padding: '1.5rem',
+              borderRadius: '12px',
+              color: 'white',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)'
+            }}>
+              <div>
+                <h2 style={{ fontSize: '1.5rem', fontWeight: '700', margin: '0 0 0.5rem 0' }}>
+                  {selectedEmployee.first_name} {selectedEmployee.last_name}
+                </h2>
+                <p style={{ fontSize: '0.95rem', opacity: '0.95', margin: 0 }}>
+                  {selectedEmployee.position ? selectedEmployee.position.charAt(0).toUpperCase() + selectedEmployee.position.slice(1) : 'Lavozim kiritilmagan'}
+                </p>
+              </div>
+              <div>
+                <span style={{
+                  background: 'rgba(255, 255, 255, 0.25)',
+                  padding: '0.5rem 1rem',
+                  borderRadius: '20px',
+                  fontSize: '0.875rem',
+                  fontWeight: '600',
+                  backdropFilter: 'blur(10px)'
+                }}>
+                  {selectedEmployee.status || 'Faol'}
+                </span>
+              </div>
+            </div>
+
+            {/* Info Grid - 2 columns */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              {/* Shaxsiy ma'lumotlar */}
+              <div style={{
+                background: 'var(--surface)',
+                padding: '1.25rem',
+                borderRadius: '10px',
+                border: '1px solid var(--border)',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+              }}>
+                <h3 style={{
+                  fontSize: '0.875rem',
+                  fontWeight: '700',
+                  marginBottom: '1rem',
+                  color: 'var(--accent)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  <span style={{ fontSize: '1.1rem' }}>📋</span> Shaxsiy ma'lumotlar
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem', fontWeight: '600' }}>Xodim raqami</label>
+                    <div style={{ fontSize: '0.9rem', fontWeight: '500' }}>{selectedEmployee.employee_number || '—'}</div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem', fontWeight: '600' }}>Tug'ilgan sana</label>
+                    <div style={{ fontSize: '0.9rem', fontWeight: '500' }}>{formatDate(selectedEmployee.birth_date)}</div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem', fontWeight: '600' }}>PNFL</label>
+                    <div style={{ fontSize: '0.9rem', fontWeight: '500', fontFamily: 'monospace' }}>{selectedEmployee.pnfl || '—'}</div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem', fontWeight: '600' }}>Tajriba</label>
+                    <div style={{ fontSize: '0.9rem', fontWeight: '500' }}>
+                      {selectedEmployee.experience ? (
+                        <span style={{ color: 'var(--accent)' }}>{selectedEmployee.experience} yil</span>
+                      ) : '—'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Aloqa ma'lumotlari */}
+              <div style={{
+                background: 'var(--surface)',
+                padding: '1.25rem',
+                borderRadius: '10px',
+                border: '1px solid var(--border)',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+              }}>
+                <h3 style={{
+                  fontSize: '0.875rem',
+                  fontWeight: '700',
+                  marginBottom: '1rem',
+                  color: 'var(--accent)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  <span style={{ fontSize: '1.1rem' }}>📞</span> Aloqa
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem', fontWeight: '600' }}>Telefon</label>
+                    <div style={{ fontSize: '0.9rem', fontWeight: '500', fontFamily: 'monospace' }}>{selectedEmployee.phone || '—'}</div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem', fontWeight: '600' }}>Email</label>
+                    <div style={{ fontSize: '0.9rem', fontWeight: '500', wordBreak: 'break-all' }}>{selectedEmployee.email || '—'}</div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem', fontWeight: '600' }}>Telegram</label>
+                    <div style={{ fontSize: '0.9rem', fontWeight: '500', color: 'var(--accent)' }}>
+                      {selectedEmployee.telegram_username || '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem', fontWeight: '600' }}>Manzil</label>
+                    <div style={{ fontSize: '0.9rem', fontWeight: '500' }}>{selectedEmployee.address || '—'}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Ish ma'lumotlari */}
+              <div style={{
+                background: 'var(--surface)',
+                padding: '1.25rem',
+                borderRadius: '10px',
+                border: '1px solid var(--border)',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+              }}>
+                <h3 style={{
+                  fontSize: '0.875rem',
+                  fontWeight: '700',
+                  marginBottom: '1rem',
+                  color: 'var(--accent)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  <span style={{ fontSize: '1.1rem' }}>💼</span> Ish ma'lumotlari
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem', fontWeight: '600' }}>Filial</label>
+                    <div style={{ fontSize: '0.9rem', fontWeight: '500' }}>
+                      {selectedEmployee.branch ? selectedEmployee.branch.charAt(0).toUpperCase() + selectedEmployee.branch.slice(1) : '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem', fontWeight: '600' }}>Bo'lim</label>
+                    <div style={{ fontSize: '0.9rem', fontWeight: '500' }}>
+                      {selectedEmployee.department ? selectedEmployee.department.charAt(0).toUpperCase() + selectedEmployee.department.slice(1) : '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem', fontWeight: '600' }}>Ishga kirgan sana</label>
+                    <div style={{ fontSize: '0.9rem', fontWeight: '500' }}>{formatDate(selectedEmployee.join_date)}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Maosh va KPI */}
+              <div style={{
+                background: 'var(--surface)',
+                padding: '1.25rem',
+                borderRadius: '10px',
+                border: '1px solid var(--border)',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+              }}>
+                <h3 style={{
+                  fontSize: '0.875rem',
+                  fontWeight: '700',
+                  marginBottom: '1rem',
+                  color: 'var(--accent)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  <span style={{ fontSize: '1.1rem' }}>💰</span> Maosh va KPI
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem', fontWeight: '600' }}>Maosh turi</label>
+                    <div style={{ fontSize: '0.9rem', fontWeight: '500' }}>{selectedEmployee.salary_type || '—'}</div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem', fontWeight: '600' }}>Maosh miqdori</label>
+                    <div style={{ fontSize: '1.1rem', fontWeight: '700', color: 'var(--success)' }}>
+                      {selectedEmployee.salary_amount ? `${selectedEmployee.salary_amount.toLocaleString('uz-UZ')} UZS` : '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem', fontWeight: '600' }}>KPI Shablon</label>
+                    <div style={{ fontSize: '0.9rem', fontWeight: '500' }}>{selectedEmployee.kpi_template || '—'}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Tizim ma'lumotlari - Full Width */}
+            <div style={{
+              background: 'var(--surface)',
+              padding: '1rem 1.25rem',
+              borderRadius: '10px',
+              border: '1px solid var(--border)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '1rem'
+            }}>
+              <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+                <div>
+                  <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem', fontWeight: '600' }}>YARATILGAN</label>
+                  <div style={{ fontSize: '0.85rem', fontWeight: '500' }}>{formatDate(selectedEmployee.created_at)}</div>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem', fontWeight: '600' }}>YANGILANGAN</label>
+                  <div style={{ fontSize: '0.85rem', fontWeight: '500' }}>{formatDate(selectedEmployee.updated_at)}</div>
+                </div>
+                {selectedEmployee.created_by && (
+                  <div>
+                    <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem', fontWeight: '600' }}>YARATUVCHI</label>
+                    <div style={{ fontSize: '0.85rem', fontWeight: '500' }}>
+                      {selectedEmployee.created_by.first_name} {selectedEmployee.created_by.last_name}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', paddingTop: '0.5rem' }}>
+              <Button variant="outline" onClick={handleDetailModalClose}>
+                Yopish
+              </Button>
+              <Button variant="primary" onClick={() => { handleDetailModalClose(); handleEditClick(selectedEmployee); }}>
+                ✏️ Tahrirlash
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

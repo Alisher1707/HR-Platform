@@ -144,7 +144,8 @@
       "Bash(docker exec hr_platform_frontend sh -c \"ls -la /usr/share/nginx/html/\")",
       "Bash(docker cp \"c:/Users/DELL-PC/Desktop/HR/HR-Platform/apps/frontend/src/services/employeeService.js\" hr_platform_frontend:/app/src/services/employeeService.js)",
       "Bash(curl -s http://localhost:5000/api/v1/employees?limit=5 -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI5OTNiNzQ5NC1mYzBkLTQzZTEtOTc3OS05YTk3MjdhNzY1ZWQiLCJlbWFpbCI6ImFkbWluQGhycGxhdGZvcm0uY29tIiwicm9sZSI6IlNVUEVSX0FETUlOIiwiaWF0IjoxNzgzMTAzNzA2LCJleHAiOjE3ODMxMDQ2MDZ9.EXEnRIoFofYy8fnHYGpYXiXvD6iAHnXFZlTB_HwC2IY\")",
-      "Bash(docker cp \"c:/Users/DELL-PC/Desktop/HR/HR-Platform/apps/frontend/src/pages/admin/AdminDashboard.jsx\" hr_platform_frontend:/app/src/pages/admin/AdminDashboard.jsx)"
+      "Bash(docker cp \"c:/Users/DELL-PC/Desktop/HR/HR-Platform/apps/frontend/src/pages/admin/AdminDashboard.jsx\" hr_platform_frontend:/app/src/pages/admin/AdminDashboard.jsx)",
+      "Bash(docker cp \"c:/Users/DELL-PC/Desktop/HR/HR-Platform/apps/frontend/src/pages/admin/EmployeeList.jsx\" hr_platform_frontend:/app/src/pages/admin/EmployeeList.jsx)"
     ],
     "deny": [],
     "ask": []
