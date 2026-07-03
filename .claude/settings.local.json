@@ -145,7 +145,13 @@
       "Bash(docker cp \"c:/Users/DELL-PC/Desktop/HR/HR-Platform/apps/frontend/src/services/employeeService.js\" hr_platform_frontend:/app/src/services/employeeService.js)",
       "Bash(curl -s http://localhost:5000/api/v1/employees?limit=5 -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI5OTNiNzQ5NC1mYzBkLTQzZTEtOTc3OS05YTk3MjdhNzY1ZWQiLCJlbWFpbCI6ImFkbWluQGhycGxhdGZvcm0uY29tIiwicm9sZSI6IlNVUEVSX0FETUlOIiwiaWF0IjoxNzgzMTAzNzA2LCJleHAiOjE3ODMxMDQ2MDZ9.EXEnRIoFofYy8fnHYGpYXiXvD6iAHnXFZlTB_HwC2IY\")",
       "Bash(docker cp \"c:/Users/DELL-PC/Desktop/HR/HR-Platform/apps/frontend/src/pages/admin/AdminDashboard.jsx\" hr_platform_frontend:/app/src/pages/admin/AdminDashboard.jsx)",
-      "Bash(docker cp \"c:/Users/DELL-PC/Desktop/HR/HR-Platform/apps/frontend/src/pages/admin/EmployeeList.jsx\" hr_platform_frontend:/app/src/pages/admin/EmployeeList.jsx)"
+      "Bash(docker cp \"c:/Users/DELL-PC/Desktop/HR/HR-Platform/apps/frontend/src/pages/admin/EmployeeList.jsx\" hr_platform_frontend:/app/src/pages/admin/EmployeeList.jsx)",
+      "Bash(curl -s http://localhost:5000/api/v1/employees?limit=1 -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI5OTNiNzQ5NC1mYzBkLTQzZTEtOTc3OS05YTk3MjdhNzY1ZWQiLCJlbWFpbCI6ImFkbWluQGhycGxhdGZvcm0uY29tIiwicm9sZSI6IlNVUEVSX0FETUlOIiwiaWF0IjoxNzgzMTA2MzYyLCJleHAiOjE3ODMxMDcyNjJ9.RhcLjB2bxul3DTlplFeAMuOElQBmBZdhwXgOvYWkzf4\")",
+      "Bash(curl -s http://localhost:5000/api/v1/employees -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI5OTNiNzQ5NC1mYzBkLTQzZTEtOTc3OS05YTk3MjdhNzY1ZWQiLCJlbWFpbCI6ImFkbWluQGhycGxhdGZvcm0uY29tIiwicm9sZSI6IlNVUEVSX0FETUlOIiwiaWF0IjoxNzgzMTA2MzYyLCJleHAiOjE3ODMxMDcyNjJ9.RhcLjB2bxul3DTlplFeAMuOElQBmBZdhwXgOvYWkzf4\")",
+      "Bash(curl -X PUT http://localhost:5000/api/v1/employees/6cfcab02-fe53-49a4-95b4-1e2139518065 )",
+      "Bash(docker cp \"c:/Users/DELL-PC/Desktop/HR/HR-Platform/apps/backend/src/modules/employees/employees.controller.js\" hr_platform_backend:/app/src/modules/employees/employees.controller.js)",
+      "Bash(docker exec hr_platform_db psql -U postgres -d hr_platform -c \"UPDATE employees SET telegram_username = ''madina_abdullayev'' WHERE id = ''6cfcab02-fe53-49a4-95b4-1e2139518065''; SELECT id, first_name, last_name, telegram_username, email, position FROM employees WHERE id = ''6cfcab02-fe53-49a4-95b4-1e2139518065'';\")",
+      "Bash(curl -s http://localhost:5000/api/v1/employees/6cfcab02-fe53-49a4-95b4-1e2139518065 -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI5OTNiNzQ5NC1mYzBkLTQzZTEtOTc3OS05YTk3MjdhNzY1ZWQiLCJlbWFpbCI6ImFkbWluQGhycGxhdGZvcm0uY29tIiwicm9sZSI6IlNVUEVSX0FETUlOIiwiaWF0IjoxNzgzMTA2NjEwLCJleHAiOjE3ODMxMDc1MTB9.TRxnrnTkN5823w6AFwnAg4gYklwJM3UEi1Kc3unz6Ts\")"
     ],
     "deny": [],
     "ask": []
