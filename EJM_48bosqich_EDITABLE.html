@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EJM - Xodim bilan ishlash jarayoni (Tahrirlash imkoniyati bilan)</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f5f6fa; color: #1a1a2e; min-height: 100vh; }
+header { background: #1a1a2e; color: #fff; padding: 18px 24px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+header h1 { font-size: 18px; font-weight: 600; }
+header span { font-size: 12px; opacity: .6; margin-left: auto; }
+.toolbar { background: #fff; border-bottom: 1px solid #e0e0e0; padding: 10px 20px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+.toolbar input[type=text] { flex: 1; min-width: 180px; padding: 7px 12px; border: 1px solid #d0d0d0; border-radius: 6px; font-size: 13px; outline: none; }
+.toolbar input:focus { border-color: #4a6fa5; }
+.btn { padding: 6px 13px; background: #4a6fa5; color: #fff; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.btn:hover { background: #3a5a8a; }
+.btn.gray { background: #888; }
+.btn.gray:hover { background: #666; }
+.btn.green { background: #388e3c; }
+.btn.green:hover { background: #2e7d32; }
+.btn.red { background: #c62828; }
+.btn.red:hover { background: #b71c1c; }
+.btn.orange { background: #e65100; }
+.btn.orange:hover { background: #bf360c; }
+.legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11px; padding: 6px 20px; background: #fafafa; border-bottom: 1px solid #ebebeb; }
+.leg { display: flex; align-items: center; gap: 5px; }
+.leg-dot { width: 11px; height: 11px; border-radius: 50%; }
+.content { padding: 16px 20px; max-width: 1300px; margin: 0 auto; }
+.edit-badge { font-size: 11px; padding: 3px 9px; border-radius: 20px; background: #fff3cd; color: #856404; border: 1px solid #ffc107; font-weight: 600; }
+.edit-badge.on { background: #d4edda; color: #155724; border-color: #28a745; }
+
+.phase { border: 1px solid #ddd; border-radius: 10px; margin-bottom: 10px; overflow: visible; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.04); position: relative; }
+.phase-header { padding: 9px 14px; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px; user-select: none; cursor: pointer; }
+.phase-header:hover { opacity: .9; }
+.phase-header-title { flex: 1; display: flex; align-items: center; gap: 8px; }
+.phase-body { padding: 12px 14px 14px; display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
+
+.node { border-radius: 8px; padding: 8px 11px; min-width: 120px; max-width: 220px; font-size: 12px; line-height: 1.4; position: relative; transition: box-shadow .12s; }
+.node:hover { box-shadow: 0 4px 14px rgba(0,0,0,.13); z-index: 2; }
+.node .label { font-weight: 700; font-size: 12.5px; }
+.node .sub { font-size: 11px; margin-top: 3px; opacity: .85; }
+.node .issue { font-size: 10.5px; margin-top: 6px; padding: 4px 7px; border-radius: 5px; background: #fff3e0; border: 1px solid #ffb74d; color: #bf360c; }
+.node .fix { font-size: 10.5px; margin-top: 3px; padding: 4px 7px; border-radius: 5px; background: #e8f5e9; border: 1px solid #81c784; color: #1b5e20; font-weight: 500; }
+
+.node-btns { display: none; position: absolute; top: 3px; right: 3px; gap: 3px; z-index: 10; }
+.node:hover .node-btns { display: flex; }
+.node-btn { font-size: 10px; padding: 2px 5px; border: none; border-radius: 4px; cursor: pointer; line-height: 1.4; }
+.nb-edit { background: #4a6fa5; color: #fff; }
+.nb-del  { background: #c62828; color: #fff; }
+
+.arr { display: flex; align-items: center; color: #aaa; font-size: 20px; padding: 0 4px; flex-shrink: 0; align-self: center; }
+.c-start   { background:#e8f5e9; border:1px solid #81c784; color:#1b5e20; }
+.c-process { background:#e3f2fd; border:1px solid #64b5f6; color:#0d47a1; }
+.c-decide  { background:#fff8e1; border:1px solid #ffd54f; color:#e65100; }
+.c-action  { background:#f3e5f5; border:1px solid #ba68c8; color:#4a148c; }
+.c-end     { background:#fce4ec; border:1px solid #f06292; color:#880e4f; }
+.c-warn    { background:#fff3e0; border:1px solid #ffb74d; color:#bf360c; }
+.c-ok      { background:#e0f7fa; border:1px solid #4dd0e1; color:#006064; }
+.c-demo    { background:#f9fbe7; border:1px solid #dce775; color:#33691e; }
+.c-final   { background:#ede7f6; border:1px solid #9575cd; color:#311b92; }
+
+.add-node-btn { border: 1.5px dashed #aaa; background: transparent; border-radius: 8px; padding: 8px 12px; font-size: 11px; color: #888; cursor: pointer; align-self: center; transition: all .15s; white-space: nowrap; }
+.add-node-btn:hover { border-color: #4a6fa5; color: #4a6fa5; background: #f0f4fb; }
+
+.add-phase-btn { border: 2px dashed #bbb; background: transparent; border-radius: 10px; padding: 12px 20px; font-size: 13px; color: #999; cursor: pointer; width: 100%; margin-bottom: 10px; transition: all .15s; }
+.add-phase-btn:hover { border-color: #4a6fa5; color: #4a6fa5; background: #f0f4fb; }
+
+.modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 9999; align-items: center; justify-content: center; }
+.modal-bg.open { display: flex; }
+.modal { background: #fff; border-radius: 12px; padding: 24px; width: 520px; max-width: 95vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 8px 40px rgba(0,0,0,.25); }
+.modal h2 { font-size: 15px; margin-bottom: 16px; color: #1a1a2e; }
+.modal label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: #444; }
+.modal input, .modal textarea, .modal select { width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 12.5px; font-family: inherit; margin-bottom: 12px; outline: none; resize: vertical; }
+.modal input:focus, .modal textarea:focus, .modal select:focus { border-color: #4a6fa5; }
+.modal-row { display: flex; gap: 8px; margin-top: 4px; }
+.modal-row .btn { flex: 1; padding: 9px; font-size: 13px; }
+
+.dim { opacity: 0.15; }
+
+@media (max-width: 700px) { .phase-body { flex-direction: column; } .arr { display: none; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>👥 EJM - Xodim bilan ishlash jarayoni (48 Bosqich)</h1>
+  <span>Tahrirlash imkoniyati bilan</span>
+</header>
+<div class="toolbar">
+  <input type="text" id="search" placeholder="🔍 Qidirish..." oninput="doSearch(this.value)">
+  <button class="btn" onclick="expandAll()">Barchasini yoy</button>
+  <button class="btn gray" onclick="collapseAll()">Yig'</button>
+  <button class="btn orange" onclick="toggleEditMode()" id="editBtn">✏️ Tahrirlash</button>
+  <span class="edit-badge" id="editBadge">O'qish rejimi</span>
+</div>
+<div class="legend">
+  <div class="leg"><div class="leg-dot" style="background:#81c784"></div>Boshlanish</div>
+  <div class="leg"><div class="leg-dot" style="background:#64b5f6"></div>Jarayon</div>
+  <div class="leg"><div class="leg-dot" style="background:#ffd54f"></div>Qaror</div>
+  <div class="leg"><div class="leg-dot" style="background:#ba68c8"></div>Harakat</div>
+  <div class="leg"><div class="leg-dot" style="background:#dce775"></div>Rivojlanish</div>
+  <div class="leg"><div class="leg-dot" style="background:#9575cd"></div>Yakuniy</div>
+  <div class="leg"><div class="leg-dot" style="background:#ffb74d"></div>⚠ Muammo</div>
+  <div class="leg"><div class="leg-dot" style="background:#81c784;border-radius:2px"></div>✔ Yechim</div>
+</div>
+<div class="content" id="mainContent"></div>
+
+<!-- MODAL -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h2 id="modalTitle">Blokni tahrirlash</h2>
+    <label>Sarlavha</label>
+    <input type="text" id="mLabel" placeholder="Blok sarlavhasi">
+    <label>Tavsif (qo'shimcha matn)</label>
+    <textarea id="mSub" rows="2" placeholder="Qisqacha izoh..."></textarea>
+    <label>⚠ Muammo (ixtiyoriy)</label>
+    <textarea id="mIssue" rows="2" placeholder="Muammo bo'lsa yozing..."></textarea>
+    <label>✔ Yechim (ixtiyoriy)</label>
+    <textarea id="mFix" rows="2" placeholder="Yechim..."></textarea>
+    <label>Blok turi (rangi)</label>
+    <select id="mType">
+      <option value="c-start">🟢 Boshlanish</option>
+      <option value="c-process">🔵 Jarayon</option>
+      <option value="c-decide">🟡 Qaror</option>
+      <option value="c-action">🟣 Harakat</option>
+      <option value="c-ok">🩵 Muvaffaqiyat</option>
+      <option value="c-warn">🟠 Muammo / Ogohlantirish</option>
+      <option value="c-demo">🟩 Rivojlanish</option>
+      <option value="c-final">🟪 Yakuniy natija</option>
+      <option value="c-end">🩷 Natija / Yakunlash</option>
+    </select>
+    <div class="modal-row">
+      <button class="btn green" onclick="saveModal()">✔ Saqlash</button>
+      <button class="btn gray" onclick="closeModal()">Bekor qilish</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let editMode = false;
+
+const data = {
+  phases: [
+    {
+      id: 'yollash', label: '1-bosqich. Yollash va vakansiya tayyorlash',
+      style: 'border-color:#a5d6a7;background:#f1f8f2',
+      headerStyle: 'background:#c8e6c9;color:#1b5e20',
+      nodes: [
+        { type:'c-start', label:'1. Lavozim profilini shakllantirish', sub:'Lavozim talablari, vazifalar, kompetensiyalar aniqlanadi', issue:'⚠ Muammo: Profil noaniq yoki to\'liq emas', fix:'✔ Yechim: Rahbar bilan birgalikda aniq mezonlar ishlab chiqiladi' },
+        { type:'arr' },
+        { type:'c-process', label:'2. Vakansiya e\'lonini tayyorlash', sub:'Matn, talablar, imtiyozlar, ish sharoiti yoziladi', issue:'⚠ Muammo: E\'lon qiziqarli emas', fix:'✔ Yechim: Kompaniya madaniyati va imkoniyatlarini yorqin taqdim etish' },
+        { type:'arr' },
+        { type:'c-action', label:'3. E\'lon joylashtirish manbalarini tanlash', sub:'HH.uz · Telegram kanallar · LinkedIn · Instagram · OLX · Sarafan so\'z' },
+        { type:'arr' },
+        { type:'c-action', label:'4. Vakansiya e\'lonini tarqatish', sub:'Barcha kanallarga joylashtiriladi, do\'stlar va hamkorlar orqali tarqatiladi', issue:'⚠ Muammo: Arizalar kelmaydi', fix:'✔ Yechim: E\'lon yangilanadi, qo\'shimcha kanallar qo\'shiladi, to\'lov reklama ishlatiladi' }
+      ]
+    },
+    {
+      id: 'saralash', label: '2-bosqich. Birlamchi saralash va chaqiruv',
+      style: 'border-color:#90caf9;background:#f0f6fd',
+      headerStyle: 'background:#bbdefb;color:#0d47a1',
+      nodes: [
+        { type:'c-process', label:'5. Birlamchi saralash (Google Form orqali)', sub:'Ariza qabul qilinadi; CV va javoblar ko\'rib chiqiladi', issue:'⚠ Muammo: Ko\'p arizalar, vaqt yo\'q', fix:'✔ Yechim: Google Form filtrlari o\'rnatiladi; avtomatik saralash savollari qo\'shiladi' },
+        { type:'arr' },
+        { type:'c-action', label:'6. Uchrashuvga chaqirish va qiziqtirish', sub:'Tanlangan nomzodlarga qo\'ng\'iroq yoki xabar yuboriladi', issue:'⚠ Muammo: Nomzod javob bermaydi', fix:'✔ Yechim: Telefon → Telegram → Email ketma-ketligi, 2-3 urinish' },
+        { type:'arr' },
+        { type:'c-process', label:'7. Suhbatga tayyorgarlik', sub:'Suhbat savollari, baholash jadval, joy va vaqt tayyorlanadi', issue:'⚠ Muammo: Suhbat strukturasiz o\'tadi', fix:'✔ Yechim: Standart suhbat skripti va baholash blanki tayyorlanadi' },
+        { type:'arr' },
+        { type:'c-process', label:'8. Suhbat jarayonida so\'rovnoma to\'ldirish', sub:'Nomzod ma\'lumotlari yozib boriladi, blanki to\'ldiriladi' },
+        { type:'arr' },
+        { type:'c-decide', label:'9. Qadriyatlar, qobiliyatlar va mutaxasislik bo\'yicha saralash', sub:'3 mezon bo\'yicha baholash: qadriyatlar, hard skills, soft skills', issue:'⚠ Muammo: Nomzod bilimi yetarli emas', fix:'✔ Yechim: Sinov topshirig\'i beriladi, potensial baholanadi' }
+      ]
+    },
+    {
+      id: 'sinov', label: '3-bosqich. Sinov muddati va qabul qilish',
+      style: 'border-color:#ffe082;background:#fefcf0',
+      headerStyle: 'background:#fff9c4;color:#e65100',
+      nodes: [
+        { type:'c-action', label:'10. Sinov muddati belgilash, onboardingga olish', sub:'Sinov muddati shartlari, vazifalar va baholash mezonlari tushuntiriladi', issue:'⚠ Muammo: Ish hajmi noaniq', fix:'✔ Yechim: Aniq KPI va vazifalar ro\'yxati bilan sinov boshlanadi' },
+        { type:'arr' },
+        { type:'c-process', label:'11. Ustoz biriktirish', sub:'Yangi xodimga mentor tayinlanadi; dastlabki 30 kun yo\'l-yo\'riq ko\'rsatiladi', issue:'⚠ Muammo: Ustoz vaqti yo\'q', fix:'✔ Yechim: Mentor yuklamasi oldindan rejalashtiriladi; checklist beriladi' },
+        { type:'arr' },
+        { type:'c-action', label:'12. Belgilangan muddat bo\'yicha topshiriqlarni bajarish', sub:'Haftalik vazifalar, nazorat nuqtalari belgilanadi', issue:'⚠ Muammo: Topshiriq tushunilmagan', fix:'✔ Yechim: Ustoz kuniga bir marta holat so\'raydi; savollar ochiq qoldirilmaydi' },
+        { type:'arr' },
+        { type:'c-process', label:'13. Kunlik hisobot va baholash', sub:'Xodim har kuni kichik hisobot yozadi; rahbar ko\'rib chiqadi', issue:'⚠ Muammo: Hisobot to\'ldirilmaydi', fix:'✔ Yechim: Eslatma tizimi o\'rnatiladi; format soddalashtiriladi' }
+      ]
+    },
+    {
+      id: 'onboarding', label: '4-bosqich. Onboarding va moslashuv',
+      style: 'border-color:#ce93d8;background:#faf0fe',
+      headerStyle: 'background:#e1bee7;color:#4a148c',
+      nodes: [
+        { type:'c-process', label:'14. Muzokara (ish xaqqi)', sub:'Ish haqi, bonus tizimi, imtiyozlar kelishiladi', issue:'⚠ Muammo: Kelishmovchilik', fix:'✔ Yechim: Bozor narxlari va kompaniya imkoniyatlari asosida muvozanat topiladi' },
+        { type:'arr' },
+        { type:'c-action', label:'15. Xodimga kpi tizimini joriy qilish', sub:'Aniq o\'lchanadigan maqsadlar, natija ko\'rsatkichlari belgilanadi', issue:'⚠ Muammo: KPI noaniq yoki ortiqcha', fix:'✔ Yechim: Birgalikda KPI ishlab chiqiladi; har oy qayta ko\'rib chiqiladi' },
+        { type:'arr' },
+        { type:'c-process', label:'16. Xodimga o\'sish xaritasini ko\'rsatish', sub:'Karyera rivojlanish yo\'li, keyingi pozitsiyalar tanishtiriladi', issue:'⚠ Muammo: Xodim istiqbolni ko\'rmaydi', fix:'✔ Yechim: 6 oylik va 1 yillik maqsadlar birgalikda belgilanadi' },
+        { type:'arr' },
+        { type:'c-process', label:'17. Onlayn ofisga kirish', sub:'Korporativ tizimlar, ish muhiti va qoidalar tanishtiriladi' },
+        { type:'arr' },
+        { type:'c-action', label:'18. Nomzodning rasmiy hujjatlarini tayyorlash', sub:'Pasport, diplom, rasm va boshqa kerakli hujjatlar yig\'iladi', issue:'⚠ Muammo: Hujjatlar to\'liq emas', fix:'✔ Yechim: Ro\'yxat oldindan beriladi; muddati belgilanadi' }
+      ]
+    },
+    {
+      id: 'rasmiylashtirish', label: '5-bosqich. Rasmiylashtirish va ish boshlash',
+      style: 'border-color:#80deea;background:#f0fdfe',
+      headerStyle: 'background:#b2ebf2;color:#006064',
+      nodes: [
+        { type:'c-action', label:'19. Shartnoma tuzish', sub:'Rasmiy mehnat shartnomasi yoki xizmat shartnomasi imzolanadi', issue:'⚠ Muammo: Xodim shartlarga rozi emas', fix:'✔ Yechim: Qo\'shimcha muzokaralar, shartlarni moslashtiriladi' },
+        { type:'arr' },
+        { type:'c-process', label:'20. Ish jarayoniga kirgizish', sub:'Jamoa bilan tanishtirish, ish joyi, qoidalar tushuntiriladi' },
+        { type:'arr' },
+        { type:'c-process', label:'21. Korporativ akkaunt ochish', sub:'Email, Telegram, CRM, boshqa tizimlar uchun akkauntlar yaratiladi', issue:'⚠ Muammo: Texnik muammolar', fix:'✔ Yechim: IT bo\'limi 1 ish kuni ichida hal qiladi' },
+        { type:'arr' },
+        { type:'c-action', label:'22. Vazifalarni bajarish', sub:'Xodim o\'z lavozim vazifalarini bajarishni boshlaydi; nazorat qilinadi' }
+      ]
+    },
+    {
+      id: 'rivojlanish', label: '6-bosqich. Rivojlanish, motivatsiya va KPI',
+      style: 'border-color:#a5d6a7;background:#f1f8f2',
+      headerStyle: 'background:#c8e6c9;color:#1b5e20',
+      nodes: [
+        { type:'c-process', label:'23. Raxbardan fidbek olish', sub:'Har oylik yoki har choraklik baholash o\'tkaziladi', issue:'⚠ Muammo: Feedback konstruktiv emas', fix:'✔ Yechim: SBI (Situation-Behavior-Impact) formati qo\'llaniladi' },
+        { type:'arr' },
+        { type:'c-demo', label:'24. Brend formaga ega bo\'lish', sub:'Korporativ kiyim, logotip, identifikatsiya elementlari beriladi' },
+        { type:'arr' },
+        { type:'c-process', label:'25. Raxbar bilan suxbat', sub:'Oylik yuzma-yuz suhbat: holat, muammolar, ehtiyojlar muhokama qilinadi', issue:'⚠ Muammo: Suhbat o\'tkazilmaydi', fix:'✔ Yechim: Kalendarga qat\'iy belgilanadi, bosh tortib bo\'lmaydi' },
+        { type:'arr' },
+        { type:'c-action', label:'26. Ota-onasi bilan uchrashuv, sovg\'a berish', sub:'Bayramlarda xodim oilasiga e\'tibor ko\'rsatiladi; mehr-oqibat madaniyati', issue:'⚠ Muammo: Xodim g\'amxo\'rlikni his qilmaydi', fix:'✔ Yechim: Shaxsiy sana va ehtiyojlarga e\'tibor beriladi' }
+      ]
+    },
+    {
+      id: 'osish', label: '7-bosqich. O\'sish va o\'rgatish',
+      style: 'border-color:#ce93d8;background:#faf0fe',
+      headerStyle: 'background:#e1bee7;color:#4a148c',
+      nodes: [
+        { type:'c-process', label:'27. Maqsadlarni aniqlab, keyingi qadamni belgilash', sub:'Xodim bilan keyingi 3-6 oylik maqsadlar, o\'sish yo\'li muhokama qilinadi' },
+        { type:'arr' },
+        { type:'c-action', label:'28. Vazifani bajarish', sub:'Yangi darajadagi mas\'uliyatlar, proyektlar va topshiriqlar beriladi' },
+        { type:'arr' },
+        { type:'c-demo', label:'29. Kurslarda qatnashish', sub:'Ichki va tashqi treninglar, onlayn kurslar, sertifikatlar', issue:'⚠ Muammo: Xodim kursga qiziqmaydi', fix:'✔ Yechim: Kurs natijalari ish faoliyatiga bog\'lanadi; ragʻbat beriladi' },
+        { type:'arr' },
+        { type:'c-final', label:'30. Yuqori lavozimga ko\'tarilish', sub:'Xodim yangi pozitsiyaga tayinlanadi, vazifalar kengayadi', issue:'⚠ Muammo: Tayyor emas', fix:'✔ Yechim: Qo\'shimcha tayyorgarlik, shadowing, kichik proyekt topshiriladi' },
+        { type:'arr' },
+        { type:'c-action', label:'31. O\'z o\'rniga xodim topish', sub:'Ko\'tarilayotgan xodim o\'rnini to\'ldiradigan yangi xodim yollashga yordam beradi' },
+        { type:'arr' },
+        { type:'c-process', label:'32. Xodimni tarbiyalash', sub:'Mentorlik, bilim uzatish, jamoa madaniyatini o\'rgatish' },
+        { type:'arr' },
+        { type:'c-process', label:'33. Lavozim vazifalari o\'rganish', sub:'Xodim ketishidan oldin barcha jarayonlar hujjatlashtiriladi' },
+        { type:'arr' },
+        { type:'c-process', label:'34. Video darslarni taqdim qilish', sub:'Xodim o\'zi bajargan ish bo\'yicha video ko\'rsatmalar tayyorlaydi' },
+        { type:'arr' },
+        { type:'c-action', label:'35. Korporativ akkaunt topshirish', sub:'Barcha login, parol, hujjat va loyihalar topshiriladi', issue:'⚠ Muammo: Ma\'lumotlar yo\'qolgan', fix:'✔ Yechim: Chiqish checklisti oldindan tayyorlanadi, bir hafta oldin boshlanadi' },
+        { type:'arr' },
+        { type:'c-process', label:'36. Yangi xodimni o\'z o\'rniga joylash', sub:'Xodim ketishidan oldin o\'rnini egallaydiganga jonli o\'tish jarayoni o\'tkaziladi' }
+      ]
+    },
+    {
+      id: 'chiqish', label: '8-bosqich. Chiqish jarayoni',
+      style: 'border-color:#9575cd;background:#f5f0ff',
+      headerStyle: 'background:#d1c4e9;color:#311b92',
+      nodes: [
+        { type:'c-decide', label:'37. Xodim bilan xayrlashish', sub:'Xushmuomalalik bilan chiqish jarayoni rasmiylashtirilib, ijobiy yakunlanadi', issue:'⚠ Muammo: Xodim norozilik bilan ketadi', fix:'✔ Yechim: Chiqish suhbati o\'tkaziladi, muammolar tinglanadi' },
+        { type:'arr' },
+        { type:'c-process', label:'38. Chiqish intervyusi', sub:'Xodim nima uchun ketayotgani, nima yoqqani/yoqmagani so\'raladi', issue:'⚠ Muammo: Xodim haqiqatni aytmaydi', fix:'✔ Yechim: Anonim format taklif qilinadi; "Nima o\'zgartirsak qolardingiz?" savoli beriladi' },
+        { type:'arr' },
+        { type:'c-final', label:'39. Video otziv berish', sub:'Xodim kompaniya haqida video fikr bildiradi (ixtiyoriy)', issue:'⚠ Muammo: Xodim istamasligi mumkin', fix:'✔ Yechim: Ijobiy muhit yaratiladi, majburlash yo\'q' },
+        { type:'arr' },
+        { type:'c-final', label:'40. Tavsiyanoma yozib berish', sub:'Xodim uchun rasmiy tavsiyoma yoziladi', issue:'⚠ Muammo: Tavsiyoma so\'ralishi esdan chiqadi', fix:'✔ Yechim: Chiqish jarayonining standart qadami sifatida kiritiladi' }
+      ]
+    },
+    {
+      id: 'alumni', label: '9-bosqich. Alumni — Hayotiy aloqa',
+      style: 'border-color:#f48fb1;background:#fff0f4',
+      headerStyle: 'background:#f8bbd0;color:#880e4f',
+      nodes: [
+        { type:'c-end', label:'41. Tashakkurnoma jo\'natish', sub:'Xodim ketganidan so\'ng rahmat xati yuboriladi; ijobiy taassurot qoldiriladi' },
+        { type:'arr' },
+        { type:'c-end', label:'42. Bayramlarda tabriklash', sub:'Yangi yil, Navro\'z, Mustaqillik kuni va boshqa milliy bayramlarda xabar yuboriladi' },
+        { type:'arr' },
+        { type:'c-end', label:'43. Tug\'ilgan kunida tabriklash', sub:'Shaxsiy munosabat — tug\'ilgan kun tabriknomasi yoki kichik sovg\'a' },
+        { type:'arr' },
+        { type:'c-process', label:'44. Oyda bir marta xabar olish', sub:'Sobiq xodim bilan aloqa uzilmaydi; qisqa suhbat o\'tkaziladi', issue:'⚠ Muammo: Aloqa yo\'qoladi', fix:'✔ Yechim: CRM da reminder o\'rnatiladi, mas\'ul shaxs belgilanadi' },
+        { type:'arr' },
+        { type:'c-process', label:'45. Yangiliklardan xabardor qilish', sub:'Kompaniya yangiliklari, muvaffaqiyatlari sobiq xodimlarga ham yuboriladi' },
+        { type:'arr' },
+        { type:'c-demo', label:'46. Karparativ bayramlarga taklif qilish', sub:'Yillik anjumanlar, korporativ tadbirlarga sobiq xodimlar ham taklif etiladi' },
+        { type:'arr' },
+        { type:'c-demo', label:'47. Tim bildinglarga chaqirish', sub:'Jamoa qurilishi tadbirlariga ishtiroq etish imkoniyati beriladi' },
+        { type:'arr' },
+        { type:'c-final', label:'48. Malaka oshirish kurslariga taklif qilish', sub:'Kompaniya o\'tkazadigan kurs va treninglarga sobiq xodimlar ham taklif etiladi', issue:'⚠ Muammo: Aloqa sovib qolgan', fix:'✔ Yechim: Alumni tarmog\'i yaratiladi; Telegram guruh ochiladi' }
+      ]
+    }
+  ]
+};
+
+function render() {
+  const container = document.getElementById('mainContent');
+  container.innerHTML = '';
+
+  data.phases.forEach((phase, pi) => {
+    const phaseEl = document.createElement('div');
+    phaseEl.className = 'phase';
+    phaseEl.style.cssText = phase.style || '';
+
+    const header = document.createElement('div');
+    header.className = 'phase-header';
+    header.style.cssText = phase.headerStyle || '';
+
+    const titleDiv = document.createElement('div');
+    titleDiv.className = 'phase-header-title';
+    titleDiv.innerHTML = `<span id="arr-${phase.id}">▼</span> <span>${phase.label}</span>`;
+    titleDiv.onclick = () => togglePhase(phase.id);
+
+    header.appendChild(titleDiv);
+    phaseEl.appendChild(header);
+
+    const body = document.createElement('div');
+    body.id = 'ph-' + phase.id;
+    body.className = 'phase-body';
+
+    phase.nodes.forEach((node, ni) => {
+      body.appendChild(renderNode(node, pi, ni, null));
+    });
+
+    if (editMode) {
+      const addBtn = document.createElement('button');
+      addBtn.className = 'add-node-btn';
+      addBtn.textContent = '+ Blok qo\'shish';
+      addBtn.onclick = () => openModal(null, pi, null, null);
+      body.appendChild(addBtn);
+    }
+
+    phaseEl.appendChild(body);
+    container.appendChild(phaseEl);
+  });
+
+  if (editMode) {
+    const addPhaseBtn = document.createElement('button');
+    addPhaseBtn.className = 'add-phase-btn';
+    addPhaseBtn.textContent = '+ Yangi bo\'lim qo\'shish';
+    addPhaseBtn.onclick = addPhase;
+    container.appendChild(addPhaseBtn);
+  }
+}
+
+function renderNode(node, pi, ni, branchIndex) {
+  if (node.type === 'arr') {
+    const arr = document.createElement('div');
+    arr.className = 'arr';
+    arr.textContent = '→';
+    return arr;
+  }
+
+  const el = document.createElement('div');
+  el.className = 'node ' + node.type;
+  let html = `<div class="label">${node.label}</div>`;
+  if (node.sub) html += `<div class="sub">${node.sub}</div>`;
+  if (node.issue) html += `<div class="issue">${node.issue}</div>`;
+  if (node.fix) html += `<div class="fix">${node.fix}</div>`;
+  el.innerHTML = html;
+
+  if (editMode) {
+    const btns = document.createElement('div');
+    btns.className = 'node-btns';
+    
+    const editBtn = document.createElement('button');
+    editBtn.className = 'node-btn nb-edit';
+    editBtn.textContent = '✏️';
+    editBtn.onclick = (e) => { e.stopPropagation(); openModal(node, pi, ni, branchIndex); };
+    
+    const delBtn = document.createElement('button');
+    delBtn.className = 'node-btn nb-del';
+    delBtn.textContent = '✕';
+    delBtn.onclick = (e) => {
+      e.stopPropagation();
+      if (!confirm('Bu blokni o\'chirasizmi?')) return;
+      data.phases[pi].nodes.splice(ni, 1);
+      render();
+    };
+    
+    btns.appendChild(editBtn);
+    btns.appendChild(delBtn);
+    el.appendChild(btns);
+  }
+  
+  return el;
+}
+
+// MODAL
+let modalCtx = null;
+function openModal(node, pi, ni, branchIndex) {
+  modalCtx = { node, pi, ni, branchIndex };
+  document.getElementById('mLabel').value = node ? node.label : '';
+  document.getElementById('mSub').value = node ? (node.sub || '') : '';
+  document.getElementById('mIssue').value = node ? (node.issue || '') : '';
+  document.getElementById('mFix').value = node ? (node.fix || '') : '';
+  document.getElementById('mType').value = node ? node.type : 'c-process';
+  document.getElementById('modalTitle').textContent = node ? 'Blokni tahrirlash' : 'Yangi blok qo\'shish';
+  document.getElementById('modalBg').classList.add('open');
+  document.getElementById('mLabel').focus();
+}
+
+function closeModal() {
+  document.getElementById('modalBg').classList.remove('open');
+  modalCtx = null;
+}
+
+function saveModal() {
+  const { node, pi, ni, branchIndex } = modalCtx;
+  const label = document.getElementById('mLabel').value.trim();
+  if (!label) { alert('Sarlavha kiritilishi shart!'); return; }
+  
+  const newNode = {
+    type: document.getElementById('mType').value,
+    label,
+    sub: document.getElementById('mSub').value.trim() || undefined,
+    issue: document.getElementById('mIssue').value.trim() || undefined,
+    fix: document.getElementById('mFix').value.trim() || undefined
+  };
+  
+  if (node) {
+    Object.assign(node, newNode);
+  } else {
+    data.phases[pi].nodes.push(newNode);
+  }
+  
+  closeModal();
+  render();
+}
+
+document.getElementById('modalBg').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+function addPhase() {
+  const label = prompt('Yangi bo\'lim sarlavhasi:');
+  if (!label) return;
+  data.phases.push({
+    id: 'phase_' + Date.now(),
+    label,
+    style: 'border-color:#90caf9;background:#f0f6fd',
+    headerStyle: 'background:#bbdefb;color:#0d47a1',
+    nodes: []
+  });
+  render();
+}
+
+function togglePhase(id) {
+  const b = document.getElementById('ph-' + id);
+  const a = document.getElementById('arr-' + id);
+  if (!b) return;
+  const hidden = b.style.display === 'none';
+  b.style.display = hidden ? '' : 'none';
+  if (a) a.textContent = hidden ? '▼' : '▶';
+}
+
+function expandAll() {
+  data.phases.forEach(p => {
+    const b = document.getElementById('ph-' + p.id);
+    const a = document.getElementById('arr-' + p.id);
+    if (b) b.style.display = '';
+    if (a) a.textContent = '▼';
+  });
+}
+
+function collapseAll() {
+  data.phases.forEach(p => {
+    const b = document.getElementById('ph-' + p.id);
+    const a = document.getElementById('arr-' + p.id);
+    if (b) b.style.display = 'none';
+    if (a) a.textContent = '▶';
+  });
+}
+
+function doSearch(q) {
+  q = q.trim().toLowerCase();
+  document.querySelectorAll('.node').forEach(n => {
+    if (!q) { n.classList.remove('dim'); return; }
+    n.classList.toggle('dim', !n.innerText.toLowerCase().includes(q));
+  });
+  if (q) expandAll();
+}
+
+function toggleEditMode() {
+  editMode = !editMode;
+  document.getElementById('editBtn').textContent = editMode ? '👁 Ko\'rish rejimi' : '✏️ Tahrirlash';
+  const badge = document.getElementById('editBadge');
+  badge.textContent = editMode ? 'Tahrirlash rejimi' : 'O\'qish rejimi';
+  badge.className = 'edit-badge' + (editMode ? ' on' : '');
+  render();
+}
+
+render();
+</script>
+</body>
+</html>

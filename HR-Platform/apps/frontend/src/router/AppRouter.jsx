@@ -10,6 +10,7 @@ import RegisterPage from '../pages/auth/RegisterPage';
 import AdminDashboard from '../pages/admin/AdminDashboard';
 import EmployeeList from '../pages/admin/EmployeeList';
 import InviteManagement from '../pages/admin/InviteManagement';
+import EJMPage from '../pages/admin/EJMPage';
 import HRDashboard from '../pages/hr/HRDashboard';
 import KanbanPage from '../pages/hr/KanbanPage';
 
@@ -129,6 +130,14 @@ export function AppRouter() {
             element={
               <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
                 <KanbanPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/ejm"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
+                <EJMPage />
               </ProtectedRoute>
             }
           />

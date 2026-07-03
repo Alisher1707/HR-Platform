@@ -83,6 +83,14 @@ export function Sidebar({ isOpen, toggleSidebar }) {
                 <span>Taklifnomalar</span>
               </NavLink>
             )}
+
+            <NavLink
+              to="/admin/ejm"
+              className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+            >
+              <span className="sidebar-link-icon">📄</span>
+              <span>EJM</span>
+            </NavLink>
           </>
         )}
 
