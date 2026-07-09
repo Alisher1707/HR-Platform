@@ -95,6 +95,10 @@ header span { font-size: 12px; opacity: .6; margin-left: auto; }
 .node-file-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; background: #e3f2fd; border: 1px solid #90caf9; border-radius: 4px; font-size: 10px; color: #0d47a1; }
 .node-file-badge:hover { background: #bbdefb; cursor: pointer; }
 
+/* Har bir card ostida fayl yuklash tugmasi */
+.node-upload-btn { margin-top: 8px; padding: 4px 8px; background: #f0f4fb; border: 1px dashed #4a6fa5; border-radius: 4px; font-size: 10px; color: #4a6fa5; cursor: pointer; text-align: center; transition: all .15s; }
+.node-upload-btn:hover { background: #4a6fa5; color: #fff; border-style: solid; }
+
 @media (max-width: 700px) { .phase-body { flex-direction: column; } .arr { display: none; } }
 </style>
 </head>
@@ -397,6 +401,33 @@ function renderNode(node, pi, ni, branchIndex) {
 
   el.innerHTML = html;
 
+  // Fayl yuklash tugmasi va input (to'g'ridan fayl tanlash)
+  const uploadWrapper = document.createElement('div');
+  uploadWrapper.style.cssText = 'margin-top: 8px;';
+
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.multiple = true;
+  fileInput.accept = 'image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.ppt,.pptx,.zip,.rar,.csv';
+  fileInput.style.display = 'none';
+  fileInput.id = `file-input-${pi}-${ni}`;
+
+  const uploadBtn = document.createElement('div');
+  uploadBtn.className = 'node-upload-btn';
+  uploadBtn.textContent = '📎 Fayl yuklash';
+  uploadBtn.onclick = () => fileInput.click();
+
+  fileInput.onchange = async (e) => {
+    if (e.target.files.length > 0) {
+      await uploadFilesDirectly(pi, ni, e.target.files, uploadWrapper);
+      e.target.value = ''; // Reset input
+    }
+  };
+
+  uploadWrapper.appendChild(fileInput);
+  uploadWrapper.appendChild(uploadBtn);
+  el.appendChild(uploadWrapper);
+
   if (editMode) {
     const btns = document.createElement('div');
     btns.className = 'node-btns';
@@ -428,7 +459,7 @@ function renderNode(node, pi, ni, branchIndex) {
 let modalCtx = null;
 let tempFiles = [];
 
-function openModal(node, pi, ni, branchIndex) {
+async function openModal(node, pi, ni, branchIndex) {
   modalCtx = { node, pi, ni, branchIndex };
   tempFiles = node && node.files ? [...node.files] : [];
 
@@ -444,10 +475,49 @@ function openModal(node, pi, ni, branchIndex) {
   fileInput.value = '';
   fileInput.onchange = handleFileSelect;
 
+  // Load files from server if editing existing node
+  if (node && ni !== null) {
+    await loadNodeFilesFromServer(pi, ni);
+  }
+
   renderModalFiles();
 
   document.getElementById('modalBg').classList.add('open');
   document.getElementById('mLabel').focus();
+}
+
+async function loadNodeFilesFromServer(pi, ni) {
+  const token = localStorage.getItem('accessToken') || parent.localStorage?.getItem('accessToken');
+  if (!token) return; // Skip if not logged in
+
+  try {
+    const response = await fetch(`/api/v1/ejm/files/${pi}/${ni}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    const result = await response.json();
+
+    if (result.success && result.data.files) {
+      // Add server files to tempFiles if not already there
+      result.data.files.forEach(serverFile => {
+        const exists = tempFiles.find(f => f.id === serverFile.id);
+        if (!exists) {
+          tempFiles.push({
+            id: serverFile.id,
+            name: serverFile.name,
+            size: typeof serverFile.size === 'number' ? formatFileSize(serverFile.size) : serverFile.size,
+            type: serverFile.type,
+            serverFile: true
+          });
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Failed to load files from server:', error);
+    // Silently fail - not critical
+  }
 }
 
 function closeModal() {
@@ -480,23 +550,135 @@ function saveModal() {
   render();
 }
 
-// File upload handlers
-function handleFileSelect(e) {
-  const files = Array.from(e.target.files);
-  files.forEach(file => {
-    // File ma'lumotlarini saqlash (Base64 formatda)
-    const reader = new FileReader();
-    reader.onload = function(ev) {
-      tempFiles.push({
+// Direct file upload (card ostidan to'g'ridan)
+async function uploadFilesDirectly(pi, ni, files, buttonWrapper) {
+  const fileArray = Array.from(files);
+
+  // Show loading
+  const loadingDiv = document.createElement('div');
+  loadingDiv.style.cssText = 'font-size:10px;color:#4a6fa5;padding:4px 8px;text-align:center;';
+  loadingDiv.textContent = `⏳ ${fileArray.length} ta fayl yuklanmoqda...`;
+  buttonWrapper.appendChild(loadingDiv);
+
+  try {
+    const token = localStorage.getItem('accessToken') || parent.localStorage?.getItem('accessToken');
+    if (!token) {
+      alert('Tizimga kirish kerak! Iltimos qayta login qiling.');
+      loadingDiv.remove();
+      return;
+    }
+
+    // Prepare FormData
+    const formData = new FormData();
+    fileArray.forEach(file => {
+      formData.append('files', file);
+    });
+    formData.append('phaseIndex', pi);
+    formData.append('nodeIndex', ni);
+
+    // Upload to server
+    const response = await fetch('/api/v1/ejm/upload', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      body: formData
+    });
+
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(result.message || 'Fayl yuklashda xatolik');
+    }
+
+    // Add uploaded files to node
+    const node = data.phases[pi].nodes[ni];
+    if (!node.files) node.files = [];
+
+    result.data.files.forEach(file => {
+      node.files.push({
+        id: file.id,
         name: file.name,
-        size: formatFileSize(file.size),
+        size: typeof file.size === 'number' ? formatFileSize(file.size) : file.size,
         type: file.type,
-        data: ev.target.result
+        serverFile: true
       });
+    });
+
+    // Success message
+    loadingDiv.style.color = '#2e7d32';
+    loadingDiv.textContent = `✅ ${fileArray.length} ta fayl yuklandi!`;
+    setTimeout(() => {
+      loadingDiv.remove();
+      render(); // Re-render to show uploaded files
+    }, 2000);
+
+  } catch (error) {
+    console.error('File upload error:', error);
+    loadingDiv.style.color = '#c62828';
+    loadingDiv.textContent = `❌ Xatolik: ${error.message}`;
+    setTimeout(() => loadingDiv.remove(), 3000);
+  }
+}
+
+// File upload handlers
+async function handleFileSelect(e) {
+  const files = Array.from(e.target.files);
+
+  // Show loading indicator
+  const filesList = document.getElementById('mFilesList');
+  filesList.innerHTML = '<div style="font-size:11px;color:#4a6fa5;padding:8px;">⏳ Fayllar yuklanmoqda...</div>';
+
+  try {
+    // Get token from parent window (iframe context)
+    const token = localStorage.getItem('accessToken') || parent.localStorage?.getItem('accessToken');
+    if (!token) {
+      alert('Tizimga kirish kerak! Iltimos qayta login qiling.');
       renderModalFiles();
-    };
-    reader.readAsDataURL(file);
-  });
+      return;
+    }
+
+    // Prepare FormData
+    const formData = new FormData();
+    files.forEach(file => {
+      formData.append('files', file);
+    });
+    formData.append('phaseIndex', modalCtx.pi);
+    formData.append('nodeIndex', modalCtx.ni !== null ? modalCtx.ni : data.phases[modalCtx.pi].nodes.length);
+
+    // Upload to server
+    const response = await fetch('/api/v1/ejm/upload', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      body: formData
+    });
+
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(result.message || 'Fayl yuklashda xatolik');
+    }
+
+    // Add uploaded files to temp list
+    result.data.files.forEach(file => {
+      tempFiles.push({
+        id: file.id,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        serverFile: true // Mark as server file
+      });
+    });
+
+    renderModalFiles();
+  } catch (error) {
+    console.error('File upload error:', error);
+    alert('Fayl yuklashda xatolik: ' + error.message);
+    renderModalFiles();
+  }
+
   e.target.value = ''; // Input'ni tozalash
 }
 
@@ -519,7 +701,36 @@ function renderModalFiles() {
   }).join('');
 }
 
-function removeModalFile(index) {
+async function removeModalFile(index) {
+  const file = tempFiles[index];
+
+  // If file is on server, delete from server
+  if (file.serverFile && file.id) {
+    const token = localStorage.getItem('accessToken') || parent.localStorage?.getItem('accessToken');
+    if (!token) {
+      alert('Tizimga kirish kerak!');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/v1/ejm/files/${file.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.message);
+      }
+    } catch (error) {
+      console.error('File delete error:', error);
+      alert('Faylni o\'chirishda xatolik: ' + error.message);
+      return;
+    }
+  }
+
   tempFiles.splice(index, 1);
   renderModalFiles();
 }
@@ -561,15 +772,33 @@ function truncateFileName(name, maxLen) {
   return truncated + '.' + ext;
 }
 
-function downloadFile(pi, ni, fi) {
+async function downloadFile(pi, ni, fi) {
   const node = data.phases[pi].nodes[ni];
   if (!node.files || !node.files[fi]) return;
 
   const file = node.files[fi];
-  const link = document.createElement('a');
-  link.href = file.data;
-  link.download = file.name;
-  link.click();
+
+  // If file is on server, download from server
+  if (file.serverFile && file.id) {
+    const token = localStorage.getItem('accessToken') || parent.localStorage?.getItem('accessToken');
+    if (!token) {
+      alert('Tizimga kirish kerak!');
+      return;
+    }
+
+    try {
+      window.open(`/api/v1/ejm/download/${file.id}?token=${token}`, '_blank');
+    } catch (error) {
+      console.error('File download error:', error);
+      alert('Faylni yuklashda xatolik: ' + error.message);
+    }
+  } else {
+    // Old LocalStorage files - download from Base64 data
+    const link = document.createElement('a');
+    link.href = file.data;
+    link.download = file.name;
+    link.click();
+  }
 }
 
 document.getElementById('modalBg').addEventListener('click', function(e) {

@@ -13,6 +13,7 @@ import authRoutes from './modules/auth/auth.routes.js';
 import inviteRoutes from './modules/invite/invite.routes.js';
 import employeesRoutes from './modules/employees/employees.routes.js';
 import applicationsRoutes from './modules/applications/applications.routes.js';
+import ejmRoutes from './modules/ejm/ejm.routes.js';
 
 /**
  * Initialize Express Application
@@ -83,6 +84,7 @@ app.use(`${API_PREFIX}/auth`, authRoutes);
 app.use(`${API_PREFIX}/invites`, inviteRoutes);
 app.use(`${API_PREFIX}/employees`, employeesRoutes);
 app.use(`${API_PREFIX}/applications`, applicationsRoutes);
+app.use(`${API_PREFIX}/ejm`, ejmRoutes);
 
 /**
  * API Documentation Root
@@ -97,6 +99,7 @@ app.get(API_PREFIX, (req, res) => {
       invites: `${API_PREFIX}/invites`,
       employees: `${API_PREFIX}/employees`,
       applications: `${API_PREFIX}/applications`,
+      ejm: `${API_PREFIX}/ejm`,
     },
     documentation: 'See README.md for API documentation',
   });
