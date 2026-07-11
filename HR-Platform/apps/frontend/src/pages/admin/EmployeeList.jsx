@@ -140,7 +140,16 @@ export function EmployeeList() {
   };
 
   const handleEJMClick = (employee) => {
-    navigate(`/admin/employees/${employee.id}/ejm`);
+    const token = localStorage.getItem('accessToken');
+    const params = new URLSearchParams({
+      employeeId: employee.id,
+      employeeName: `${employee.first_name} ${employee.last_name}`,
+      position: employee.position || '',
+      branch: employee.branch || '',
+      department: employee.department || '',
+      token: token || ''
+    });
+    window.open(`/ejm.html?${params.toString()}`, '_blank');
   };
 
   const formatDate = (dateString) => {

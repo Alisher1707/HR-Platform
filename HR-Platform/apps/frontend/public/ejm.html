@@ -171,12 +171,51 @@ let editMode = false;
 let currentEmployeeId = null; // Current employee ID for employee-specific EJM
 let currentEmployeeName = ''; // Current employee name for display
 
-// Listen for employee context from parent window (React app)
+// Check URL parameters for employee context (when opened in new tab)
+(function initFromURLParams() {
+  const params = new URLSearchParams(window.location.search);
+  const employeeId = params.get('employeeId');
+  const employeeName = params.get('employeeName');
+  const token = params.get('token');
+
+  if (employeeId) {
+    currentEmployeeId = employeeId;
+    currentEmployeeName = employeeName || '';
+
+    // Store token in localStorage if provided via URL
+    if (token) {
+      localStorage.setItem('accessToken', token);
+    }
+
+    console.log('Employee context from URL params:', {
+      employeeId: currentEmployeeId,
+      name: currentEmployeeName
+    });
+
+    // Update header with employee name
+    const header = document.querySelector('header h1');
+    if (header && currentEmployeeName) {
+      header.innerHTML = `👥 EJM - ${currentEmployeeName} (48 Bosqich)`;
+    }
+
+    // Load employee-specific EJM data after DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function() {
+        loadEmployeeEJMData();
+      });
+    } else {
+      // Small delay to ensure render() has run first
+      setTimeout(() => loadEmployeeEJMData(), 100);
+    }
+  }
+})();
+
+// Listen for employee context from parent window (React app iframe)
 window.addEventListener('message', function(event) {
   if (event.data.type === 'EMPLOYEE_CONTEXT') {
     currentEmployeeId = event.data.employeeId;
     currentEmployeeName = event.data.employeeName || '';
-    console.log('Employee context received:', {
+    console.log('Employee context received via postMessage:', {
       employeeId: currentEmployeeId,
       name: currentEmployeeName
     });
