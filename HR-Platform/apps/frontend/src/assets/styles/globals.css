@@ -685,6 +685,17 @@ a:hover {
 .modal-lg { max-width: 800px; }
 .modal-xl { max-width: 1000px; }
 .modal-2xl { max-width: 1200px; }
+.modal-full {
+  max-width: 95vw;
+  max-height: 95vh;
+  height: 95vh;
+  margin: 2.5vh auto;
+}
+.modal-full .modal-body {
+  height: calc(100% - 120px);
+  overflow: hidden;
+  padding: 0;
+}
 
 .modal-header {
   display: flex;

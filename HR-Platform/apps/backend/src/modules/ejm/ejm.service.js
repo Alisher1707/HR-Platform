@@ -12,7 +12,7 @@ import fs from 'fs/promises';
  */
 export async function getUserEJM(userId) {
   const result = await query(
-    'SELECT * FROM ejm_data WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1',
+    'SELECT * FROM ejm_data WHERE user_id = $1 AND employee_id IS NULL ORDER BY updated_at DESC LIMIT 1',
     [userId]
   );
 
@@ -20,6 +20,28 @@ export async function getUserEJM(userId) {
     return {
       id: result.rows[0].id,
       data: result.rows[0].data_json,
+      createdAt: result.rows[0].created_at,
+      updatedAt: result.rows[0].updated_at
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Get employee's EJM data (employee-specific)
+ */
+export async function getEmployeeEJM(employeeId) {
+  const result = await query(
+    'SELECT * FROM ejm_data WHERE employee_id = $1 ORDER BY updated_at DESC LIMIT 1',
+    [employeeId]
+  );
+
+  if (result.rows.length > 0) {
+    return {
+      id: result.rows[0].id,
+      data: result.rows[0].data_json,
+      employeeId: result.rows[0].employee_id,
       createdAt: result.rows[0].created_at,
       updatedAt: result.rows[0].updated_at
     };
@@ -80,25 +102,33 @@ export async function saveUserEJM(userId, ejmData) {
 /**
  * Upload files to EJM node
  */
-export async function uploadEJMFiles(userId, phaseIndex, nodeIndex, files) {
+export async function uploadEJMFiles(userId, phaseIndex, nodeIndex, files, employeeId = null) {
   const client = await getClient();
 
   try {
     await client.query('BEGIN');
 
-    // Get or create user's EJM
-    let ejmResult = await client.query(
-      'SELECT id FROM ejm_data WHERE user_id = $1',
-      [userId]
-    );
+    // Get or create user's/employee's EJM
+    let ejmResult;
+    if (employeeId) {
+      ejmResult = await client.query(
+        'SELECT id FROM ejm_data WHERE employee_id = $1',
+        [employeeId]
+      );
+    } else {
+      ejmResult = await client.query(
+        'SELECT id FROM ejm_data WHERE user_id = $1 AND employee_id IS NULL',
+        [userId]
+      );
+    }
 
     let ejmId;
 
     if (ejmResult.rows.length === 0) {
       // Create empty EJM if doesn't exist
       const newEjm = await client.query(
-        'INSERT INTO ejm_data (user_id, data_json) VALUES ($1, $2) RETURNING id',
-        [userId, { phases: [] }]
+        'INSERT INTO ejm_data (user_id, employee_id, data_json) VALUES ($1, $2, $3) RETURNING id',
+        [userId, employeeId, { phases: [] }]
       );
       ejmId = newEjm.rows[0].id;
     } else {
@@ -149,15 +179,27 @@ export async function uploadEJMFiles(userId, phaseIndex, nodeIndex, files) {
 /**
  * Get files for specific node
  */
-export async function getNodeFiles(userId, phaseIndex, nodeIndex) {
-  const result = await query(
-    `SELECT f.id, f.file_name, f.file_size, f.file_type, f.original_name, f.created_at
-     FROM ejm_files f
-     JOIN ejm_data e ON f.ejm_data_id = e.id
-     WHERE e.user_id = $1 AND f.phase_index = $2 AND f.node_index = $3
-     ORDER BY f.created_at DESC`,
-    [userId, phaseIndex, nodeIndex]
-  );
+export async function getNodeFiles(userId, phaseIndex, nodeIndex, employeeId = null) {
+  let result;
+  if (employeeId) {
+    result = await query(
+      `SELECT f.id, f.file_name, f.file_size, f.file_type, f.original_name, f.created_at
+       FROM ejm_files f
+       JOIN ejm_data e ON f.ejm_data_id = e.id
+       WHERE e.employee_id = $1 AND f.phase_index = $2 AND f.node_index = $3
+       ORDER BY f.created_at DESC`,
+      [employeeId, phaseIndex, nodeIndex]
+    );
+  } else {
+    result = await query(
+      `SELECT f.id, f.file_name, f.file_size, f.file_type, f.original_name, f.created_at
+       FROM ejm_files f
+       JOIN ejm_data e ON f.ejm_data_id = e.id
+       WHERE e.user_id = $1 AND e.employee_id IS NULL AND f.phase_index = $2 AND f.node_index = $3
+       ORDER BY f.created_at DESC`,
+      [userId, phaseIndex, nodeIndex]
+    );
+  }
 
   return result.rows.map(f => ({
     id: f.id,

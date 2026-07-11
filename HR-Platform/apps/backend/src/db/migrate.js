@@ -37,7 +37,7 @@ async function migrate() {
         console.log(`✅ Success: ${file}\n`);
       } catch (error) {
         // Check if error is because object already exists
-        if (error.code === '42P07' || error.code === '42710') {
+        if (error.code === '42P07' || error.code === '42710' || error.code === '42701') {
           console.log(`⚠️  Warning: ${file} - Objects already exist, skipping...\n`);
         } else {
           throw error;

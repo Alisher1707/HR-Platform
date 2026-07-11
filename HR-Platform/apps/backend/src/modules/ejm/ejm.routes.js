@@ -1,6 +1,6 @@
 import express from 'express';
 import * as ejmController from './ejm.controller.js';
-import { authenticate, authorize } from '../auth/auth.middleware.js';
+import { authenticate, authorize, authenticateFromQuery } from '../auth/auth.middleware.js';
 import { uploadEJMFile, handleMulterError } from '../../shared/middleware/upload.js';
 import { USER_ROLES } from '../../config/constants.js';
 
@@ -23,8 +23,8 @@ router.post('/upload', authenticate, authorize(USER_ROLES.ADMIN, USER_ROLES.SUPE
 // Get files for specific node
 router.get('/files/:phaseIndex/:nodeIndex', authenticate, authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.HR), ejmController.getNodeFiles);
 
-// Download file
-router.get('/download/:fileId', authenticate, authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.HR), ejmController.downloadFile);
+// Download file - uses query param token for iframe/new tab compatibility
+router.get('/download/:fileId', authenticateFromQuery, authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.HR), ejmController.downloadFile);
 
 // Delete file
 router.delete('/files/:fileId', authenticate, authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN), ejmController.deleteFile);

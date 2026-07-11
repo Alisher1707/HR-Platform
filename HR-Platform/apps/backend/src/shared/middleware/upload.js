@@ -32,34 +32,10 @@ const storage = multer.diskStorage({
   }
 });
 
-// File filter - allowed types
+// File filter - allow all types
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = [
-    // Images
-    'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp',
-    // Videos
-    'video/mp4', 'video/avi', 'video/quicktime', 'video/x-ms-wmv', 'video/x-flv', 'video/x-matroska', 'video/webm',
-    // Audio
-    'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4', 'audio/flac', 'audio/aac',
-    // Documents
-    'application/pdf',
-    'application/msword', // .doc
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
-    'application/vnd.ms-excel', // .xls
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
-    'application/vnd.ms-powerpoint', // .ppt
-    'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
-    'text/plain', 'text/csv',
-    // Archives
-    'application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed',
-    'application/x-tar', 'application/gzip'
-  ];
-
-  if (allowedTypes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error(`File type not allowed: ${file.mimetype}. Allowed types: images, videos, audio, documents, archives.`), false);
-  }
+  // Allow all file types as requested
+  cb(null, true);
 };
 
 // Configure multer

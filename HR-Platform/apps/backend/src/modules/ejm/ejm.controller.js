@@ -57,7 +57,7 @@ export async function saveEJM(req, res) {
  */
 export async function uploadFiles(req, res) {
   try {
-    const { phaseIndex, nodeIndex } = req.body;
+    const { phaseIndex, nodeIndex, employeeId } = req.body;
 
     if (phaseIndex === undefined || nodeIndex === undefined) {
       return errorResponse(res, 'phaseIndex va nodeIndex kiritilishi shart', HTTP_STATUS.BAD_REQUEST);
@@ -71,7 +71,8 @@ export async function uploadFiles(req, res) {
       req.user.id,
       parseInt(phaseIndex),
       parseInt(nodeIndex),
-      req.files
+      req.files,
+      employeeId || null
     );
 
     return successResponse(res, { files }, 'Fayllar yuklandi', HTTP_STATUS.CREATED);
@@ -88,15 +89,18 @@ export async function uploadFiles(req, res) {
 /**
  * Get files for specific node
  * GET /api/v1/ejm/files/:phaseIndex/:nodeIndex
+ * GET /api/v1/ejm/files/:phaseIndex/:nodeIndex?employeeId=xxx
  */
 export async function getNodeFiles(req, res) {
   try {
     const { phaseIndex, nodeIndex } = req.params;
+    const { employeeId } = req.query;
 
     const files = await ejmService.getNodeFiles(
       req.user.id,
       parseInt(phaseIndex),
-      parseInt(nodeIndex)
+      parseInt(nodeIndex),
+      employeeId || null
     );
 
     return successResponse(res, { files }, 'Fayllar ro\'yxati olindi');
@@ -120,7 +124,9 @@ export async function downloadFile(req, res) {
 
     const file = await ejmService.getEJMFile(fileId, req.user.id);
 
-    res.download(file.path, file.name);
+    // Faylni majburiy yuklash o'rniga brauzerda ochilishi uchun inline qilib beramiz
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.name)}"`);
+    res.sendFile(file.path);
   } catch (error) {
     console.error('Download file error:', error);
     return errorResponse(

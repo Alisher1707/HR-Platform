@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import employeeService from '../../services/employeeService';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
@@ -16,6 +16,7 @@ import useToast from '../../hooks/useToast';
  */
 export function EmployeeList() {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   
   const [loading, setLoading] = useState(true);
@@ -138,6 +139,10 @@ export function EmployeeList() {
     setSelectedEmployee(null);
   };
 
+  const handleEJMClick = (employee) => {
+    navigate(`/admin/employees/${employee.id}/ejm`);
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return 'Kiritilmagan';
     const date = new Date(dateString);
@@ -247,6 +252,19 @@ export function EmployeeList() {
                             style={{ borderColor: '#ffffff' }}
                           >
                             Batafsil
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEJMClick(emp)}
+                            style={{
+                              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                              color: 'white',
+                              border: 'none',
+                              fontWeight: '600'
+                            }}
+                          >
+                            📊 EJM
                           </Button>
                           <Button variant="outline" size="sm" onClick={() => handleEditClick(emp)}>
                             Tahrirlash
@@ -561,13 +579,27 @@ export function EmployeeList() {
             </div>
 
             {/* Action Buttons */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', paddingTop: '0.5rem' }}>
-              <Button variant="outline" onClick={handleDetailModalClose}>
-                Yopish
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', paddingTop: '0.5rem' }}>
+              <Button
+                variant="outline"
+                onClick={() => { handleDetailModalClose(); handleEJMClick(selectedEmployee); }}
+                style={{
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  color: 'white',
+                  border: 'none',
+                  fontWeight: '600'
+                }}
+              >
+                📊 EJM
               </Button>
-              <Button variant="primary" onClick={() => { handleDetailModalClose(); handleEditClick(selectedEmployee); }}>
-                ✏️ Tahrirlash
-              </Button>
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <Button variant="outline" onClick={handleDetailModalClose}>
+                  Yopish
+                </Button>
+                <Button variant="primary" onClick={() => { handleDetailModalClose(); handleEditClick(selectedEmployee); }}>
+                  ✏️ Tahrirlash
+                </Button>
+              </div>
             </div>
           </div>
         )}

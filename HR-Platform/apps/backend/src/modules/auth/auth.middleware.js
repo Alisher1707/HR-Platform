@@ -80,6 +80,53 @@ export function authorize(...allowedRoles) {
 }
 
 /**
+ * Authentication from Query Parameter
+ * For file downloads where token is passed in URL query param
+ */
+export async function authenticateFromQuery(req, res, next) {
+  try {
+    // Get token from query parameter
+    const token = req.query.token;
+
+    if (!token) {
+      return errorResponse(res, MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED);
+    }
+
+    // Verify token
+    const decoded = verifyAccessToken(token);
+
+    // Get user from database
+    const result = await query(
+      'SELECT id, email, role, first_name, last_name, is_active FROM users WHERE id = $1',
+      [decoded.userId]
+    );
+
+    if (result.rows.length === 0) {
+      return errorResponse(res, MESSAGES.USER_NOT_FOUND, HTTP_STATUS.UNAUTHORIZED);
+    }
+
+    const user = result.rows[0];
+
+    // Check if user is active
+    if (!user.is_active) {
+      return errorResponse(res, 'Account is deactivated', HTTP_STATUS.FORBIDDEN);
+    }
+
+    // Attach user to request
+    req.user = user;
+    next();
+  } catch (error) {
+    if (error.message === 'Access token expired') {
+      return errorResponse(res, MESSAGES.TOKEN_EXPIRED, HTTP_STATUS.UNAUTHORIZED);
+    }
+    if (error.message === 'Invalid access token') {
+      return errorResponse(res, MESSAGES.TOKEN_INVALID, HTTP_STATUS.UNAUTHORIZED);
+    }
+    return errorResponse(res, MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED);
+  }
+}
+
+/**
  * Optional Authentication
  * Attaches user if token is valid, but doesn't require it
  */

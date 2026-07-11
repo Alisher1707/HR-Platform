@@ -2,9 +2,13 @@
 -- Date: 2026-07-01
 -- Description: Rename field and update logic - candidates wait 1 hour in SHARTNOMA before becoming employees
 
--- Rename column for clarity
-ALTER TABLE applications
-RENAME COLUMN sinov_muddati_start_date TO shartnoma_start_date;
+-- Rename column for clarity (skip if already renamed)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='applications' AND column_name='sinov_muddati_start_date') THEN
+    ALTER TABLE applications RENAME COLUMN sinov_muddati_start_date TO shartnoma_start_date;
+  END IF;
+END $$;
 
 -- Drop old index
 DROP INDEX IF EXISTS idx_applications_sinov_promotion;

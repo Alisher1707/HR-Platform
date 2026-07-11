@@ -152,9 +152,9 @@ header span { font-size: 12px; opacity: .6; margin-left: auto; }
     </select>
 
     <div class="file-upload-section">
-      <label class="file-upload-label">📎 Fayllar yuklash (rasm, video, hujjat, audio va h.k.)</label>
+      <label class="file-upload-label">📎 Fayllar yuklash (barcha formatlar qabul qilinadi)</label>
       <div class="file-input-wrapper">
-        <input type="file" id="mFiles" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.ppt,.pptx,.zip,.rar,.csv">
+        <input type="file" id="mFiles" multiple>
       </div>
       <div class="uploaded-files" id="mFilesList"></div>
     </div>
@@ -168,6 +168,75 @@ header span { font-size: 12px; opacity: .6; margin-left: auto; }
 
 <script>
 let editMode = false;
+let currentEmployeeId = null; // Current employee ID for employee-specific EJM
+let currentEmployeeName = ''; // Current employee name for display
+
+// Listen for employee context from parent window (React app)
+window.addEventListener('message', function(event) {
+  if (event.data.type === 'EMPLOYEE_CONTEXT') {
+    currentEmployeeId = event.data.employeeId;
+    currentEmployeeName = event.data.employeeName || '';
+    console.log('Employee context received:', {
+      employeeId: currentEmployeeId,
+      name: currentEmployeeName
+    });
+
+    // Update header with employee name
+    const header = document.querySelector('header h1');
+    if (header && currentEmployeeName) {
+      header.innerHTML = `👥 EJM - ${currentEmployeeName} (48 Bosqich)`;
+    }
+
+    // Load employee-specific EJM data and files
+    loadEmployeeEJMData();
+  }
+});
+
+// Load employee-specific EJM data from server
+async function loadEmployeeEJMData() {
+  if (!currentEmployeeId) return;
+
+  const token = localStorage.getItem('accessToken') || parent.localStorage?.getItem('accessToken');
+  if (!token) {
+    console.log('No auth token found, skipping EJM data load');
+    return;
+  }
+
+  try {
+    // Load all files for all nodes
+    for (let pi = 0; pi < data.phases.length; pi++) {
+      for (let ni = 0; ni < data.phases[pi].nodes.length; ni++) {
+        const node = data.phases[pi].nodes[ni];
+        if (node.type === 'arr') continue; // Skip arrow nodes
+
+        // Load files for this node
+        const response = await fetch(`/api/v1/ejm/files/${pi}/${ni}?employeeId=${currentEmployeeId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        const result = await response.json();
+
+        if (result.success && result.data.files && result.data.files.length > 0) {
+          node.files = result.data.files.map(file => ({
+            id: file.id,
+            name: file.name,
+            size: typeof file.size === 'number' ? formatFileSize(file.size) : file.size,
+            type: file.type,
+            serverFile: true
+          }));
+        }
+      }
+    }
+
+    // Re-render to show loaded files
+    render();
+    console.log('Employee EJM data loaded successfully');
+  } catch (error) {
+    console.error('Failed to load employee EJM data:', error);
+  }
+}
 
 const data = {
   phases: [
@@ -408,7 +477,7 @@ function renderNode(node, pi, ni, branchIndex) {
   const fileInput = document.createElement('input');
   fileInput.type = 'file';
   fileInput.multiple = true;
-  fileInput.accept = 'image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.ppt,.pptx,.zip,.rar,.csv';
+  // Accept all file formats - no restriction
   fileInput.style.display = 'none';
   fileInput.id = `file-input-${pi}-${ni}`;
 
@@ -576,6 +645,11 @@ async function uploadFilesDirectly(pi, ni, files, buttonWrapper) {
     formData.append('phaseIndex', pi);
     formData.append('nodeIndex', ni);
 
+    // Add employeeId if in employee-specific context
+    if (currentEmployeeId) {
+      formData.append('employeeId', currentEmployeeId);
+    }
+
     // Upload to server
     const response = await fetch('/api/v1/ejm/upload', {
       method: 'POST',
@@ -584,6 +658,11 @@ async function uploadFilesDirectly(pi, ni, files, buttonWrapper) {
       },
       body: formData
     });
+
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('text/html')) {
+      throw new Error(`Server xatolik qaytardi (HTML): Katta ehtimol bilan fayl hajmi juda katta yoki server xatosi.`);
+    }
 
     const result = await response.json();
 
@@ -646,6 +725,11 @@ async function handleFileSelect(e) {
     formData.append('phaseIndex', modalCtx.pi);
     formData.append('nodeIndex', modalCtx.ni !== null ? modalCtx.ni : data.phases[modalCtx.pi].nodes.length);
 
+    // Add employeeId if in employee-specific context
+    if (currentEmployeeId) {
+      formData.append('employeeId', currentEmployeeId);
+    }
+
     // Upload to server
     const response = await fetch('/api/v1/ejm/upload', {
       method: 'POST',
@@ -654,6 +738,11 @@ async function handleFileSelect(e) {
       },
       body: formData
     });
+
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('text/html')) {
+      throw new Error(`Server xatolik qaytardi (HTML): Katta ehtimol bilan fayl hajmi juda katta yoki server xatosi.`);
+    }
 
     const result = await response.json();
 
@@ -693,12 +782,26 @@ function renderModalFiles() {
     const icon = getFileIcon(file.name);
     return `
       <div class="file-item">
-        <span class="file-item-name">${icon} ${file.name}</span>
+        <span class="file-item-name" style="cursor:pointer; color:#0d47a1; text-decoration:underline;" onclick="downloadModalFile(${i})">${icon} ${file.name}</span>
         <span class="file-item-size">${file.size}</span>
         <button class="file-item-del" onclick="removeModalFile(${i})">✕</button>
       </div>
     `;
   }).join('');
+}
+
+function downloadModalFile(index) {
+  const file = tempFiles[index];
+  if (file.serverFile && file.id) {
+    const token = localStorage.getItem('accessToken') || parent.localStorage?.getItem('accessToken');
+    if (!token) return alert('Tizimga kirish kerak!');
+    window.open(`/api/v1/ejm/download/${file.id}?token=${token}&t=${Date.now()}`, '_blank');
+  } else if (file.data) {
+    const link = document.createElement('a');
+    link.href = file.data;
+    link.download = file.name;
+    link.click();
+  }
 }
 
 async function removeModalFile(index) {
@@ -787,7 +890,7 @@ async function downloadFile(pi, ni, fi) {
     }
 
     try {
-      window.open(`/api/v1/ejm/download/${file.id}?token=${token}`, '_blank');
+      window.open(`/api/v1/ejm/download/${file.id}?token=${token}&t=${Date.now()}`, '_blank');
     } catch (error) {
       console.error('File download error:', error);
       alert('Faylni yuklashda xatolik: ' + error.message);
@@ -863,7 +966,23 @@ function toggleEditMode() {
   render();
 }
 
-render();
+// Initial render
+console.log('📊 Starting initial render...');
+console.log('mainContent element:', document.getElementById('mainContent'));
+console.log('data.phases length:', data.phases.length);
+
+// Make sure DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function() {
+    console.log('✅ DOM loaded, rendering...');
+    render();
+  });
+} else {
+  console.log('✅ DOM already loaded, rendering immediately...');
+  render();
+}
+
+console.log('🎉 EJM script initialization complete');
 </script>
 </body>
 </html>
