@@ -161,6 +161,7 @@ export async function getAllEmployees(filters = {}, pagination = {}) {
       status: row.status,
       kpi_template: row.kpi_template,
       telegram_username: row.telegram_username,
+      photo_url: row.photo_url,
       age: row.age,
       experience: row.experience,
       created_at: row.created_at,
@@ -225,6 +226,7 @@ export async function getEmployeeById(id) {
     status: row.status,
     kpi_template: row.kpi_template,
     telegram_username: row.telegram_username,
+    photo_url: row.photo_url,
     age: row.age,
     experience: row.experience,
     created_at: row.created_at,
@@ -289,6 +291,35 @@ export async function updateEmployee(id, updates) {
   }
 
   return result.rows[0];
+}
+
+/**
+ * Update employee photo
+ * Returns the updated employee row and the previous photo URL (for cleanup)
+ */
+export async function updateEmployeePhoto(id, photoUrl) {
+  const currentResult = await query('SELECT photo_url FROM employees WHERE id = $1', [id]);
+
+  if (currentResult.rows.length === 0) {
+    const error = new Error(MESSAGES.EMPLOYEE_NOT_FOUND);
+    error.statusCode = HTTP_STATUS.NOT_FOUND;
+    throw error;
+  }
+
+  const oldPhotoUrl = currentResult.rows[0].photo_url;
+
+  const result = await query(
+    `UPDATE employees
+     SET photo_url = $1, updated_at = NOW()
+     WHERE id = $2
+     RETURNING *`,
+    [photoUrl, id]
+  );
+
+  return {
+    employee: result.rows[0],
+    oldPhotoUrl,
+  };
 }
 
 /**

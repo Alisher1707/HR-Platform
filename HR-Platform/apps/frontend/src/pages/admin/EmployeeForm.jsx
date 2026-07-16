@@ -42,8 +42,8 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
   // Branch options
   const branches = [
     { value: '', label: 'Tanlang...' },
-    { value: 'beeline', label: 'Beeline' },
-    { value: 'stomatologiya', label: 'Stomatologiya' },
+    { value: 'sayxun', label: 'Sayxun' },
+    { value: "xalqlar do'stligi", label: "Xalqlar do'stligi" },
     { value: 'tuman', label: 'Tuman' },
   ];
 
@@ -117,7 +117,7 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
       });
 
       if (employee.photo_url) {
-        setPhotoPreview(employee.photo_url);
+        setPhotoPreview(employeeService.getPhotoUrl(employee.photo_url));
       }
     }
   }, [employee]);
@@ -247,9 +247,16 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
 
       if (isEditing) {
         await employeeService.updateEmployee(employee.id, payload);
+        if (formData.photo) {
+          await employeeService.uploadPhoto(employee.id, formData.photo);
+        }
         toast.success('Xodim ma\'lumotlari muvaffaqiyatli yangilandi!');
       } else {
-        await employeeService.createEmployee(payload);
+        const created = await employeeService.createEmployee(payload);
+        const newEmployeeId = created?.employee?.id;
+        if (formData.photo && newEmployeeId) {
+          await employeeService.uploadPhoto(newEmployeeId, formData.photo);
+        }
         toast.success('Yangi xodim muvaffaqiyatli qo\'shildi!');
       }
 

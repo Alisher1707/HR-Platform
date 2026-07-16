@@ -48,6 +48,43 @@ export const uploadEJMFile = multer({
   }
 }).array('files', 10); // Field name: 'files', max 10 files
 
+// =============================================
+// Employee photo upload (avatar)
+// =============================================
+
+const employeePhotosDir = path.join(__dirname, '../../../uploads/employees');
+if (!fs.existsSync(employeePhotosDir)) {
+  fs.mkdirSync(employeePhotosDir, { recursive: true });
+}
+
+const employeePhotoStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, employeePhotosDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `${uniqueSuffix}${ext}`);
+  }
+});
+
+// Only image files are allowed for employee photos
+const imageFileFilter = (req, file, cb) => {
+  if (file.mimetype.startsWith('image/')) {
+    cb(null, true);
+  } else {
+    cb(new Error('Faqat rasm fayllari yuklash mumkin'));
+  }
+};
+
+export const uploadEmployeePhoto = multer({
+  storage: employeePhotoStorage,
+  fileFilter: imageFileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB max
+  }
+}).single('photo'); // Field name: 'photo'
+
 // Error handler middleware
 export function handleMulterError(err, req, res, next) {
   if (err instanceof multer.MulterError) {

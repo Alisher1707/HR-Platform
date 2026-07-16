@@ -5,6 +5,9 @@ import api from './api';
  * Handles all employee-related API calls
  */
 
+// Backend origin (without /api/v1) — used for building photo URLs
+const API_ORIGIN = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1').replace(/\/api\/v1\/?$/, '');
+
 export const employeeService = {
   /**
    * Create new employee
@@ -49,6 +52,28 @@ export const employeeService = {
   async deleteEmployee(id) {
     const response = await api.delete(`/employees/${id}`);
     return response.data;
+  },
+
+  /**
+   * Upload employee photo (avatar)
+   */
+  async uploadPhoto(id, file) {
+    const formData = new FormData();
+    formData.append('photo', file);
+    // Instance default is application/json — must be overridden,
+    // otherwise axios serializes FormData to JSON and the file is lost
+    const response = await api.post(`/employees/${id}/photo`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data.data.employee;
+  },
+
+  /**
+   * Build absolute URL for an employee photo path
+   */
+  getPhotoUrl(photoUrl) {
+    if (!photoUrl) return null;
+    return photoUrl.startsWith('http') ? photoUrl : `${API_ORIGIN}${photoUrl}`;
   },
 };
 

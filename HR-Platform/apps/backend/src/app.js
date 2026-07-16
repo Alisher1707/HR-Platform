@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { config, validateEnv } from './config/env.js';
 import { testConnection } from './config/database.js';
 import { generalLimiter } from './shared/middleware/rateLimiter.js';
@@ -57,6 +59,20 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' })); // Parse URL-enc
  * Cookie Parser Middleware
  */
 app.use(cookieParser());
+
+/**
+ * Static Files - Employee photos (avatars)
+ * CORP header is required because the frontend runs on a different origin
+ */
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+app.use(
+  '/uploads/employees',
+  express.static(path.join(__dirname, '../uploads/employees'), {
+    setHeaders: (res) => {
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    },
+  })
+);
 
 /**
  * Rate Limiting

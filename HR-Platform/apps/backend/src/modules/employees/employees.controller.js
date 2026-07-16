@@ -1,7 +1,13 @@
+import fs from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { asyncHandler } from '../../shared/middleware/errorHandler.js';
-import { successResponse, createdResponse, paginatedResponse } from '../../shared/utils/response.js';
-import { MESSAGES } from '../../config/constants.js';
+import { successResponse, createdResponse, paginatedResponse, errorResponse } from '../../shared/utils/response.js';
+import { HTTP_STATUS, MESSAGES } from '../../config/constants.js';
 import * as employeesService from './employees.service.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const employeePhotosDir = path.join(__dirname, '../../../uploads/employees');
 
 /**
  * Employees Controller
@@ -106,6 +112,35 @@ export const updateEmployee = asyncHandler(async (req, res) => {
   const employee = await employeesService.updateEmployee(req.params.id, updates);
 
   return successResponse(res, { employee }, MESSAGES.EMPLOYEE_UPDATED);
+});
+
+/**
+ * POST /api/v1/employees/:id/photo
+ * Upload/replace employee photo (avatar)
+ */
+export const uploadPhoto = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    return errorResponse(res, 'Rasm fayli tanlanmagan', HTTP_STATUS.BAD_REQUEST);
+  }
+
+  const photoUrl = `/uploads/employees/${req.file.filename}`;
+
+  let result;
+  try {
+    result = await employeesService.updateEmployeePhoto(req.params.id, photoUrl);
+  } catch (error) {
+    // Employee not found — remove the orphaned uploaded file
+    await fs.unlink(req.file.path).catch(() => {});
+    throw error;
+  }
+
+  // Remove the previous photo file if it was replaced
+  if (result.oldPhotoUrl) {
+    const oldFileName = path.basename(result.oldPhotoUrl);
+    await fs.unlink(path.join(employeePhotosDir, oldFileName)).catch(() => {});
+  }
+
+  return successResponse(res, { employee: result.employee }, 'Xodim rasmi saqlandi');
 });
 
 /**

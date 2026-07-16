@@ -210,6 +210,8 @@ export function EmployeeList() {
               <table className="table">
                 <thead>
                   <tr>
+                    <th style={{ width: '40px' }}>№</th>
+                    <th style={{ width: '56px' }}>Rasm</th>
                     <th>Ism</th>
                     <th>Familiya</th>
                     <th>Filial</th>
@@ -221,8 +223,46 @@ export function EmployeeList() {
                   </tr>
                 </thead>
                 <tbody>
-                  {employees.map((emp) => (
+                  {employees.map((emp, index) => (
                     <tr key={emp.id}>
+                      <td style={{ color: 'var(--text-muted)', fontWeight: '600' }}>
+                        {(pagination.page - 1) * pagination.limit + index + 1}
+                      </td>
+                      <td>
+                        {emp.photo_url ? (
+                          <img
+                            src={employeeService.getPhotoUrl(emp.photo_url)}
+                            alt={`${emp.first_name} ${emp.last_name}`}
+                            style={{
+                              width: '36px',
+                              height: '36px',
+                              borderRadius: '50%',
+                              objectFit: 'cover',
+                              border: '2px solid var(--border)',
+                              display: 'block',
+                            }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: '36px',
+                              height: '36px',
+                              borderRadius: '50%',
+                              background: 'var(--surface)',
+                              border: '2px solid var(--border)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '0.7rem',
+                              fontWeight: '700',
+                              color: 'var(--text-muted)',
+                              textTransform: 'uppercase',
+                            }}
+                          >
+                            {(emp.first_name?.[0] || '') + (emp.last_name?.[0] || '')}
+                          </div>
+                        )}
+                      </td>
                       <td><div className="font-semibold">{emp.first_name}</div></td>
                       <td><div className="font-semibold">{emp.last_name}</div></td>
                       <td>{emp.branch ? emp.branch.charAt(0).toUpperCase() + emp.branch.slice(1) : 'Yo\'q'}</td>

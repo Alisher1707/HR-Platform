@@ -3,6 +3,7 @@ import Joi from 'joi';
 import * as employeesController from './employees.controller.js';
 import { authenticate, authorize } from '../auth/auth.middleware.js';
 import { validate, validateParams, validateQuery, commonSchemas } from '../../shared/middleware/validate.js';
+import { uploadEmployeePhoto, handleMulterError } from '../../shared/middleware/upload.js';
 import { USER_ROLES } from '../../config/constants.js';
 
 const router = express.Router();
@@ -104,6 +105,17 @@ router.put(
   validateParams(uuidParamSchema),
   validate(updateEmployeeSchema),
   employeesController.updateEmployee
+);
+
+// POST /api/v1/employees/:id/photo - Upload employee photo (ADMIN only)
+router.post(
+  '/:id/photo',
+  authenticate,
+  authorize(USER_ROLES.ADMIN),
+  validateParams(uuidParamSchema),
+  uploadEmployeePhoto,
+  handleMulterError,
+  employeesController.uploadPhoto
 );
 
 // DELETE /api/v1/employees/:id - Delete employee (ADMIN only)
