@@ -215,11 +215,8 @@ export function EmployeeList() {
                     <th>Filial</th>
                     <th>Bo'lim</th>
                     <th>Lavozim</th>
-                    <th>Tajriba</th>
                     <th>Holat</th>
                     <th>Telefon</th>
-                    <th>Telegram</th>
-                    <th>Manzil</th>
                     <th style={{ textAlign: 'right' }}>Amallar</th>
                   </tr>
                 </thead>
@@ -231,27 +228,12 @@ export function EmployeeList() {
                       <td>{emp.branch ? emp.branch.charAt(0).toUpperCase() + emp.branch.slice(1) : 'Yo\'q'}</td>
                       <td>{emp.department ? emp.department.charAt(0).toUpperCase() + emp.department.slice(1) : 'Yo\'q'}</td>
                       <td>{emp.position ? emp.position.charAt(0).toUpperCase() + emp.position.slice(1) : 'Yo\'q'}</td>
-                      <td>{emp.experience || 0} yil</td>
                       <td>
                         <span className={`status-badge status-${emp.status?.toLowerCase().replace(/['\s]/g, '')}`}>
                           {emp.status || 'Faol'}
                         </span>
                       </td>
                       <td>{emp.phone || 'Yo\'q'}</td>
-                      <td>
-                        {emp.telegram_username ? (
-                          <span style={{ color: 'var(--accent)', fontWeight: '500' }}>
-                            {emp.telegram_username}
-                          </span>
-                        ) : (
-                          'Yo\'q'
-                        )}
-                      </td>
-                      <td>
-                        <div className="truncate" style={{ maxWidth: '150px' }}>
-                          {emp.address || 'Yo\'q'}
-                        </div>
-                      </td>
                       <td>
                         <div className="table-actions" style={{ justifyContent: 'flex-end', gap: '0.75rem' }}>
                           <Button
