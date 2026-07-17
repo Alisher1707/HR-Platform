@@ -60,15 +60,15 @@ export function KanbanBoard({ applications = [], onStatusChange, onCardClick }) 
           onCardClick={onCardClick}
         />
         <KanbanColumn
-          status="SHARTNOMA"
-          title="Shartnoma Imzolandi"
-          applications={shartnomaApps}
-          onCardClick={onCardClick}
-        />
-        <KanbanColumn
           status="RAD_ETILDI"
           title="Rad Etildi"
           applications={radEtildiApps}
+          onCardClick={onCardClick}
+        />
+        <KanbanColumn
+          status="SHARTNOMA"
+          title="Shartnoma Imzolandi"
+          applications={shartnomaApps}
           onCardClick={onCardClick}
         />
       </div>
