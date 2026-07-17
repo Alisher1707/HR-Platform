@@ -5,6 +5,9 @@ import api from './api';
  * Handles all application (Kanban) related API calls
  */
 
+// Backend origin (without /api/v1) — used for building resume file URLs
+const API_ORIGIN = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1').replace(/\/api\/v1\/?$/, '');
+
 export const applicationService = {
   /**
    * Get all applications grouped by status
@@ -44,6 +47,8 @@ export const applicationService = {
       employeeStatus: app.employee?.status || '',
       kpiTemplate: app.employee?.kpi_template || '',
       telegramUsername: app.employee?.telegram_username || '',
+      resumeUrl: app.employee?.resume_url || null,
+      resumeOriginalName: app.employee?.resume_original_name || '',
       createdAt: app.created_at,
       experience: app.employee?.experience || 0,
       address: app.employee?.address || '',
@@ -95,6 +100,14 @@ export const applicationService = {
   async getApplicationHistory(id) {
     const response = await api.get(`/applications/${id}/history`);
     return response.data.data.history;
+  },
+
+  /**
+   * Build absolute URL for a candidate resume path
+   */
+  getResumeUrl(resumeUrl) {
+    if (!resumeUrl) return null;
+    return resumeUrl.startsWith('http') ? resumeUrl : `${API_ORIGIN}${resumeUrl}`;
   },
 };
 

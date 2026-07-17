@@ -1,3 +1,4 @@
+import fs from 'fs/promises';
 import { query, getClient } from '../../config/database.js';
 import { generateInviteToken } from '../../shared/utils/crypto.js';
 import { config } from '../../config/env.js';
@@ -235,8 +236,10 @@ export async function validateInviteToken(token) {
 
 /**
  * Submit application using invite token
+ * @param {object} applicationData - Candidate form fields
+ * @param {object|null} resumeFile - Multer file object (candidate resume), optional
  */
-export async function submitApplication(applicationData) {
+export async function submitApplication(applicationData, resumeFile = null) {
   const client = await getClient();
   try {
     await client.query('BEGIN');
@@ -278,10 +281,11 @@ export async function submitApplication(applicationData) {
       throw error;
     }
 
-    // 2. Insert employee
+    // 2. Insert employee as candidate ('Nomzod')
+    // Xodimlar bo'limida ko'rinmaydi — SHARTNOMA bosqichiga o'tganda 'Faol' bo'ladi
     const employeeResult = await client.query(
-      `INSERT INTO employees (first_name, last_name, phone, address, birth_date, experience, telegram_username, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO employees (first_name, last_name, phone, address, birth_date, experience, telegram_username, resume_url, resume_original_name, status, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING id`,
       [
         applicationData.firstName,
@@ -291,6 +295,9 @@ export async function submitApplication(applicationData) {
         applicationData.birthDate,
         applicationData.experience,
         applicationData.telegramUsername || null,
+        resumeFile ? `/uploads/resumes/${resumeFile.filename}` : null,
+        resumeFile ? resumeFile.originalname : null,
+        'Nomzod',
         invite.created_by
       ]
     );
@@ -345,6 +352,16 @@ export async function submitApplication(applicationData) {
     };
   } catch (error) {
     await client.query('ROLLBACK');
+
+    // Ariza saqlanmadi — yuklangan rezyume faylini ham tozalab qo'yamiz
+    if (resumeFile) {
+      try {
+        await fs.unlink(resumeFile.path);
+      } catch (unlinkError) {
+        console.error('Failed to clean up resume file:', unlinkError.message);
+      }
+    }
+
     throw error;
   } finally {
     client.release();

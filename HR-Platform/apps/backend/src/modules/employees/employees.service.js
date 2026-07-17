@@ -90,7 +90,9 @@ export async function createEmployee(employeeData, createdBy) {
  * Get all employees with pagination and filters
  */
 export async function getAllEmployees(filters = {}, pagination = {}) {
-  let whereClause = [];
+  // Nomzodlar (havola orqali ariza topshirganlar) Xodimlar bo'limida ko'rinmaydi —
+  // ular Kanban doskasida SHARTNOMA bosqichiga o'tgandagina 'Faol' bo'ladi
+  let whereClause = [`e.status IS DISTINCT FROM 'Nomzod'`];
   let params = [];
   let paramCount = 1;
 
@@ -162,6 +164,8 @@ export async function getAllEmployees(filters = {}, pagination = {}) {
       kpi_template: row.kpi_template,
       telegram_username: row.telegram_username,
       photo_url: row.photo_url,
+      resume_url: row.resume_url,
+      resume_original_name: row.resume_original_name,
       age: row.age,
       experience: row.experience,
       created_at: row.created_at,
@@ -227,6 +231,8 @@ export async function getEmployeeById(id) {
     kpi_template: row.kpi_template,
     telegram_username: row.telegram_username,
     photo_url: row.photo_url,
+    resume_url: row.resume_url,
+    resume_original_name: row.resume_original_name,
     age: row.age,
     experience: row.experience,
     created_at: row.created_at,

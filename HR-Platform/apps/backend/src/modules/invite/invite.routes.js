@@ -3,6 +3,7 @@ import Joi from 'joi';
 import * as inviteController from './invite.controller.js';
 import { authenticate, authorize } from '../auth/auth.middleware.js';
 import { validate, validateParams, validateQuery, commonSchemas } from '../../shared/middleware/validate.js';
+import { uploadResume, handleMulterError } from '../../shared/middleware/upload.js';
 import { inviteLimiter } from '../../shared/middleware/rateLimiter.js';
 import { USER_ROLES } from '../../config/constants.js';
 
@@ -38,6 +39,7 @@ const applyInviteSchema = Joi.object({
   birthDate: Joi.date().required(),
   experience: Joi.number().integer().min(0).max(50).required(),
   address: Joi.string().max(500).allow('', null).optional(),
+  telegramUsername: Joi.string().max(100).allow('', null).optional(),
   notes: Joi.string().max(1000).allow('', null).optional(),
 });
 
@@ -45,9 +47,11 @@ const applyInviteSchema = Joi.object({
  * Routes
  */
 
-// POST /api/v1/invites/apply - Candidate application (public)
+// POST /api/v1/invites/apply - Candidate application (public, multipart: resume file)
 router.post(
   '/apply',
+  uploadResume,
+  handleMulterError,
   validate(applyInviteSchema),
   inviteController.submitApplication
 );

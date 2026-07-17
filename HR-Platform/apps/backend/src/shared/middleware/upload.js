@@ -85,6 +85,49 @@ export const uploadEmployeePhoto = multer({
   }
 }).single('photo'); // Field name: 'photo'
 
+// =============================================
+// Candidate resume upload (application form)
+// =============================================
+
+const resumesDir = path.join(__dirname, '../../../uploads/resumes');
+if (!fs.existsSync(resumesDir)) {
+  fs.mkdirSync(resumesDir, { recursive: true });
+}
+
+const resumeStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, resumesDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `${uniqueSuffix}${ext}`);
+  }
+});
+
+// Only document files are allowed for resumes
+const RESUME_MIME_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+];
+
+const resumeFileFilter = (req, file, cb) => {
+  if (RESUME_MIME_TYPES.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Rezyume faqat PDF, DOC yoki DOCX formatida bo\'lishi kerak'));
+  }
+};
+
+export const uploadResume = multer({
+  storage: resumeStorage,
+  fileFilter: resumeFileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB max
+  }
+}).single('resume'); // Field name: 'resume'
+
 // Error handler middleware
 export function handleMulterError(err, req, res, next) {
   if (err instanceof multer.MulterError) {

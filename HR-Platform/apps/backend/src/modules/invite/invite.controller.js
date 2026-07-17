@@ -49,7 +49,7 @@ export const getInviteById = asyncHandler(async (req, res) => {
  * Submit candidate application using invite token
  */
 export const submitApplication = asyncHandler(async (req, res) => {
-  const result = await inviteService.submitApplication(req.body);
+  const result = await inviteService.submitApplication(req.body, req.file || null);
 
   return successResponse(res, result, 'Muvaffaqiyatli ariza topshirdingiz. Rahmat!', 201);
 });

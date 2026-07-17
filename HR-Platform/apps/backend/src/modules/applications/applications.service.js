@@ -58,6 +58,8 @@ export async function getAllApplications(filters = {}) {
       e.kpi_template as employee_kpi_template,
       e.telegram_username as employee_telegram_username,
       e.experience as employee_experience,
+      e.resume_url as employee_resume_url,
+      e.resume_original_name as employee_resume_original_name,
       u.first_name as assigned_first_name,
       u.last_name as assigned_last_name,
       EXTRACT(YEAR FROM AGE(CURRENT_DATE, e.birth_date))::INTEGER as employee_age
@@ -109,6 +111,8 @@ export async function getAllApplications(filters = {}) {
         telegram_username: row.employee_telegram_username,
         age: row.employee_age,
         experience: row.employee_experience,
+        resume_url: row.employee_resume_url,
+        resume_original_name: row.employee_resume_original_name,
       },
       assigned_to: row.assigned_to ? {
         id: row.assigned_to,
@@ -146,6 +150,8 @@ export async function getApplicationById(id) {
       e.kpi_template as employee_kpi_template,
       e.telegram_username as employee_telegram_username,
       e.experience as employee_experience,
+      e.resume_url as employee_resume_url,
+      e.resume_original_name as employee_resume_original_name,
       u.first_name as assigned_first_name,
       u.last_name as assigned_last_name,
       EXTRACT(YEAR FROM AGE(CURRENT_DATE, e.birth_date))::INTEGER as employee_age
@@ -193,6 +199,8 @@ export async function getApplicationById(id) {
       telegram_username: row.employee_telegram_username,
       age: row.employee_age,
       experience: row.employee_experience,
+      resume_url: row.employee_resume_url,
+      resume_original_name: row.employee_resume_original_name,
     },
     assigned_to: row.assigned_to ? {
       id: row.assigned_to,
@@ -279,6 +287,16 @@ export async function updateApplicationStatus(id, newStatus, changedBy, comment 
           [position, employeeId]
         );
       }
+    } else if (oldStatus === APPLICATION_STATUS.SHARTNOMA) {
+      // Card moved back from SHARTNOMA — hiring is undone, revert to candidate
+      // so the person disappears from the Xodimlar section again
+      await client.query(
+        `UPDATE employees
+         SET status = 'Nomzod',
+             updated_at = NOW()
+         WHERE id = (SELECT employee_id FROM applications WHERE id = $1)`,
+        [id]
+      );
     }
 
     // Log history

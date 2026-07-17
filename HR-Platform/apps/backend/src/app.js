@@ -75,6 +75,18 @@ app.use(
 );
 
 /**
+ * Static Files - Candidate resumes
+ */
+app.use(
+  '/uploads/resumes',
+  express.static(path.join(__dirname, '../uploads/resumes'), {
+    setHeaders: (res) => {
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    },
+  })
+);
+
+/**
  * Rate Limiting
  */
 app.use(generalLimiter);

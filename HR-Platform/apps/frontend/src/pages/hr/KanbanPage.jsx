@@ -355,6 +355,63 @@ export function KanbanPage() {
                       {selectedApp.telegramUsername ? `@${selectedApp.telegramUsername}` : '—'}
                     </span>
                   </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem', gridColumn: '1 / -1' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '600' }}>Rezyume</span>
+                    {selectedApp.resumeUrl ? (
+                      <a
+                        href={applicationService.getResumeUrl(selectedApp.resumeUrl)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.75rem',
+                          padding: '0.75rem 1rem',
+                          background: 'var(--bg-secondary)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 'var(--radius-lg)',
+                          textDecoration: 'none',
+                          transition: 'border-color 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+                      >
+                        <div style={{
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: 'var(--radius-md)',
+                          background: 'var(--accent-light, rgba(99, 102, 241, 0.12))',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}>
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2Z" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            <path d="M14 2V8H20" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {selectedApp.resumeOriginalName || 'Rezyume fayli'}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            Nomzod yuklagan rezyume
+                          </div>
+                        </div>
+                        <span style={{ fontSize: '0.8125rem', fontWeight: '700', color: 'var(--accent)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          Ochish
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M7 17L17 7M17 7H8M17 7V16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </span>
+                      </a>
+                    ) : (
+                      <span style={{ fontSize: '0.875rem', fontWeight: '500', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                        Rezyume yuklanmagan
+                      </span>
+                    )}
+                  </div>
                   {selectedApp.notes && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', gridColumn: '1 / -1' }}>
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '600' }}>Qo'shimcha izohlar</span>

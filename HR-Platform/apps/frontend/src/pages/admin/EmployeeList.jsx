@@ -577,6 +577,82 @@ export function EmployeeList() {
               </div>
             </div>
 
+            {/* Rezyume - Full Width */}
+            <div style={{
+              background: 'var(--surface)',
+              padding: '1.25rem',
+              borderRadius: '10px',
+              border: '1px solid var(--border)',
+            }}>
+              <h3 style={{
+                fontSize: '0.875rem',
+                fontWeight: '700',
+                marginBottom: '1rem',
+                color: 'var(--accent)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}>
+                <span style={{ fontSize: '1.1rem' }}>📄</span> Rezyume
+              </h3>
+              {selectedEmployee.resume_url ? (
+                <a
+                  href={employeeService.getResumeUrl(selectedEmployee.resume_url)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.75rem',
+                    padding: '0.75rem 1rem',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '10px',
+                    textDecoration: 'none',
+                    transition: 'border-color 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+                >
+                  <div style={{
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '8px',
+                    background: 'var(--accent-light, rgba(99, 102, 241, 0.12))',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0
+                  }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2Z" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M14 2V8H20" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {selectedEmployee.resume_original_name || 'Rezyume fayli'}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      Ariza topshirishda yuklangan rezyume
+                    </div>
+                  </div>
+                  <span style={{ fontSize: '0.8125rem', fontWeight: '700', color: 'var(--accent)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                    Ochish
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M7 17L17 7M17 7H8M17 7V16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                </a>
+              ) : (
+                <div style={{ fontSize: '0.875rem', fontWeight: '500', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                  Rezyume yuklanmagan
+                </div>
+              )}
+            </div>
+
             {/* Tizim ma'lumotlari - Full Width */}
             <div style={{
               background: 'var(--surface)',

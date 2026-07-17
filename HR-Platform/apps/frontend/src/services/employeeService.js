@@ -75,6 +75,14 @@ export const employeeService = {
     if (!photoUrl) return null;
     return photoUrl.startsWith('http') ? photoUrl : `${API_ORIGIN}${photoUrl}`;
   },
+
+  /**
+   * Build absolute URL for an employee resume path
+   */
+  getResumeUrl(resumeUrl) {
+    if (!resumeUrl) return null;
+    return resumeUrl.startsWith('http') ? resumeUrl : `${API_ORIGIN}${resumeUrl}`;
+  },
 };
 
 export default employeeService;

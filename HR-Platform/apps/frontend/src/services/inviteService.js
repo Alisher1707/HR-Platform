@@ -47,9 +47,25 @@ export const inviteService = {
 
   /**
    * Submit application using invite token
+   * Sent as multipart/form-data because it may include a resume file
    */
   async submitApplication(data) {
-    const response = await api.post('/invites/apply', data);
+    const formData = new FormData();
+
+    Object.entries(data).forEach(([key, value]) => {
+      if (key === 'resume') return; // File is appended separately below
+      if (value !== null && value !== undefined && value !== '') {
+        formData.append(key, value);
+      }
+    });
+
+    if (data.resume) {
+      formData.append('resume', data.resume);
+    }
+
+    const response = await api.post('/invites/apply', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return response.data.data;
   },
 };

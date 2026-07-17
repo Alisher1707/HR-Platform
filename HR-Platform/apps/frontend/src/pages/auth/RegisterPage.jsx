@@ -159,6 +159,42 @@ export function RegisterPage() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSubmittingCandidate, setIsSubmittingCandidate] = useState(false);
   const [candidateError, setCandidateError] = useState(null);
+  const [resumeFile, setResumeFile] = useState(null);
+
+  const RESUME_MAX_SIZE = 10 * 1024 * 1024; // 10MB
+  const RESUME_EXTENSIONS = ['.pdf', '.doc', '.docx'];
+
+  const handleResumeChange = (e) => {
+    const file = e.target.files?.[0];
+    // Allow re-selecting the same file after removal
+    e.target.value = '';
+
+    if (!file) return;
+
+    const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+    if (!RESUME_EXTENSIONS.includes(ext)) {
+      setFormErrors((prev) => ({ ...prev, resume: 'Faqat PDF, DOC yoki DOCX fayl yuklash mumkin' }));
+      return;
+    }
+
+    if (file.size > RESUME_MAX_SIZE) {
+      setFormErrors((prev) => ({ ...prev, resume: 'Fayl hajmi 10MB dan oshmasligi kerak' }));
+      return;
+    }
+
+    setFormErrors((prev) => ({ ...prev, resume: '' }));
+    setResumeFile(file);
+  };
+
+  const handleResumeRemove = () => {
+    setResumeFile(null);
+    setFormErrors((prev) => ({ ...prev, resume: '' }));
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
 
   const handleCandidateChange = (e) => {
     const { name, value } = e.target;
@@ -223,6 +259,7 @@ export function RegisterPage() {
         address: candidateData.address,
         telegramUsername: candidateData.telegramUsername,
         notes: candidateData.notes,
+        resume: resumeFile,
       });
       setIsSubmitted(true);
     } catch (err) {
@@ -442,6 +479,97 @@ export function RegisterPage() {
               placeholder="@username"
               error={formErrors.telegramUsername}
             />
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+              <label style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Rezyume (PDF, DOC, DOCX)
+              </label>
+
+              {!resumeFile ? (
+                <label style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.375rem',
+                  padding: '1.5rem 1rem',
+                  border: `2px dashed ${formErrors.resume ? 'var(--error, #ef4444)' : 'var(--border)'}`,
+                  borderRadius: 'var(--radius-md)',
+                  background: 'var(--bg-secondary)',
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  transition: 'border-color 0.2s ease'
+                }}>
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx"
+                    onChange={handleResumeChange}
+                    style={{ display: 'none' }}
+                  />
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M12 16V4M12 4L7 9M12 4L17 9" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M4 16V18C4 19.1 4.9 20 6 20H18C19.1 20 20 19.1 20 18V16" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                  <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    Rezyume faylini tanlang
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                    PDF, DOC yoki DOCX &middot; maksimal 10MB
+                  </span>
+                </label>
+              ) : (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  padding: '0.75rem 1rem',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'var(--bg-secondary)'
+                }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
+                    <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2Z" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M14 2V8H20" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {resumeFile.name}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                      {formatFileSize(resumeFile.size)}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleResumeRemove}
+                    aria-label="Rezyumeni olib tashlash"
+                    style={{
+                      flexShrink: 0,
+                      width: '28px',
+                      height: '28px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: 'none',
+                      borderRadius: '50%',
+                      background: 'transparent',
+                      color: 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      fontSize: '1rem',
+                      lineHeight: 1
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
+              {formErrors.resume && (
+                <span style={{ fontSize: '0.75rem', color: 'var(--error, #ef4444)' }}>
+                  {formErrors.resume}
+                </span>
+              )}
+            </div>
 
             <Textarea
               label="Qo'shimcha izohlar"
