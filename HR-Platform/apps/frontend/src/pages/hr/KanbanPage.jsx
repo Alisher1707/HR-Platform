@@ -23,6 +23,8 @@ export function KanbanPage() {
   // State for search and position filters
   const [search, setSearch] = useState('');
   const [selectedPosition, setSelectedPosition] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   
   // Query hook
   const { 
@@ -145,7 +147,20 @@ export function KanbanPage() {
       phone.includes(search);
 
     const positionMatch = !selectedPosition || app.position === selectedPosition;
-    return searchMatch && positionMatch;
+
+    // Sana oralig'i bo'yicha filtr (ariza topshirilgan sana — createdAt)
+    let dateMatch = true;
+    if (startDate || endDate) {
+      if (!app.createdAt) {
+        dateMatch = false;
+      } else {
+        const appTime = new Date(app.createdAt);
+        if (startDate && appTime < new Date(`${startDate}T00:00:00`)) dateMatch = false;
+        if (endDate && appTime > new Date(`${endDate}T23:59:59.999`)) dateMatch = false;
+      }
+    }
+
+    return searchMatch && positionMatch && dateMatch;
   });
 
   const getStatusLabel = (s) => {
@@ -209,9 +224,32 @@ export function KanbanPage() {
             style={{ padding: '0.5rem' }}
           />
         </div>
-        
-        {(search || selectedPosition) && (
-          <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setSelectedPosition(''); }}>
+
+        {/* Sana oralig'i: boshlanish — tugash (ariza topshirilgan sana bo'yicha) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <input
+            type="date"
+            className="form-input"
+            title="Boshlanish sanasi"
+            value={startDate}
+            max={endDate || undefined}
+            onChange={(e) => setStartDate(e.target.value)}
+            style={{ width: '160px', padding: '0.5rem' }}
+          />
+          <span>—</span>
+          <input
+            type="date"
+            className="form-input"
+            title="Tugash sanasi"
+            value={endDate}
+            min={startDate || undefined}
+            onChange={(e) => setEndDate(e.target.value)}
+            style={{ width: '160px', padding: '0.5rem' }}
+          />
+        </div>
+
+        {(search || selectedPosition || startDate || endDate) && (
+          <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setSelectedPosition(''); setStartDate(''); setEndDate(''); }}>
             Filtrlarni tozalash
           </Button>
         )}
