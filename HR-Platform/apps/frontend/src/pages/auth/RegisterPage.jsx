@@ -330,7 +330,67 @@ export function RegisterPage() {
             sizning <strong style={{ color: 'var(--text-primary)' }}>{inviteDetails?.position}</strong> lavozimiga topshirgan arizangiz muvaffaqiyatli qabul qilindi va tizimga saqlandi.
             HR xodimlarimiz uni tez orada ko'rib chiqishadi va siz bilan bog'lanishadi.
           </p>
-          <div style={{ borderTop: '1px solid var(--border)', width: '100%', paddingTop: '1.25rem', marginTop: '2rem' }}>
+          <div style={{ borderTop: '1px solid var(--border)', width: '100%', paddingTop: '1.5rem', marginTop: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.25rem' }}>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+              <a
+                href="https://www.instagram.com/itliveacademy?igsh=MTRjcndudDMyMGt1dQ=="
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  padding: '0.625rem 1.25rem',
+                  background: 'var(--bg-secondary)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-full, 9999px)',
+                  textDecoration: 'none',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  color: 'var(--text-primary)',
+                  transition: 'border-color 0.2s ease, transform 0.2s ease'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#E1306C'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = 'none'; }}
+              >
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <rect x="2" y="2" width="20" height="20" rx="5.5" stroke="#E1306C" strokeWidth="2" />
+                  <circle cx="12" cy="12" r="4.25" stroke="#E1306C" strokeWidth="2" />
+                  <circle cx="17.4" cy="6.6" r="1.3" fill="#E1306C" />
+                </svg>
+                Instagram
+              </a>
+
+              <a
+                href="https://itliveacademy.uz/"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  padding: '0.625rem 1.25rem',
+                  background: 'var(--bg-secondary)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-full, 9999px)',
+                  textDecoration: 'none',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  color: 'var(--text-primary)',
+                  transition: 'border-color 0.2s ease, transform 0.2s ease'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = 'none'; }}
+              >
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" stroke="var(--accent)" strokeWidth="2" />
+                  <path d="M2 12H22" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" />
+                  <path d="M12 2C14.5 4.7 15.9 8.2 15.9 12C15.9 15.8 14.5 19.3 12 22C9.5 19.3 8.1 15.8 8.1 12C8.1 8.2 9.5 4.7 12 2Z" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round" />
+                </svg>
+                itliveacademy.uz
+              </a>
+            </div>
+
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0 }}>
               HR Platform Recruiting Tizimi
             </p>
