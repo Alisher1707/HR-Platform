@@ -69,6 +69,18 @@ export const employeeService = {
   },
 
   /**
+   * Upload employee resume (PDF, DOC, DOCX)
+   */
+  async uploadResume(id, file) {
+    const formData = new FormData();
+    formData.append('resume', file);
+    const response = await api.post(`/employees/${id}/resume`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data.data.employee;
+  },
+
+  /**
    * Build absolute URL for an employee photo path
    */
   getPhotoUrl(photoUrl) {

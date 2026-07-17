@@ -12,6 +12,7 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
   const { toast } = useToast();
   const isEditing = !!employee;
   const fileInputRef = useRef(null);
+  const resumeInputRef = useRef(null);
 
   const [formData, setFormData] = useState({
     employeeNumber: '27',
@@ -33,6 +34,7 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
     status: 'Faol',
     kpiTemplate: '',
     photo: null,
+    resume: null,
   });
 
   const [formErrors, setFormErrors] = useState({});
@@ -114,6 +116,7 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
         status: employee.status || 'Faol',
         kpiTemplate: employee.kpi_template || '',
         photo: null,
+        resume: null,
       });
 
       if (employee.photo_url) {
@@ -169,6 +172,34 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
 
   const handlePhotoClick = () => {
     fileInputRef.current?.click();
+  };
+
+  const handleResumeChange = (e) => {
+    const file = e.target.files[0];
+    // Allow re-selecting the same file
+    e.target.value = '';
+
+    if (!file) return;
+
+    const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+    if (!['.pdf', '.doc', '.docx'].includes(ext)) {
+      toast.error('Rezyume faqat PDF, DOC yoki DOCX formatida bo\'lishi kerak');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Rezyume hajmi 10MB dan oshmasligi kerak');
+      return;
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      resume: file,
+    }));
+  };
+
+  const handleResumeClick = () => {
+    resumeInputRef.current?.click();
   };
 
   const validateForm = () => {
@@ -250,12 +281,18 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
         if (formData.photo) {
           await employeeService.uploadPhoto(employee.id, formData.photo);
         }
+        if (formData.resume) {
+          await employeeService.uploadResume(employee.id, formData.resume);
+        }
         toast.success('Xodim ma\'lumotlari muvaffaqiyatli yangilandi!');
       } else {
         const created = await employeeService.createEmployee(payload);
         const newEmployeeId = created?.employee?.id;
         if (formData.photo && newEmployeeId) {
           await employeeService.uploadPhoto(newEmployeeId, formData.photo);
+        }
+        if (formData.resume && newEmployeeId) {
+          await employeeService.uploadResume(newEmployeeId, formData.resume);
         }
         toast.success('Yangi xodim muvaffaqiyatli qo\'shildi!');
       }
@@ -575,10 +612,11 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
         </div>
       </div>
 
-      {/* Photo Upload - Full Width */}
-      <div className="form-field-full">
-        <label className="form-label">Xodim rasmi (yuz tekshiruvi uchun)</label>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+      {/* Photo & Resume Upload - side by side */}
+      <div className="form-grid">
+        {/* Photo Upload */}
+        <div className="form-field">
+          <label className="form-label">Xodim rasmi (yuz tekshiruvi uchun)</label>
           <input
             ref={fileInputRef}
             type="file"
@@ -586,33 +624,91 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
             onChange={handlePhotoChange}
             style={{ display: 'none' }}
           />
-          <Button
-            type="button"
-            variant="outline"
+          <div
+            className={`upload-card ${photoPreview ? 'upload-card-filled' : ''}`}
+            role="button"
+            tabIndex={0}
             onClick={handlePhotoClick}
-            icon="📷"
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handlePhotoClick(); } }}
           >
-            Rasm yuklash
-          </Button>
-          {photoPreview && (
-            <div style={{
-              width: '60px',
-              height: '60px',
-              borderRadius: 'var(--radius-lg)',
-              overflow: 'hidden',
-              border: '2px solid var(--border)',
-            }}>
-              <img
-                src={photoPreview}
-                alt="Preview"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                }}
-              />
+            {photoPreview ? (
+              <img src={photoPreview} alt="Xodim rasmi" className="upload-avatar" />
+            ) : (
+              <div className="upload-icon-circle">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M23 19C23 20.1 22.1 21 21 21H3C1.9 21 1 20.1 1 19V8C1 6.9 1.9 6 3 6H7L9 3H15L17 6H21C22.1 6 23 6.9 23 8V19Z" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <circle cx="12" cy="13" r="4" stroke="var(--accent)" strokeWidth="2" />
+                </svg>
+              </div>
+            )}
+            <div className="upload-texts">
+              <span className="upload-title">{photoPreview ? 'Rasmni almashtirish' : 'Rasm yuklash'}</span>
+              <span className="upload-hint">PNG yoki JPG &middot; maksimal 5MB</span>
             </div>
-          )}
+          </div>
+        </div>
+
+        {/* Resume Upload */}
+        <div className="form-field">
+          <label className="form-label">Rezyume (PDF, DOC, DOCX)</label>
+          <input
+            ref={resumeInputRef}
+            type="file"
+            accept=".pdf,.doc,.docx"
+            onChange={handleResumeChange}
+            style={{ display: 'none' }}
+          />
+          <div
+            className={`upload-card ${(formData.resume || (isEditing && employee?.resume_url)) ? 'upload-card-filled' : ''}`}
+            role="button"
+            tabIndex={0}
+            onClick={handleResumeClick}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleResumeClick(); } }}
+          >
+            <div className="upload-icon-circle">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2Z" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M14 2V8H20" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            {formData.resume ? (
+              <>
+                <div className="upload-texts">
+                  <span className="upload-title">{formData.resume.name}</span>
+                  <span className="upload-hint">Yangi tanlangan fayl &middot; saqlanganda yuklanadi</span>
+                </div>
+                <button
+                  type="button"
+                  className="upload-clear"
+                  aria-label="Tanlangan rezyumeni olib tashlash"
+                  onClick={(e) => { e.stopPropagation(); setFormData((prev) => ({ ...prev, resume: null })); }}
+                >
+                  ✕
+                </button>
+              </>
+            ) : isEditing && employee?.resume_url ? (
+              <>
+                <div className="upload-texts">
+                  <span className="upload-title">{employee.resume_original_name || 'Joriy rezyume'}</span>
+                  <span className="upload-hint">Almashtirish uchun bosing</span>
+                </div>
+                <a
+                  href={employeeService.getResumeUrl(employee.resume_url)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="upload-open"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Ochish ↗
+                </a>
+              </>
+            ) : (
+              <div className="upload-texts">
+                <span className="upload-title">Rezyume yuklash</span>
+                <span className="upload-hint">PDF, DOC yoki DOCX &middot; maksimal 10MB</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -702,6 +798,99 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
         .error-text {
           font-size: 0.75rem;
           color: var(--error);
+        }
+
+        .upload-card {
+          display: flex;
+          align-items: center;
+          gap: 0.875rem;
+          padding: 0.875rem 1rem;
+          min-height: 76px;
+          background: var(--bg-primary);
+          border: 1.5px dashed var(--border);
+          border-radius: var(--radius-lg);
+          cursor: pointer;
+          user-select: none;
+          transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .upload-card:hover,
+        .upload-card:focus-visible {
+          border-color: var(--accent);
+          background: rgba(139, 92, 246, 0.05);
+          outline: none;
+        }
+
+        .upload-card-filled {
+          border-style: solid;
+        }
+
+        .upload-avatar {
+          width: 48px;
+          height: 48px;
+          border-radius: 50%;
+          object-fit: cover;
+          border: 2px solid var(--border);
+          flex-shrink: 0;
+        }
+
+        .upload-icon-circle {
+          width: 48px;
+          height: 48px;
+          border-radius: 50%;
+          background: var(--accent-light, rgba(99, 102, 241, 0.12));
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+
+        .upload-texts {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          flex: 1;
+          min-width: 0;
+        }
+
+        .upload-title {
+          font-size: 0.875rem;
+          font-weight: 600;
+          color: var(--text-primary);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .upload-hint {
+          font-size: 0.75rem;
+          color: var(--text-secondary);
+        }
+
+        .upload-clear {
+          border: none;
+          background: transparent;
+          color: var(--text-secondary);
+          cursor: pointer;
+          font-size: 1rem;
+          line-height: 1;
+          padding: 6px;
+          border-radius: 50%;
+          flex-shrink: 0;
+          transition: color 0.2s ease;
+        }
+
+        .upload-clear:hover {
+          color: var(--error);
+        }
+
+        .upload-open {
+          font-size: 0.8125rem;
+          font-weight: 700;
+          color: var(--accent);
+          text-decoration: none;
+          flex-shrink: 0;
+          white-space: nowrap;
         }
 
         .form-actions {

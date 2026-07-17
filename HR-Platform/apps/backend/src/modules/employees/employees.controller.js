@@ -8,6 +8,7 @@ import * as employeesService from './employees.service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const employeePhotosDir = path.join(__dirname, '../../../uploads/employees');
+const resumesDir = path.join(__dirname, '../../../uploads/resumes');
 
 /**
  * Employees Controller
@@ -141,6 +142,35 @@ export const uploadPhoto = asyncHandler(async (req, res) => {
   }
 
   return successResponse(res, { employee: result.employee }, 'Xodim rasmi saqlandi');
+});
+
+/**
+ * POST /api/v1/employees/:id/resume
+ * Upload/replace employee resume
+ */
+export const uploadResume = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    return errorResponse(res, 'Rezyume fayli tanlanmagan', HTTP_STATUS.BAD_REQUEST);
+  }
+
+  const resumeUrl = `/uploads/resumes/${req.file.filename}`;
+
+  let result;
+  try {
+    result = await employeesService.updateEmployeeResume(req.params.id, resumeUrl, req.file.originalname);
+  } catch (error) {
+    // Employee not found — remove the orphaned uploaded file
+    await fs.unlink(req.file.path).catch(() => {});
+    throw error;
+  }
+
+  // Remove the previous resume file if it was replaced
+  if (result.oldResumeUrl) {
+    const oldFileName = path.basename(result.oldResumeUrl);
+    await fs.unlink(path.join(resumesDir, oldFileName)).catch(() => {});
+  }
+
+  return successResponse(res, { employee: result.employee }, 'Xodim rezyumesi saqlandi');
 });
 
 /**

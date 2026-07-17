@@ -329,6 +329,35 @@ export async function updateEmployeePhoto(id, photoUrl) {
 }
 
 /**
+ * Update employee resume
+ * Returns the updated employee row and the previous resume URL (for cleanup)
+ */
+export async function updateEmployeeResume(id, resumeUrl, resumeOriginalName) {
+  const currentResult = await query('SELECT resume_url FROM employees WHERE id = $1', [id]);
+
+  if (currentResult.rows.length === 0) {
+    const error = new Error(MESSAGES.EMPLOYEE_NOT_FOUND);
+    error.statusCode = HTTP_STATUS.NOT_FOUND;
+    throw error;
+  }
+
+  const oldResumeUrl = currentResult.rows[0].resume_url;
+
+  const result = await query(
+    `UPDATE employees
+     SET resume_url = $1, resume_original_name = $2, updated_at = NOW()
+     WHERE id = $3
+     RETURNING *`,
+    [resumeUrl, resumeOriginalName, id]
+  );
+
+  return {
+    employee: result.rows[0],
+    oldResumeUrl,
+  };
+}
+
+/**
  * Delete employee (soft delete via application CASCADE)
  */
 export async function deleteEmployee(id) {
