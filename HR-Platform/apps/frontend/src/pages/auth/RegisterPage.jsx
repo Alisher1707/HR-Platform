@@ -249,8 +249,8 @@ export function RegisterPage() {
         </div>
         <div style={{
           width: '100%',
-          maxWidth: '500px',
-          padding: '2.5rem',
+          maxWidth: '520px',
+          padding: '3rem 2.75rem 2.25rem',
           textAlign: 'center',
           borderRadius: 'var(--radius-lg)',
           boxShadow: 'var(--shadow-xl)',
@@ -258,19 +258,42 @@ export function RegisterPage() {
           border: '1px solid var(--border)',
           display: 'flex',
           flexDirection: 'column',
-          alignItems: 'center',
-          gap: '1.5rem'
+          alignItems: 'center'
         }}>
-          <div style={{ fontSize: '4rem' }}>🎉</div>
-          <h2 style={{ fontSize: '1.75rem', fontWeight: '800', color: 'var(--status-shartnoma, #10b981)', margin: 0 }}>
-            Arizangiz qabul qilindi!
+          <div
+            aria-label="IT Live"
+            style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', userSelect: 'none', lineHeight: 1 }}
+          >
+            <span style={{ fontSize: '3rem', fontWeight: 900, letterSpacing: '-0.02em', color: '#ED1C24' }}>iT</span>
+            <span style={{ fontSize: '3rem', fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>Live</span>
+            <span style={{ width: '0.6rem', height: '0.6rem', background: '#ED1C24', borderRadius: '1px', marginTop: '0.25rem' }} />
+          </div>
+
+          <div style={{
+            width: '64px',
+            height: '64px',
+            borderRadius: '50%',
+            background: 'rgba(16, 185, 129, 0.12)',
+            border: '1px solid rgba(16, 185, 129, 0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '2rem 0 1.5rem'
+          }}>
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M5 12.5L10 17.5L19 7" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+
+          <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--text-primary)', letterSpacing: '-0.01em', margin: '0 0 1rem' }}>
+            Arizangiz qabul qilindi
           </h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: '1.6', margin: 0 }}>
-            Hurmatli <strong>{candidateData.firstName} {candidateData.lastName}</strong>, 
-            sizning <strong>{inviteDetails?.position}</strong> lavozimiga topshirgan arizangiz muvaffaqiyatli qabul qilindi va tizimga saqlandi. 
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: '1.7', margin: 0 }}>
+            Hurmatli <strong style={{ color: 'var(--text-primary)' }}>{candidateData.firstName} {candidateData.lastName}</strong>,
+            sizning <strong style={{ color: 'var(--text-primary)' }}>{inviteDetails?.position}</strong> lavozimiga topshirgan arizangiz muvaffaqiyatli qabul qilindi va tizimga saqlandi.
             HR xodimlarimiz uni tez orada ko'rib chiqishadi va siz bilan bog'lanishadi.
           </p>
-          <div style={{ borderTop: '1px solid var(--border)', width: '100%', paddingTop: '1.5rem', marginTop: '0.5rem' }}>
+          <div style={{ borderTop: '1px solid var(--border)', width: '100%', paddingTop: '1.25rem', marginTop: '2rem' }}>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0 }}>
               HR Platform Recruiting Tizimi
             </p>
