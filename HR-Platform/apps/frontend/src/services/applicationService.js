@@ -50,6 +50,7 @@ export const applicationService = {
       resumeUrl: app.employee?.resume_url || null,
       resumeOriginalName: app.employee?.resume_original_name || '',
       createdAt: app.created_at,
+      interviewDate: app.interview_date || null,
       experience: app.employee?.experience || 0,
       address: app.employee?.address || '',
       age: app.employee?.age || null,
@@ -68,11 +69,12 @@ export const applicationService = {
   /**
    * Update application status (move between columns)
    */
-  async updateApplicationStatus(id, status, comment) {
-    const response = await api.patch(`/applications/${id}/status`, {
-      status,
-      comment,
-    });
+  async updateApplicationStatus(id, status, comment, interviewDate) {
+    const body = { status, comment };
+    if (interviewDate !== undefined) {
+      body.interviewDate = interviewDate;
+    }
+    const response = await api.patch(`/applications/${id}/status`, body);
     return response.data.data.application;
   },
 

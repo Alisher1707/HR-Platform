@@ -47,6 +47,41 @@ export function KanbanPage() {
   const [changingStatus, setChangingStatus] = useState(false);
   const [updatingInfo, setUpdatingInfo] = useState(false);
 
+  // Suhbatga chaqirish: vaqt tanlash paneli.
+  // Sana va vaqt alohida maydonlarda — datetime-local'da vaqt kiritilmaguncha
+  // qiymat bo'sh qolib, qo'lda kiritishda tugma ochilmasdi.
+  const [showInterviewPicker, setShowInterviewPicker] = useState(false);
+  const [interviewDatePart, setInterviewDatePart] = useState('');
+  const [interviewTimePart, setInterviewTimePart] = useState('09:00');
+
+  // ISO sanani date/time input qiymatlariga ajratish (mahalliy vaqt)
+  const toDateTimeParts = (iso) => {
+    if (!iso) return { date: '', time: '09:00' };
+    const d = new Date(iso);
+    if (isNaN(d)) return { date: '', time: '09:00' };
+    const pad = (n) => String(n).padStart(2, '0');
+    return {
+      date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+      time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+    };
+  };
+
+  // Suhbat vaqtini o'qish uchun format: 17.07.2026, 14:30
+  const formatInterviewDate = (iso) => {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleString('uz-UZ', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch (e) {
+      return iso;
+    }
+  };
+
   // Fetch employees list for assigning
   useEffect(() => {
     const fetchEmployees = async () => {
@@ -70,6 +105,10 @@ export function KanbanPage() {
       setNotes(selectedApp.notes || '');
       setAssignedTo(selectedApp.assignedTo || '');
       setStatusComment('');
+      setShowInterviewPicker(false);
+      const parts = toDateTimeParts(selectedApp.interviewDate);
+      setInterviewDatePart(parts.date);
+      setInterviewTimePart(parts.time);
       
       const fetchHistory = async () => {
         setLoadingHistory(true);
@@ -88,14 +127,18 @@ export function KanbanPage() {
   }, [selectedApp]);
 
   // Handle status changes (Drag & Drop or quick transition button)
-  const handleStatusChange = async (id, newStatus, comment = 'Holati yangilandi') => {
+  const handleStatusChange = async (id, newStatus, comment = 'Holati yangilandi', interviewDate = undefined) => {
     try {
       setChangingStatus(true);
-      await updateStatus({ id, status: newStatus, comment });
-      
+      await updateStatus({ id, status: newStatus, comment, interviewDate });
+
       // If modal is open, update its local status display or re-fetch details
       if (selectedApp && selectedApp.id === id) {
-        setSelectedApp(prev => ({ ...prev, status: newStatus }));
+        setSelectedApp(prev => ({
+          ...prev,
+          status: newStatus,
+          ...(interviewDate !== undefined ? { interviewDate } : {}),
+        }));
         // Refresh history
         const logs = await applicationService.getApplicationHistory(id);
         setHistory(logs || []);
@@ -106,6 +149,16 @@ export function KanbanPage() {
     } finally {
       setChangingStatus(false);
     }
+  };
+
+  // Suhbat vaqti tasdiqlanganda: statusni QOSHILDI ga o'tkazib, vaqtni saqlaymiz
+  const handleInterviewConfirm = async () => {
+    if (!selectedApp || !interviewDatePart) return;
+    const localDateTime = `${interviewDatePart}T${interviewTimePart || '09:00'}`;
+    const iso = new Date(localDateTime).toISOString();
+    const comment = statusComment || `Suhbatga chaqirildi — ${formatInterviewDate(localDateTime)}`;
+    await handleStatusChange(selectedApp.id, 'QOSHILDI', comment, iso);
+    setShowInterviewPicker(false);
   };
 
   // Handle saving details (notes and assignment)
@@ -480,7 +533,7 @@ export function KanbanPage() {
                     variant={selectedApp.status === 'QOSHILDI' ? 'primary' : 'outline'}
                     size="sm"
                     disabled={changingStatus}
-                    onClick={() => handleStatusChange(selectedApp.id, 'QOSHILDI', statusComment || 'Suhbatga chaqirildi')}
+                    onClick={() => setShowInterviewPicker((v) => !v)}
                   >
                     Suhbatga chaqirish
                   </Button>
@@ -509,6 +562,67 @@ export function KanbanPage() {
                     Rad etish
                   </Button>
                 </div>
+
+                {/* Suhbat vaqtini belgilash paneli */}
+                {showInterviewPicker && (
+                  <div style={{
+                    display: 'flex',
+                    gap: '0.5rem',
+                    alignItems: 'flex-end',
+                    flexWrap: 'wrap',
+                    marginBottom: '1rem',
+                    padding: '0.75rem',
+                    background: 'var(--accent-light)',
+                    borderRadius: 'var(--radius)',
+                    border: '1px solid var(--accent)',
+                  }}>
+                    <div style={{ flex: 1, minWidth: '150px' }}>
+                      <Input
+                        label="Suhbat sanasi"
+                        type="date"
+                        value={interviewDatePart}
+                        onChange={(e) => setInterviewDatePart(e.target.value)}
+                      />
+                    </div>
+                    <div style={{ width: '110px' }}>
+                      <Input
+                        label="Vaqti"
+                        type="time"
+                        value={interviewTimePart}
+                        onChange={(e) => setInterviewTimePart(e.target.value)}
+                      />
+                    </div>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      disabled={!interviewDatePart || changingStatus}
+                      loading={changingStatus}
+                      onClick={handleInterviewConfirm}
+                    >
+                      ✅ Tasdiqlash
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={changingStatus}
+                      onClick={() => setShowInterviewPicker(false)}
+                    >
+                      Bekor qilish
+                    </Button>
+                  </div>
+                )}
+
+                {/* Belgilangan suhbat vaqti */}
+                {selectedApp.interviewDate && !showInterviewPicker && (
+                  <div style={{
+                    marginBottom: '1rem',
+                    fontSize: '0.875rem',
+                    fontWeight: '600',
+                    color: 'var(--text-primary)',
+                  }}>
+                    🕐 Belgilangan suhbat vaqti: {formatInterviewDate(selectedApp.interviewDate)}
+                  </div>
+                )}
 
                 <Input
                   label="Izoh (Status o'zgarishi uchun sabab)"

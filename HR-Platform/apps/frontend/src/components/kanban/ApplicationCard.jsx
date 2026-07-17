@@ -6,7 +6,7 @@ import { useDraggable } from '@dnd-kit/core';
  * Draggable card representing a candidate application on the Kanban board
  */
 export function ApplicationCard({ application, onClick }) {
-  const { id, firstName, lastName, position, phone, createdAt } = application;
+  const { id, firstName, lastName, position, phone, createdAt, interviewDate } = application;
   
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: id,
@@ -56,6 +56,17 @@ export function ApplicationCard({ application, onClick }) {
           📅 {formatDate(createdAt)}
         </div>
       </div>
+      {interviewDate && (
+        <div className="kanban-card-date" style={{ marginTop: '0.375rem' }}>
+          🕐 Suhbat: {new Date(interviewDate).toLocaleString('uz-UZ', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          })}
+        </div>
+      )}
       <button
         className="kanban-card-detail-btn"
         onClick={(e) => {

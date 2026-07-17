@@ -16,6 +16,7 @@ const updateStatusSchema = Joi.object({
     .valid(...Object.values(APPLICATION_STATUS))
     .required(),
   comment: Joi.string().max(500).optional().allow('', null),
+  interviewDate: Joi.date().iso().optional().allow(null),
 });
 
 const updateOrderSchema = Joi.object({

@@ -88,6 +88,7 @@ export async function getAllApplications(filters = {}) {
       position: row.position,
       notes: row.notes,
       order_index: row.order_index,
+      interview_date: row.interview_date,
       created_at: row.created_at,
       updated_at: row.updated_at,
       employee: {
@@ -213,7 +214,7 @@ export async function getApplicationById(id) {
 /**
  * Update application status (Drag & Drop between columns)
  */
-export async function updateApplicationStatus(id, newStatus, changedBy, comment = null) {
+export async function updateApplicationStatus(id, newStatus, changedBy, comment = null, interviewDate = undefined) {
   const client = await getClient();
 
   try {
@@ -262,7 +263,19 @@ export async function updateApplicationStatus(id, newStatus, changedBy, comment 
 
     // Update application
     const updateResult = await client.query(updateQuery, updateParams);
-    const application = updateResult.rows[0];
+    let application = updateResult.rows[0];
+
+    // Suhbat vaqti berilgan bo'lsa saqlab qo'yamiz (Suhbatga chaqirish bosqichida belgilanadi)
+    if (interviewDate !== undefined) {
+      const interviewResult = await client.query(
+        `UPDATE applications
+         SET interview_date = $1, updated_at = NOW()
+         WHERE id = $2
+         RETURNING *`,
+        [interviewDate, id]
+      );
+      application = interviewResult.rows[0];
+    }
 
     // If moving to SHARTNOMA, update employee record with complete information
     if (newStatus === APPLICATION_STATUS.SHARTNOMA) {

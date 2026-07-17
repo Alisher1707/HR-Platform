@@ -39,13 +39,14 @@ export const getApplicationById = asyncHandler(async (req, res) => {
  * Update application status (move between Kanban columns)
  */
 export const updateApplicationStatus = asyncHandler(async (req, res) => {
-  const { status, comment } = req.body;
+  const { status, comment, interviewDate } = req.body;
 
   const application = await applicationsService.updateApplicationStatus(
     req.params.id,
     status,
     req.user.id,
-    comment
+    comment,
+    interviewDate
   );
 
   return successResponse(res, { application }, MESSAGES.APPLICATION_UPDATED);

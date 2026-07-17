@@ -23,8 +23,8 @@ export function useKanban(filters = {}) {
 
   // Mutation to update application status
   const updateStatusMutation = useMutation({
-    mutationFn: ({ id, status, comment }) => 
-      applicationService.updateApplicationStatus(id, status, comment),
+    mutationFn: ({ id, status, comment, interviewDate }) =>
+      applicationService.updateApplicationStatus(id, status, comment, interviewDate),
     onSuccess: (data) => {
       toast.success('Nomzod holati muvaffaqiyatli yangilandi');
       // Invalidate queries to trigger re-fetch
