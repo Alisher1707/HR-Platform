@@ -31,12 +31,40 @@ export function KanbanBoard({ applications = [], onStatusChange, onCardClick }) 
     }
   };
 
+  // Suhbati BUGUN bo'lganlar (soatidan qat'i nazar) va kelgusi suhbatlilar
+  // ustun tepasiga chiqadi — eng yaqin vaqt birinchi. Qolganlari mavjud
+  // tartibida qoladi (sort barqaror).
+  const prioritizeUpcomingInterviews = (apps) => {
+    const now = new Date();
+
+    const isPriority = (time) => {
+      if (isNaN(time)) return false;
+      const d = new Date(time);
+      const isToday =
+        d.getFullYear() === now.getFullYear() &&
+        d.getMonth() === now.getMonth() &&
+        d.getDate() === now.getDate();
+      return isToday || time >= now.getTime();
+    };
+
+    return [...apps].sort((a, b) => {
+      const aTime = a.interviewDate ? new Date(a.interviewDate).getTime() : NaN;
+      const bTime = b.interviewDate ? new Date(b.interviewDate).getTime() : NaN;
+      const aPriority = isPriority(aTime);
+      const bPriority = isPriority(bTime);
+      if (aPriority && bPriority) return aTime - bTime;
+      if (aPriority) return -1;
+      if (bPriority) return 1;
+      return 0;
+    });
+  };
+
   // Group applications by status
-  const keldiApps = applications.filter(app => app.status === 'KELDI');
-  const qoshildiApps = applications.filter(app => app.status === 'QOSHILDI');
-  const sinovMuddatiApps = applications.filter(app => app.status === 'SINOV_MUDDATI');
-  const shartnomaApps = applications.filter(app => app.status === 'SHARTNOMA');
-  const radEtildiApps = applications.filter(app => app.status === 'RAD_ETILDI');
+  const keldiApps = prioritizeUpcomingInterviews(applications.filter(app => app.status === 'KELDI'));
+  const qoshildiApps = prioritizeUpcomingInterviews(applications.filter(app => app.status === 'QOSHILDI'));
+  const sinovMuddatiApps = prioritizeUpcomingInterviews(applications.filter(app => app.status === 'SINOV_MUDDATI'));
+  const shartnomaApps = prioritizeUpcomingInterviews(applications.filter(app => app.status === 'SHARTNOMA'));
+  const radEtildiApps = prioritizeUpcomingInterviews(applications.filter(app => app.status === 'RAD_ETILDI'));
 
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>

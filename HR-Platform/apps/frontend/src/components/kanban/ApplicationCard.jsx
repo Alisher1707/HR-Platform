@@ -20,6 +20,19 @@ export function ApplicationCard({ application, onClick }) {
     zIndex: isDragging ? 999 : undefined,
   } : undefined;
 
+  // Suhbat bugunga belgilanganmi (mahalliy sana bo'yicha)
+  const isInterviewToday = (() => {
+    if (!interviewDate) return false;
+    const d = new Date(interviewDate);
+    if (isNaN(d)) return false;
+    const now = new Date();
+    return (
+      d.getFullYear() === now.getFullYear() &&
+      d.getMonth() === now.getMonth() &&
+      d.getDate() === now.getDate()
+    );
+  })();
+
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
     try {
@@ -38,7 +51,7 @@ export function ApplicationCard({ application, onClick }) {
     <div
       ref={setNodeRef}
       style={style}
-      className={`kanban-card ${isDragging ? 'dragging' : ''}`}
+      className={`kanban-card ${isDragging ? 'dragging' : ''} ${isInterviewToday ? 'interview-today' : ''}`}
       {...attributes}
       {...listeners}
     >
@@ -57,15 +70,24 @@ export function ApplicationCard({ application, onClick }) {
         </div>
       </div>
       {interviewDate && (
-        <div className="kanban-card-date" style={{ marginTop: '0.375rem' }}>
-          🕐 Suhbat: {new Date(interviewDate).toLocaleString('uz-UZ', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-          })}
-        </div>
+        isInterviewToday ? (
+          <div className="interview-today-badge">
+            🔔 Bugun suhbat — {new Date(interviewDate).toLocaleTimeString('uz-UZ', {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </div>
+        ) : (
+          <div className="kanban-card-date" style={{ marginTop: '0.375rem' }}>
+            🕐 Suhbat: {new Date(interviewDate).toLocaleString('uz-UZ', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </div>
+        )
       )}
       <button
         className="kanban-card-detail-btn"

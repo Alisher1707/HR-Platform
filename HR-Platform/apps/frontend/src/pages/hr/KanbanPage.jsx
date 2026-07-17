@@ -183,6 +183,19 @@ export function KanbanPage() {
     }
   };
 
+  // Bugun suhbati belgilangan nomzodlar soni (filtrlardan qat'i nazar)
+  const todayInterviewCount = applications.filter((app) => {
+    if (!app.interviewDate) return false;
+    const d = new Date(app.interviewDate);
+    if (isNaN(d)) return false;
+    const now = new Date();
+    return (
+      d.getFullYear() === now.getFullYear() &&
+      d.getMonth() === now.getMonth() &&
+      d.getDate() === now.getDate()
+    );
+  }).length;
+
   // Filter positions options dynamically
   const uniquePositions = [...new Set(applications.map(app => app.position).filter(Boolean))];
   const positionOptions = uniquePositions.map(pos => ({ value: pos, label: pos }));
@@ -300,6 +313,12 @@ export function KanbanPage() {
             style={{ width: '160px', padding: '0.5rem' }}
           />
         </div>
+
+        {todayInterviewCount > 0 && (
+          <div className="interview-today-badge" style={{ marginTop: 0, padding: '0.375rem 0.75rem', fontSize: '0.8125rem' }}>
+            🔔 Bugun suhbatlar: {todayInterviewCount} ta
+          </div>
+        )}
 
         {(search || selectedPosition || startDate || endDate) && (
           <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setSelectedPosition(''); setStartDate(''); setEndDate(''); }}>
