@@ -4,13 +4,27 @@ import api from './api';
  * Invite Service
  * Handles invite-related API calls
  */
+
+// Backend havolani o'zining FRONTEND_URL (localhost) bilan yasaydi.
+// Nomzod ochishi uchun havola HR brauzerda ochgan haqiqiy manzil
+// (masalan http://192.168.1.50:5173) bilan qayta yasaladi.
+const toLocalInviteUrl = (invite) => {
+  if (!invite) return invite;
+  return {
+    ...invite,
+    invite_url: invite.token
+      ? `${window.location.origin}/apply?token=${invite.token}`
+      : invite.invite_url,
+  };
+};
+
 export const inviteService = {
   /**
    * Create invite link
    */
   async createInvite(data = {}) {
     const response = await api.post('/invites', data);
-    return response.data.data.invite;
+    return toLocalInviteUrl(response.data.data.invite);
   },
 
   /**
@@ -18,7 +32,7 @@ export const inviteService = {
    */
   async getInvites(params = {}) {
     const response = await api.get('/invites', { params });
-    return response.data.data.invites;
+    return (response.data.data.invites || []).map(toLocalInviteUrl);
   },
 
   /**
@@ -26,7 +40,7 @@ export const inviteService = {
    */
   async getInviteById(id) {
     const response = await api.get(`/invites/${id}`);
-    return response.data.data.invite;
+    return toLocalInviteUrl(response.data.data.invite);
   },
 
   /**

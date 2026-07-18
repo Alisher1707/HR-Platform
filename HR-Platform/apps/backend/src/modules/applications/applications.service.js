@@ -91,6 +91,7 @@ export async function getAllApplications(filters = {}) {
       notes: row.notes,
       order_index: row.order_index,
       interview_date: row.interview_date,
+      interview_status: row.interview_status,
       sinov_start_date: row.sinov_start_date,
       sinov_end_date: row.sinov_end_date,
       created_at: row.created_at,
@@ -382,7 +383,7 @@ export async function updateApplication(id, updates, changedBy) {
   try {
     await client.query('BEGIN');
 
-    const allowedFields = ['position', 'notes', 'assigned_to'];
+    const allowedFields = ['position', 'notes', 'assigned_to', 'interview_status'];
     const setClauses = [];
     const params = [];
     let paramCount = 1;
@@ -421,11 +422,17 @@ export async function updateApplication(id, updates, changedBy) {
       throw error;
     }
 
-    // Log history
+    // Log history — suhbat natijasi belgilanganda alohida izoh
+    let historyComment = 'Ma\'lumotlar yangilandi';
+    if (updates.interviewStatus !== undefined) {
+      if (updates.interviewStatus === 'KELDI') historyComment = '✅ Nomzod suhbatga keldi';
+      else if (updates.interviewStatus === 'KELMADI') historyComment = '❌ Nomzod suhbatga kelmadi';
+      else historyComment = 'Suhbat natijasi belgisi olib tashlandi';
+    }
     await client.query(
       `INSERT INTO application_history (application_id, changed_by, comment)
        VALUES ($1, $2, $3)`,
-      [id, changedBy, 'Ma\'lumotlar yangilandi']
+      [id, changedBy, historyComment]
     );
 
     await client.query('COMMIT');

@@ -75,6 +75,7 @@ export const updateApplication = asyncHandler(async (req, res) => {
     position: req.body.position,
     notes: req.body.notes,
     assignedTo: req.body.assignedTo,
+    interviewStatus: req.body.interviewStatus,
   };
 
   // Remove undefined values

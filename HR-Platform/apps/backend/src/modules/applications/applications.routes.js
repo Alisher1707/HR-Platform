@@ -34,6 +34,7 @@ const updateApplicationSchema = Joi.object({
   position: Joi.string().max(200).optional().allow('', null),
   notes: Joi.string().max(1000).optional().allow('', null),
   assignedTo: commonSchemas.uuid.optional().allow(null),
+  interviewStatus: Joi.string().valid('KELDI', 'KELMADI').optional().allow(null),
 }).min(1);
 
 const uuidParamSchema = Joi.object({

@@ -6,7 +6,7 @@ import { useDraggable } from '@dnd-kit/core';
  * Draggable card representing a candidate application on the Kanban board
  */
 export function ApplicationCard({ application, onClick }) {
-  const { id, firstName, lastName, position, phone, createdAt, interviewDate, status, sinovStartDate, sinovEndDate, contractStartDate, contractEndDate } = application;
+  const { id, firstName, lastName, position, phone, createdAt, interviewDate, interviewStatus, status, sinovStartDate, sinovEndDate, contractStartDate, contractEndDate } = application;
   
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: id,
@@ -142,6 +142,11 @@ export function ApplicationCard({ application, onClick }) {
             })}
           </div>
         )
+      )}
+      {interviewStatus && (
+        <div className={interviewStatus === 'KELDI' ? 'interview-today-badge' : 'sinov-ends-badge'}>
+          {interviewStatus === 'KELDI' ? '✅ Suhbatga keldi' : '❌ Suhbatga kelmadi'}
+        </div>
       )}
       <button
         className="kanban-card-detail-btn"

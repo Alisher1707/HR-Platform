@@ -5,8 +5,9 @@ import api from './api';
  * Handles all application (Kanban) related API calls
  */
 
-// Backend origin (without /api/v1) — used for building resume file URLs
-const API_ORIGIN = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1').replace(/\/api\/v1\/?$/, '');
+// Backend origin (without /api/v1) — used for building resume file URLs.
+// Nisbiy bo'lsa ('' ga aylanadi) fayllar /uploads orqali nginx proxy'dan olinadi.
+const API_ORIGIN = (import.meta.env.VITE_API_URL || '/api/v1').replace(/\/api\/v1\/?$/, '');
 
 export const applicationService = {
   /**
@@ -51,6 +52,7 @@ export const applicationService = {
       resumeOriginalName: app.employee?.resume_original_name || '',
       createdAt: app.created_at,
       interviewDate: app.interview_date || null,
+      interviewStatus: app.interview_status || null,
       sinovStartDate: app.sinov_start_date || null,
       sinovEndDate: app.sinov_end_date || null,
       contractStartDate: app.employee?.contract_start_date || null,

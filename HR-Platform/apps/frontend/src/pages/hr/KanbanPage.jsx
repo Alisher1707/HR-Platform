@@ -208,6 +208,24 @@ export function KanbanPage() {
     setShowSinovPicker(false);
   };
 
+  // Suhbat natijasini belgilash: keldi / kelmadi.
+  // Xuddi shu tugma qayta bosilsa belgi olib tashlanadi.
+  const handleInterviewStatus = async (value) => {
+    if (!selectedApp) return;
+    const newValue = selectedApp.interviewStatus === value ? null : value;
+    try {
+      setChangingStatus(true);
+      await updateDetails({ id: selectedApp.id, data: { interviewStatus: newValue } });
+      setSelectedApp(prev => ({ ...prev, interviewStatus: newValue }));
+      const logs = await applicationService.getApplicationHistory(selectedApp.id);
+      setHistory(logs || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setChangingStatus(false);
+    }
+  };
+
   // Handle saving details (notes and assignment)
   const handleSaveDetails = async (e) => {
     e.preventDefault();
@@ -728,15 +746,37 @@ export function KanbanPage() {
                   </div>
                 )}
 
-                {/* Belgilangan suhbat vaqti */}
+                {/* Belgilangan suhbat vaqti + keldi/kelmadi belgilash */}
                 {selectedApp.interviewDate && !showInterviewPicker && (
                   <div style={{
                     marginBottom: '1rem',
                     fontSize: '0.875rem',
                     fontWeight: '600',
                     color: 'var(--text-primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    flexWrap: 'wrap',
                   }}>
-                    🕐 Belgilangan suhbat vaqti: {formatInterviewDate(selectedApp.interviewDate)}
+                    <span>🕐 Belgilangan suhbat vaqti: {formatInterviewDate(selectedApp.interviewDate)}</span>
+                    <Button
+                      variant={selectedApp.interviewStatus === 'KELDI' ? 'primary' : 'outline'}
+                      size="sm"
+                      disabled={changingStatus}
+                      title="Nomzod suhbatga keldi"
+                      onClick={() => handleInterviewStatus('KELDI')}
+                    >
+                      ✅ Keldi
+                    </Button>
+                    <Button
+                      variant={selectedApp.interviewStatus === 'KELMADI' ? 'danger' : 'outline'}
+                      size="sm"
+                      disabled={changingStatus}
+                      title="Nomzod suhbatga kelmadi"
+                      onClick={() => handleInterviewStatus('KELMADI')}
+                    >
+                      ❌ Kelmadi
+                    </Button>
                   </div>
                 )}
 

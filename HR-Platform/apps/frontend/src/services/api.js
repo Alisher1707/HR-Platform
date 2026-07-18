@@ -5,7 +5,9 @@ import axios from 'axios';
  * Centralized API client with interceptors
  */
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+// Nisbiy manzil — so'rovlar nginx (prod) yoki Vite (dev) proxy orqali backendga boradi.
+// Shu tufayli sayt qaysi manzildan ochilsa ham (localhost, LAN IP, domen) API ishlayveradi.
+const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
 export const api = axios.create({
   baseURL: API_URL,

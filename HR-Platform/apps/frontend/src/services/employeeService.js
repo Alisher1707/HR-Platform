@@ -5,8 +5,9 @@ import api from './api';
  * Handles all employee-related API calls
  */
 
-// Backend origin (without /api/v1) — used for building photo URLs
-const API_ORIGIN = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1').replace(/\/api\/v1\/?$/, '');
+// Backend origin (without /api/v1) — used for building photo URLs.
+// Nisbiy bo'lsa ('' ga aylanadi) fayllar /uploads orqali nginx proxy'dan olinadi.
+const API_ORIGIN = (import.meta.env.VITE_API_URL || '/api/v1').replace(/\/api\/v1\/?$/, '');
 
 export const employeeService = {
   /**
