@@ -6,7 +6,7 @@ import { useDraggable } from '@dnd-kit/core';
  * Draggable card representing a candidate application on the Kanban board
  */
 export function ApplicationCard({ application, onClick }) {
-  const { id, firstName, lastName, position, phone, createdAt, interviewDate } = application;
+  const { id, firstName, lastName, position, phone, createdAt, interviewDate, status, sinovStartDate, sinovEndDate } = application;
   
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: id,
@@ -33,6 +33,20 @@ export function ApplicationCard({ application, onClick }) {
     );
   })();
 
+  // Sinov muddati tugash kuni keldimi yoki o'tib ketdimi (mahalliy sana bo'yicha).
+  // Tugash kuni kelganda karta rangi o'zgaradi.
+  const sinovEndState = (() => {
+    if (status !== 'SINOV_MUDDATI' || !sinovEndDate) return null;
+    const end = new Date(sinovEndDate);
+    if (isNaN(end)) return null;
+    const now = new Date();
+    const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (today.getTime() === endDay.getTime()) return 'today';
+    if (today > endDay) return 'overdue';
+    return null;
+  })();
+
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
     try {
@@ -51,7 +65,7 @@ export function ApplicationCard({ application, onClick }) {
     <div
       ref={setNodeRef}
       style={style}
-      className={`kanban-card ${isDragging ? 'dragging' : ''} ${isInterviewToday ? 'interview-today' : ''}`}
+      className={`kanban-card ${isDragging ? 'dragging' : ''} ${sinovEndState ? 'sinov-ends' : (isInterviewToday ? 'interview-today' : '')}`}
       {...attributes}
       {...listeners}
     >
@@ -69,6 +83,18 @@ export function ApplicationCard({ application, onClick }) {
           📅 {formatDate(createdAt)}
         </div>
       </div>
+      {status === 'SINOV_MUDDATI' && (sinovStartDate || sinovEndDate) && (
+        <div className="kanban-card-date" style={{ marginTop: '0.375rem' }}>
+          ⏳ Sinov: {formatDate(sinovStartDate) || '—'} — {formatDate(sinovEndDate) || '—'}
+        </div>
+      )}
+      {sinovEndState && (
+        <div className="sinov-ends-badge">
+          {sinovEndState === 'today'
+            ? '⏰ Bugun sinov muddati tugaydi'
+            : '⏰ Sinov muddati tugagan'}
+        </div>
+      )}
       {interviewDate && (
         isInterviewToday ? (
           <div className="interview-today-badge">

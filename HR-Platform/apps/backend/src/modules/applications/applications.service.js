@@ -89,6 +89,8 @@ export async function getAllApplications(filters = {}) {
       notes: row.notes,
       order_index: row.order_index,
       interview_date: row.interview_date,
+      sinov_start_date: row.sinov_start_date,
+      sinov_end_date: row.sinov_end_date,
       created_at: row.created_at,
       updated_at: row.updated_at,
       employee: {
@@ -214,7 +216,7 @@ export async function getApplicationById(id) {
 /**
  * Update application status (Drag & Drop between columns)
  */
-export async function updateApplicationStatus(id, newStatus, changedBy, comment = null, interviewDate = undefined) {
+export async function updateApplicationStatus(id, newStatus, changedBy, comment = null, interviewDate = undefined, sinovStartDate = undefined, sinovEndDate = undefined) {
   const client = await getClient();
 
   try {
@@ -275,6 +277,32 @@ export async function updateApplicationStatus(id, newStatus, changedBy, comment 
         [interviewDate, id]
       );
       application = interviewResult.rows[0];
+    }
+
+    // Sinov muddati sanalari berilgan bo'lsa saqlaymiz (Sinov Muddatiga chaqirish bosqichida belgilanadi)
+    if (sinovStartDate !== undefined || sinovEndDate !== undefined) {
+      const sinovResult = await client.query(
+        `UPDATE applications
+         SET sinov_start_date = COALESCE($1, sinov_start_date),
+             sinov_end_date = COALESCE($2, sinov_end_date),
+             updated_at = NOW()
+         WHERE id = $3
+         RETURNING *`,
+        [sinovStartDate ?? null, sinovEndDate ?? null, id]
+      );
+      application = sinovResult.rows[0];
+    } else if (newStatus === APPLICATION_STATUS.SINOV_MUDDATI) {
+      // Karta doskada sudrab SINOV_MUDDATI'ga o'tkazilsa, boshlanish sanasi
+      // avtomatik bugun bo'ladi (avval belgilanmagan bo'lsa)
+      const sinovResult = await client.query(
+        `UPDATE applications
+         SET sinov_start_date = COALESCE(sinov_start_date, CURRENT_DATE),
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING *`,
+        [id]
+      );
+      application = sinovResult.rows[0];
     }
 
     // If moving to SHARTNOMA, update employee record with complete information

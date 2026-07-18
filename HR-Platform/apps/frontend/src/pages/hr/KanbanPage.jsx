@@ -54,6 +54,34 @@ export function KanbanPage() {
   const [interviewDatePart, setInterviewDatePart] = useState('');
   const [interviewTimePart, setInterviewTimePart] = useState('09:00');
 
+  // Sinov muddatiga chaqirish: boshlanish/tugash sanalarini tanlash paneli
+  const [showSinovPicker, setShowSinovPicker] = useState(false);
+  const [sinovStartPart, setSinovStartPart] = useState('');
+  const [sinovEndPart, setSinovEndPart] = useState('');
+
+  // ISO/timestamp qiymatni date input formatiga (YYYY-MM-DD, mahalliy) keltirish
+  const toDatePart = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d)) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
+
+  // Sinov sanasini o'qish uchun format: 17.07.2026
+  const formatSinovDate = (iso) => {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleDateString('uz-UZ', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      });
+    } catch (e) {
+      return iso;
+    }
+  };
+
   // ISO sanani date/time input qiymatlariga ajratish (mahalliy vaqt)
   const toDateTimeParts = (iso) => {
     if (!iso) return { date: '', time: '09:00' };
@@ -109,6 +137,9 @@ export function KanbanPage() {
       const parts = toDateTimeParts(selectedApp.interviewDate);
       setInterviewDatePart(parts.date);
       setInterviewTimePart(parts.time);
+      setShowSinovPicker(false);
+      setSinovStartPart(toDatePart(selectedApp.sinovStartDate) || toDatePart(new Date().toISOString()));
+      setSinovEndPart(toDatePart(selectedApp.sinovEndDate));
       
       const fetchHistory = async () => {
         setLoadingHistory(true);
@@ -127,10 +158,10 @@ export function KanbanPage() {
   }, [selectedApp]);
 
   // Handle status changes (Drag & Drop or quick transition button)
-  const handleStatusChange = async (id, newStatus, comment = 'Holati yangilandi', interviewDate = undefined) => {
+  const handleStatusChange = async (id, newStatus, comment = 'Holati yangilandi', interviewDate = undefined, sinovStartDate = undefined, sinovEndDate = undefined) => {
     try {
       setChangingStatus(true);
-      await updateStatus({ id, status: newStatus, comment, interviewDate });
+      await updateStatus({ id, status: newStatus, comment, interviewDate, sinovStartDate, sinovEndDate });
 
       // If modal is open, update its local status display or re-fetch details
       if (selectedApp && selectedApp.id === id) {
@@ -138,6 +169,8 @@ export function KanbanPage() {
           ...prev,
           status: newStatus,
           ...(interviewDate !== undefined ? { interviewDate } : {}),
+          ...(sinovStartDate !== undefined ? { sinovStartDate } : {}),
+          ...(sinovEndDate !== undefined ? { sinovEndDate } : {}),
         }));
         // Refresh history
         const logs = await applicationService.getApplicationHistory(id);
@@ -159,6 +192,15 @@ export function KanbanPage() {
     const comment = statusComment || `Suhbatga chaqirildi — ${formatInterviewDate(localDateTime)}`;
     await handleStatusChange(selectedApp.id, 'QOSHILDI', comment, iso);
     setShowInterviewPicker(false);
+  };
+
+  // Sinov sanalari tasdiqlanganda: statusni SINOV_MUDDATI ga o'tkazib, sanalarni saqlaymiz
+  const handleSinovConfirm = async () => {
+    if (!selectedApp || !sinovStartPart || !sinovEndPart) return;
+    const comment = statusComment ||
+      `Sinov muddatiga chaqirildi — ${formatSinovDate(sinovStartPart)} dan ${formatSinovDate(sinovEndPart)} gacha`;
+    await handleStatusChange(selectedApp.id, 'SINOV_MUDDATI', comment, undefined, sinovStartPart, sinovEndPart);
+    setShowSinovPicker(false);
   };
 
   // Handle saving details (notes and assignment)
@@ -560,7 +602,7 @@ export function KanbanPage() {
                     variant={selectedApp.status === 'SINOV_MUDDATI' ? 'primary' : 'outline'}
                     size="sm"
                     disabled={changingStatus}
-                    onClick={() => handleStatusChange(selectedApp.id, 'SINOV_MUDDATI', statusComment || 'Sinov muddatiga chaqirildi')}
+                    onClick={() => setShowSinovPicker((v) => !v)}
                   >
                     Sinov Muddatiga chaqirish
                   </Button>
@@ -631,6 +673,57 @@ export function KanbanPage() {
                   </div>
                 )}
 
+                {/* Sinov muddatini belgilash paneli */}
+                {showSinovPicker && (
+                  <div style={{
+                    display: 'flex',
+                    gap: '0.5rem',
+                    alignItems: 'flex-end',
+                    flexWrap: 'wrap',
+                    marginBottom: '1rem',
+                    padding: '0.75rem',
+                    background: 'var(--accent-light)',
+                    borderRadius: 'var(--radius)',
+                    border: '1px solid var(--accent)',
+                  }}>
+                    <div style={{ flex: 1, minWidth: '150px' }}>
+                      <Input
+                        label="Sinov boshlanish sanasi"
+                        type="date"
+                        value={sinovStartPart}
+                        max={sinovEndPart || undefined}
+                        onChange={(e) => setSinovStartPart(e.target.value)}
+                      />
+                    </div>
+                    <div style={{ flex: 1, minWidth: '150px' }}>
+                      <Input
+                        label="Sinov tugash sanasi"
+                        type="date"
+                        value={sinovEndPart}
+                        min={sinovStartPart || undefined}
+                        onChange={(e) => setSinovEndPart(e.target.value)}
+                      />
+                    </div>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      disabled={!sinovStartPart || !sinovEndPart || changingStatus}
+                      loading={changingStatus}
+                      onClick={handleSinovConfirm}
+                    >
+                      ✅ Tasdiqlash
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={changingStatus}
+                      onClick={() => setShowSinovPicker(false)}
+                    >
+                      Bekor qilish
+                    </Button>
+                  </div>
+                )}
+
                 {/* Belgilangan suhbat vaqti */}
                 {selectedApp.interviewDate && !showInterviewPicker && (
                   <div style={{
@@ -640,6 +733,18 @@ export function KanbanPage() {
                     color: 'var(--text-primary)',
                   }}>
                     🕐 Belgilangan suhbat vaqti: {formatInterviewDate(selectedApp.interviewDate)}
+                  </div>
+                )}
+
+                {/* Belgilangan sinov muddati */}
+                {(selectedApp.sinovStartDate || selectedApp.sinovEndDate) && !showSinovPicker && (
+                  <div style={{
+                    marginBottom: '1rem',
+                    fontSize: '0.875rem',
+                    fontWeight: '600',
+                    color: 'var(--text-primary)',
+                  }}>
+                    ⏳ Sinov muddati: {formatSinovDate(selectedApp.sinovStartDate) || '—'} — {formatSinovDate(selectedApp.sinovEndDate) || '—'}
                   </div>
                 )}
 

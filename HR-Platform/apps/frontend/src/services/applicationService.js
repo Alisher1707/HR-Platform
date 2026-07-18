@@ -51,6 +51,8 @@ export const applicationService = {
       resumeOriginalName: app.employee?.resume_original_name || '',
       createdAt: app.created_at,
       interviewDate: app.interview_date || null,
+      sinovStartDate: app.sinov_start_date || null,
+      sinovEndDate: app.sinov_end_date || null,
       experience: app.employee?.experience || 0,
       address: app.employee?.address || '',
       age: app.employee?.age || null,
@@ -69,10 +71,16 @@ export const applicationService = {
   /**
    * Update application status (move between columns)
    */
-  async updateApplicationStatus(id, status, comment, interviewDate) {
+  async updateApplicationStatus(id, status, comment, interviewDate, sinovStartDate, sinovEndDate) {
     const body = { status, comment };
     if (interviewDate !== undefined) {
       body.interviewDate = interviewDate;
+    }
+    if (sinovStartDate !== undefined) {
+      body.sinovStartDate = sinovStartDate;
+    }
+    if (sinovEndDate !== undefined) {
+      body.sinovEndDate = sinovEndDate;
     }
     const response = await api.patch(`/applications/${id}/status`, body);
     return response.data.data.application;

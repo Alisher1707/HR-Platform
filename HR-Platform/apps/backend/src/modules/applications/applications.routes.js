@@ -17,6 +17,13 @@ const updateStatusSchema = Joi.object({
     .required(),
   comment: Joi.string().max(500).optional().allow('', null),
   interviewDate: Joi.date().iso().optional().allow(null),
+  sinovStartDate: Joi.date().iso().optional().allow(null),
+  sinovEndDate: Joi.date().iso().optional().allow(null)
+    .when('sinovStartDate', {
+      is: Joi.date().required(),
+      then: Joi.date().iso().min(Joi.ref('sinovStartDate'))
+        .messages({ 'date.min': 'Sinov tugash sanasi boshlanish sanasidan oldin bo\'lishi mumkin emas' }),
+    }),
 });
 
 const updateOrderSchema = Joi.object({
