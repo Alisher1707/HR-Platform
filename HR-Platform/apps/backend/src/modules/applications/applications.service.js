@@ -60,6 +60,8 @@ export async function getAllApplications(filters = {}) {
       e.experience as employee_experience,
       e.resume_url as employee_resume_url,
       e.resume_original_name as employee_resume_original_name,
+      e.contract_start_date as employee_contract_start_date,
+      e.contract_end_date as employee_contract_end_date,
       u.first_name as assigned_first_name,
       u.last_name as assigned_last_name,
       EXTRACT(YEAR FROM AGE(CURRENT_DATE, e.birth_date))::INTEGER as employee_age
@@ -116,6 +118,8 @@ export async function getAllApplications(filters = {}) {
         experience: row.employee_experience,
         resume_url: row.employee_resume_url,
         resume_original_name: row.employee_resume_original_name,
+        contract_start_date: row.employee_contract_start_date,
+        contract_end_date: row.employee_contract_end_date,
       },
       assigned_to: row.assigned_to ? {
         id: row.assigned_to,

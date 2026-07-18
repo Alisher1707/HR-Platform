@@ -6,7 +6,7 @@ import { useDraggable } from '@dnd-kit/core';
  * Draggable card representing a candidate application on the Kanban board
  */
 export function ApplicationCard({ application, onClick }) {
-  const { id, firstName, lastName, position, phone, createdAt, interviewDate, status, sinovStartDate, sinovEndDate } = application;
+  const { id, firstName, lastName, position, phone, createdAt, interviewDate, status, sinovStartDate, sinovEndDate, contractStartDate, contractEndDate } = application;
   
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: id,
@@ -47,6 +47,22 @@ export function ApplicationCard({ application, onClick }) {
     return null;
   })();
 
+  // Shartnoma tugashiga 2 oy yoki undan kam qolganmi (yoki muddati o'tganmi).
+  // Shu holatda SHARTNOMA ustunidagi karta qizil bo'ladi.
+  const contractEndState = (() => {
+    if (status !== 'SHARTNOMA' || !contractEndDate) return null;
+    const end = new Date(contractEndDate);
+    if (isNaN(end)) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+    if (endDay < today) return 'expired';
+    const threshold = new Date(today);
+    threshold.setMonth(threshold.getMonth() + 2);
+    if (endDay <= threshold) return 'expiring';
+    return null;
+  })();
+
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
     try {
@@ -65,7 +81,7 @@ export function ApplicationCard({ application, onClick }) {
     <div
       ref={setNodeRef}
       style={style}
-      className={`kanban-card ${isDragging ? 'dragging' : ''} ${sinovEndState ? 'sinov-ends' : (isInterviewToday ? 'interview-today' : '')}`}
+      className={`kanban-card ${isDragging ? 'dragging' : ''} ${(sinovEndState || contractEndState) ? 'sinov-ends' : (isInterviewToday ? 'interview-today' : '')}`}
       {...attributes}
       {...listeners}
     >
@@ -93,6 +109,18 @@ export function ApplicationCard({ application, onClick }) {
           {sinovEndState === 'today'
             ? '⏰ Bugun sinov muddati tugaydi'
             : '⏰ Sinov muddati tugagan'}
+        </div>
+      )}
+      {status === 'SHARTNOMA' && (contractStartDate || contractEndDate) && (
+        <div className="kanban-card-date" style={{ marginTop: '0.375rem' }}>
+          📄 Shartnoma: {formatDate(contractStartDate) || '—'} — {formatDate(contractEndDate) || '—'}
+        </div>
+      )}
+      {contractEndState && (
+        <div className="sinov-ends-badge">
+          {contractEndState === 'expired'
+            ? '⚠️ Shartnoma muddati tugagan'
+            : '⚠️ Shartnomaga 2 oydan kam qoldi'}
         </div>
       )}
       {interviewDate && (

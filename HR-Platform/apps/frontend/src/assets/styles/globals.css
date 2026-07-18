@@ -1166,6 +1166,30 @@ a:hover {
   border-radius: 999px;
 }
 
+/* Shartnoma tugashiga 2 oy qolgan (yoki muddati o'tgan) xodim qatori — qizil aksent */
+.table tr.contract-expiring-row td {
+  background: var(--error-bg);
+}
+
+.table tr.contract-expiring-row td:first-child {
+  box-shadow: inset 4px 0 0 var(--error);
+}
+
+.contract-expiring-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--error);
+  background: var(--error-bg);
+  border: 1px solid var(--error);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
 .kanban-card-name {
   font-size: 0.875rem;
   font-weight: 600;

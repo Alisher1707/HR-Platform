@@ -158,6 +158,21 @@ export function EmployeeList() {
     return date.toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
+  // Shartnoma holati: tugashiga 2 oy yoki undan kam qolgan bo'lsa 'expiring',
+  // muddati o'tgan bo'lsa 'expired', aks holda null
+  const getContractState = (emp) => {
+    if (!emp.contract_end_date) return null;
+    const end = new Date(emp.contract_end_date);
+    if (isNaN(end)) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (end < today) return 'expired';
+    const threshold = new Date(today);
+    threshold.setMonth(threshold.getMonth() + 2);
+    if (end <= threshold) return 'expiring';
+    return null;
+  };
+
   return (
     <div className="animate-fade-in">
       {/* Page Header */}
@@ -218,13 +233,14 @@ export function EmployeeList() {
                     <th>Bo'lim</th>
                     <th>Lavozim</th>
                     <th>Holat</th>
+                    <th>Shartnoma</th>
                     <th>Telefon</th>
                     <th style={{ textAlign: 'right' }}>Amallar</th>
                   </tr>
                 </thead>
                 <tbody>
                   {employees.map((emp, index) => (
-                    <tr key={emp.id}>
+                    <tr key={emp.id} className={getContractState(emp) ? 'contract-expiring-row' : ''}>
                       <td style={{ color: 'var(--text-muted)', fontWeight: '600' }}>
                         {(pagination.page - 1) * pagination.limit + index + 1}
                       </td>
@@ -272,6 +288,24 @@ export function EmployeeList() {
                         <span className={`status-badge status-${emp.status?.toLowerCase().replace(/['\s]/g, '')}`}>
                           {emp.status || 'Faol'}
                         </span>
+                      </td>
+                      <td>
+                        {emp.contract_start_date || emp.contract_end_date ? (
+                          <div>
+                            <div style={{ fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>
+                              {emp.contract_start_date ? formatDate(emp.contract_start_date) : '—'} — {emp.contract_end_date ? formatDate(emp.contract_end_date) : '—'}
+                            </div>
+                            {getContractState(emp) && (
+                              <div className="contract-expiring-badge">
+                                {getContractState(emp) === 'expired'
+                                  ? '⚠️ Muddati tugagan'
+                                  : '⚠️ 2 oydan kam qoldi'}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)' }}>—</span>
+                        )}
                       </td>
                       <td>{emp.phone || 'Yo\'q'}</td>
                       <td>
@@ -533,6 +567,20 @@ export function EmployeeList() {
                   <div>
                     <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem', fontWeight: '600' }}>Ishga kirgan sana</label>
                     <div style={{ fontSize: '0.9rem', fontWeight: '500' }}>{formatDate(selectedEmployee.join_date)}</div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem', fontWeight: '600' }}>Shartnoma muddati</label>
+                    <div style={{
+                      fontSize: '0.9rem',
+                      fontWeight: '500',
+                      color: getContractState(selectedEmployee) ? 'var(--error)' : 'inherit',
+                    }}>
+                      {selectedEmployee.contract_start_date || selectedEmployee.contract_end_date
+                        ? `${selectedEmployee.contract_start_date ? formatDate(selectedEmployee.contract_start_date) : '—'} — ${selectedEmployee.contract_end_date ? formatDate(selectedEmployee.contract_end_date) : '—'}`
+                        : '—'}
+                      {getContractState(selectedEmployee) === 'expired' && ' (muddati tugagan)'}
+                      {getContractState(selectedEmployee) === 'expiring' && ' (2 oydan kam qoldi)'}
+                    </div>
                   </div>
                 </div>
               </div>

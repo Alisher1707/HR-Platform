@@ -32,6 +32,8 @@ const createEmployeeSchema = Joi.object({
   kpiTemplate: Joi.string().max(100).optional().allow('', null),
   experience: Joi.number().integer().min(0).max(100).default(0),
   notes: Joi.string().max(1000).optional().allow('', null),
+  contractStartDate: commonSchemas.date.optional().allow('', null),
+  contractEndDate: commonSchemas.date.optional().allow('', null),
 });
 
 const updateEmployeeSchema = Joi.object({
@@ -53,6 +55,8 @@ const updateEmployeeSchema = Joi.object({
   status: Joi.string().max(50).optional().allow('', null),
   kpiTemplate: Joi.string().max(100).optional().allow('', null),
   experience: Joi.number().integer().min(0).max(100),
+  contractStartDate: commonSchemas.date.optional().allow('', null),
+  contractEndDate: commonSchemas.date.optional().allow('', null),
 }).min(1); // At least one field required
 
 const uuidParamSchema = Joi.object({

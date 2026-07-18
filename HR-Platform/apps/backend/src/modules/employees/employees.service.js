@@ -20,9 +20,10 @@ export async function createEmployee(employeeData, createdBy) {
       `INSERT INTO employees (
         employee_number, first_name, last_name, branch, department, position,
         join_date, birth_date, pnfl, phone, email, address,
-        salary_type, salary_amount, status, kpi_template, experience, telegram_username, created_by
+        salary_type, salary_amount, status, kpi_template, experience, telegram_username,
+        contract_start_date, contract_end_date, created_by
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
        RETURNING *`,
       [
         employeeData.employeeNumber || null,
@@ -43,6 +44,8 @@ export async function createEmployee(employeeData, createdBy) {
         employeeData.kpiTemplate || null,
         employeeData.experience || 0,
         employeeData.telegramUsername || null,
+        employeeData.contractStartDate || null,
+        employeeData.contractEndDate || null,
         createdBy,
       ]
     );
@@ -135,7 +138,14 @@ export async function getAllEmployees(filters = {}, pagination = {}) {
     FROM employees e
     LEFT JOIN users u ON e.created_by = u.id
     ${whereString}
-    ORDER BY e.created_at DESC
+    ORDER BY
+      CASE WHEN e.contract_end_date IS NOT NULL
+             AND e.contract_end_date <= CURRENT_DATE + INTERVAL '2 months'
+           THEN 0 ELSE 1 END,
+      CASE WHEN e.contract_end_date IS NOT NULL
+             AND e.contract_end_date <= CURRENT_DATE + INTERVAL '2 months'
+           THEN e.contract_end_date END ASC,
+      e.created_at DESC
     LIMIT $${paramCount} OFFSET $${paramCount + 1}
   `;
 
@@ -168,6 +178,8 @@ export async function getAllEmployees(filters = {}, pagination = {}) {
       resume_original_name: row.resume_original_name,
       age: row.age,
       experience: row.experience,
+      contract_start_date: row.contract_start_date,
+      contract_end_date: row.contract_end_date,
       created_at: row.created_at,
       updated_at: row.updated_at,
       created_by: row.created_by ? {
@@ -235,6 +247,8 @@ export async function getEmployeeById(id) {
     resume_original_name: row.resume_original_name,
     age: row.age,
     experience: row.experience,
+    contract_start_date: row.contract_start_date,
+    contract_end_date: row.contract_end_date,
     created_at: row.created_at,
     updated_at: row.updated_at,
     created_by: row.created_by ? {
@@ -253,7 +267,8 @@ export async function updateEmployee(id, updates) {
   const allowedFields = [
     'employee_number', 'first_name', 'last_name', 'branch', 'department', 'position',
     'join_date', 'birth_date', 'pnfl', 'phone', 'email', 'address',
-    'salary_type', 'salary_amount', 'status', 'kpi_template', 'experience', 'telegram_username'
+    'salary_type', 'salary_amount', 'status', 'kpi_template', 'experience', 'telegram_username',
+    'contract_start_date', 'contract_end_date'
   ];
   const setClauses = [];
   const params = [];

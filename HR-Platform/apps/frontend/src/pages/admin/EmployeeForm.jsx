@@ -33,6 +33,8 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
     salaryAmount: '',
     status: 'Faol',
     kpiTemplate: '',
+    contractStartDate: '',
+    contractEndDate: '',
     photo: null,
     resume: null,
   });
@@ -79,6 +81,8 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
       // Parse employee data for editing
       let formattedJoinDate = '';
       let formattedBirthDate = '';
+      let formattedContractStart = '';
+      let formattedContractEnd = '';
 
       if (employee.join_date) {
         try {
@@ -93,6 +97,22 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
           formattedBirthDate = new Date(employee.birth_date).toISOString().split('T')[0];
         } catch (e) {
           formattedBirthDate = employee.birth_date;
+        }
+      }
+
+      if (employee.contract_start_date) {
+        try {
+          formattedContractStart = new Date(employee.contract_start_date).toISOString().split('T')[0];
+        } catch (e) {
+          formattedContractStart = employee.contract_start_date;
+        }
+      }
+
+      if (employee.contract_end_date) {
+        try {
+          formattedContractEnd = new Date(employee.contract_end_date).toISOString().split('T')[0];
+        } catch (e) {
+          formattedContractEnd = employee.contract_end_date;
         }
       }
 
@@ -115,6 +135,8 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
         salaryAmount: employee.salary_amount || '',
         status: employee.status || 'Faol',
         kpiTemplate: employee.kpi_template || '',
+        contractStartDate: formattedContractStart,
+        contractEndDate: formattedContractEnd,
         photo: null,
         resume: null,
       });
@@ -241,6 +263,11 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
       errors.salaryAmount = 'Maosh miqdori kiritilishi shart';
     }
 
+    if (formData.contractStartDate && formData.contractEndDate &&
+        formData.contractEndDate < formData.contractStartDate) {
+      errors.contractEndDate = 'Shartnoma tugash sanasi boshlanish sanasidan oldin bo\'lishi mumkin emas';
+    }
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -274,6 +301,8 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
         salaryAmount: parseFloat(formData.salaryAmount),
         status: formData.status,
         kpiTemplate: formData.kpiTemplate || null,
+        contractStartDate: formData.contractStartDate || null,
+        contractEndDate: formData.contractEndDate || null,
       };
 
       if (isEditing) {
@@ -609,6 +638,33 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
               <option value="management">Boshqaruv KPI</option>
             </select>
           </div>
+        </div>
+      </div>
+
+      {/* Shartnoma muddati - side by side */}
+      <div className="form-grid">
+        <div className="form-field">
+          <label className="form-label">Shartnoma boshlanish sanasi</label>
+          <input
+            type="date"
+            name="contractStartDate"
+            value={formData.contractStartDate}
+            onChange={handleChange}
+            max={formData.contractEndDate || undefined}
+            className="form-input"
+          />
+        </div>
+        <div className="form-field">
+          <label className="form-label">Shartnoma tugash sanasi</label>
+          <input
+            type="date"
+            name="contractEndDate"
+            value={formData.contractEndDate}
+            onChange={handleChange}
+            min={formData.contractStartDate || undefined}
+            className={`form-input ${formErrors.contractEndDate ? 'input-error' : ''}`}
+          />
+          {formErrors.contractEndDate && <span className="error-text">{formErrors.contractEndDate}</span>}
         </div>
       </div>
 

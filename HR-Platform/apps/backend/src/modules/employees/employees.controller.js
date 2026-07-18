@@ -40,6 +40,8 @@ export const createEmployee = asyncHandler(async (req, res) => {
     kpiTemplate: req.body.kpiTemplate,
     experience: req.body.experience,
     notes: req.body.notes,
+    contractStartDate: req.body.contractStartDate,
+    contractEndDate: req.body.contractEndDate,
   };
 
   const result = await employeesService.createEmployee(employeeData, req.user.id);
@@ -101,6 +103,8 @@ export const updateEmployee = asyncHandler(async (req, res) => {
     status: req.body.status,
     kpiTemplate: req.body.kpiTemplate,
     experience: req.body.experience,
+    contractStartDate: req.body.contractStartDate,
+    contractEndDate: req.body.contractEndDate,
   };
 
   // Remove undefined values

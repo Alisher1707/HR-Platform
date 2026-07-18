@@ -53,6 +53,8 @@ export const applicationService = {
       interviewDate: app.interview_date || null,
       sinovStartDate: app.sinov_start_date || null,
       sinovEndDate: app.sinov_end_date || null,
+      contractStartDate: app.employee?.contract_start_date || null,
+      contractEndDate: app.employee?.contract_end_date || null,
       experience: app.employee?.experience || 0,
       address: app.employee?.address || '',
       age: app.employee?.age || null,
