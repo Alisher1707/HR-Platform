@@ -194,12 +194,17 @@ export function KanbanPage() {
     setShowInterviewPicker(false);
   };
 
-  // Sinov sanalari tasdiqlanganda: statusni SINOV_MUDDATI ga o'tkazib, sanalarni saqlaymiz
+  // Sinov tugash sanasi tasdiqlanganda: statusni SINOV_MUDDATI ga o'tkazib, sanani saqlaymiz.
+  // Boshlanish sanasi backend'da avtomatik belgilanadi (mavjud bo'lmasa — bugun).
+  // Karta allaqachon SINOV_MUDDATI'da bo'lsa, bu faqat tugash sanasini tahrirlash bo'ladi.
   const handleSinovConfirm = async () => {
-    if (!selectedApp || !sinovStartPart || !sinovEndPart) return;
+    if (!selectedApp || !sinovEndPart) return;
+    const isEditingEndDate = selectedApp.status === 'SINOV_MUDDATI';
     const comment = statusComment ||
-      `Sinov muddatiga chaqirildi — ${formatSinovDate(sinovStartPart)} dan ${formatSinovDate(sinovEndPart)} gacha`;
-    await handleStatusChange(selectedApp.id, 'SINOV_MUDDATI', comment, undefined, sinovStartPart, sinovEndPart);
+      (isEditingEndDate
+        ? `Sinov tugash sanasi o'zgartirildi — ${formatSinovDate(sinovEndPart)}`
+        : `Sinov muddatiga chaqirildi — tugash sanasi: ${formatSinovDate(sinovEndPart)}`);
+    await handleStatusChange(selectedApp.id, 'SINOV_MUDDATI', comment, undefined, undefined, sinovEndPart);
     setShowSinovPicker(false);
   };
 
@@ -687,13 +692,12 @@ export function KanbanPage() {
                     border: '1px solid var(--accent)',
                   }}>
                     <div style={{ flex: 1, minWidth: '150px' }}>
-                      <Input
-                        label="Sinov boshlanish sanasi"
-                        type="date"
-                        value={sinovStartPart}
-                        max={sinovEndPart || undefined}
-                        onChange={(e) => setSinovStartPart(e.target.value)}
-                      />
+                      <div style={{ fontSize: '0.8125rem', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '0.25rem' }}>
+                        Boshlanish sanasi
+                      </div>
+                      <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)', padding: '0.5rem 0' }}>
+                        {sinovStartPart ? formatSinovDate(sinovStartPart) : 'Bugun'} (avtomatik)
+                      </div>
                     </div>
                     <div style={{ flex: 1, minWidth: '150px' }}>
                       <Input
@@ -707,7 +711,7 @@ export function KanbanPage() {
                     <Button
                       variant="primary"
                       size="sm"
-                      disabled={!sinovStartPart || !sinovEndPart || changingStatus}
+                      disabled={!sinovEndPart || changingStatus}
                       loading={changingStatus}
                       onClick={handleSinovConfirm}
                     >
@@ -736,15 +740,31 @@ export function KanbanPage() {
                   </div>
                 )}
 
-                {/* Belgilangan sinov muddati */}
+                {/* Belgilangan sinov muddati + tugash sanasini tahrirlash */}
                 {(selectedApp.sinovStartDate || selectedApp.sinovEndDate) && !showSinovPicker && (
                   <div style={{
                     marginBottom: '1rem',
                     fontSize: '0.875rem',
                     fontWeight: '600',
                     color: 'var(--text-primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    flexWrap: 'wrap',
                   }}>
-                    ⏳ Sinov muddati: {formatSinovDate(selectedApp.sinovStartDate) || '—'} — {formatSinovDate(selectedApp.sinovEndDate) || '—'}
+                    <span>
+                      ⏳ Sinov muddati: {formatSinovDate(selectedApp.sinovStartDate) || '—'} — {formatSinovDate(selectedApp.sinovEndDate) || '—'}
+                    </span>
+                    {selectedApp.status === 'SINOV_MUDDATI' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={changingStatus}
+                        onClick={() => setShowSinovPicker(true)}
+                      >
+                        ✏️ Tugash sanasini tahrirlash
+                      </Button>
+                    )}
                   </div>
                 )}
 

@@ -283,28 +283,18 @@ export async function updateApplicationStatus(id, newStatus, changedBy, comment 
       application = interviewResult.rows[0];
     }
 
-    // Sinov muddati sanalari berilgan bo'lsa saqlaymiz (Sinov Muddatiga chaqirish bosqichida belgilanadi)
-    if (sinovStartDate !== undefined || sinovEndDate !== undefined) {
+    // Sinov muddati: boshlanish sanasi avtomatik — SINOV_MUDDATI'ga o'tganda bugun
+    // (avval belgilanmagan bo'lsa). HR faqat tugash sanasini kiritadi.
+    if (sinovStartDate !== undefined || sinovEndDate !== undefined || newStatus === APPLICATION_STATUS.SINOV_MUDDATI) {
+      const autoStart = newStatus === APPLICATION_STATUS.SINOV_MUDDATI ? 'CURRENT_DATE' : 'sinov_start_date';
       const sinovResult = await client.query(
         `UPDATE applications
-         SET sinov_start_date = COALESCE($1, sinov_start_date),
+         SET sinov_start_date = COALESCE($1, sinov_start_date, ${autoStart}),
              sinov_end_date = COALESCE($2, sinov_end_date),
              updated_at = NOW()
          WHERE id = $3
          RETURNING *`,
         [sinovStartDate ?? null, sinovEndDate ?? null, id]
-      );
-      application = sinovResult.rows[0];
-    } else if (newStatus === APPLICATION_STATUS.SINOV_MUDDATI) {
-      // Karta doskada sudrab SINOV_MUDDATI'ga o'tkazilsa, boshlanish sanasi
-      // avtomatik bugun bo'ladi (avval belgilanmagan bo'lsa)
-      const sinovResult = await client.query(
-        `UPDATE applications
-         SET sinov_start_date = COALESCE(sinov_start_date, CURRENT_DATE),
-             updated_at = NOW()
-         WHERE id = $1
-         RETURNING *`,
-        [id]
       );
       application = sinovResult.rows[0];
     }
