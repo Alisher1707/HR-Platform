@@ -230,36 +230,38 @@ export function LoginPage() {
           </form>
 
           {/* Demo account helper */}
-          <div className="login-demo-card">
-            <div className="demo-card-header">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M12 16v-4" />
-                <path d="M12 8h.01" />
-              </svg>
-              <span>Demo Hisoblar</span>
-            </div>
-
-            <div className="demo-accounts">
-              <div className="demo-account-item">
-                <span className="demo-label">Admin:</span>
-                <div className="demo-credentials">
-                  <code>admin@hrplatform.com</code>
-                  <span className="demo-divider">/</span>
-                  <code>Admin123!@#</code>
-                </div>
+          {import.meta.env.DEV && (
+            <div className="login-demo-card">
+              <div className="demo-card-header">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 16v-4" />
+                  <path d="M12 8h.01" />
+                </svg>
+                <span>Demo Hisoblar</span>
               </div>
 
-              <div className="demo-account-item">
-                <span className="demo-label">HR Manager:</span>
-                <div className="demo-credentials">
-                  <code>hr@hrplatform.com</code>
-                  <span className="demo-divider">/</span>
-                  <code>HR123!@#</code>
+              <div className="demo-accounts">
+                <div className="demo-account-item">
+                  <span className="demo-label">Admin:</span>
+                  <div className="demo-credentials">
+                    <code>admin@hrplatform.com</code>
+                    <span className="demo-divider">/</span>
+                    <code>Admin123!@#</code>
+                  </div>
+                </div>
+
+                <div className="demo-account-item">
+                  <span className="demo-label">HR Manager:</span>
+                  <div className="demo-credentials">
+                    <code>hr@hrplatform.com</code>
+                    <span className="demo-divider">/</span>
+                    <code>HR123!@#</code>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
