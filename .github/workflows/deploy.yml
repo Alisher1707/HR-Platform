@@ -46,5 +46,6 @@ jobs:
             cd ${{ secrets.DEPLOY_PATH }}
             git fetch origin main
             git reset --hard origin/main
+            cd HR-Platform
             docker-compose up -d --build
-            docker-compose exec -T backend npm run migrate
+            docker-compose exec -T backend pnpm run migrate

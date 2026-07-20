@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
     ports:
-      - "5432:5432"
+      - "5435:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -24,10 +24,10 @@ services:
     ports:
       - "5000:5000"
     environment:
-      NODE_ENV: development
-      DATABASE_URL: postgresql://postgres:password@postgres:5432/hr_platform
-      PORT: 5000
-      FRONTEND_URL: http://localhost:5173
+      NODE_ENV: ${NODE_ENV:-production}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:password@postgres:5432/hr_platform}
+      PORT: ${PORT:-5000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://158.220.111.34:5173}
     depends_on:
       postgres:
         condition: service_healthy
@@ -39,12 +39,13 @@ services:
     restart: unless-stopped
 
   frontend:
-    build: ./apps/frontend
+    build:
+      context: ./apps/frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://158.220.111.34:5000/api/v1}
     container_name: hr_platform_frontend
     ports:
       - "5173:5173"
-    environment:
-      VITE_API_URL: http://localhost:5000/api/v1
     volumes:
       - ./apps/frontend:/app
       - /app/node_modules
