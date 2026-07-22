@@ -146,9 +146,26 @@ export function InviteManagement() {
     }
   };
 
-  const copyToClipboard = (url) => {
-    navigator.clipboard.writeText(url);
-    toast.success('Taklifnoma havolasi buferga nusxalandi! 📋');
+  const copyToClipboard = async (url) => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = url;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      toast.success('Taklifnoma havolasi buferga nusxalandi! 📋');
+    } catch (err) {
+      toast.error('Nusxalashda xatolik yuz berdi');
+      console.error(err);
+    }
   };
 
   const formatDate = (dateStr) => {
