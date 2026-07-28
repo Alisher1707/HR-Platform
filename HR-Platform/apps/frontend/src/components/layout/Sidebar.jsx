@@ -1,5 +1,17 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
+import {
+  LayoutDashboard,
+  Users,
+  KanbanSquare,
+  Link2,
+  FileText,
+  CalendarCheck2,
+  TrendingUp,
+  LogOut,
+  Briefcase,
+  ScanFace,
+} from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 
 /**
@@ -40,7 +52,7 @@ export function Sidebar({ isOpen, toggleSidebar }) {
   return (
     <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
       <div className="sidebar-logo">
-        <div className="sidebar-logo-icon">HR</div>
+        <div className="sidebar-logo-icon"><Briefcase size={18} strokeWidth={2.25} /></div>
         <span className="sidebar-logo-text">Platform</span>
       </div>
 
@@ -50,11 +62,11 @@ export function Sidebar({ isOpen, toggleSidebar }) {
           <>
             <div className="sidebar-section-title">Admin Panel</div>
             
-            <NavLink 
-              to="/admin/dashboard" 
+            <NavLink
+              to="/admin/dashboard"
               className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
             >
-              <span className="sidebar-link-icon">📊</span>
+              <span className="sidebar-link-icon"><LayoutDashboard size={18} strokeWidth={2} /></span>
               <span>Dashboard</span>
             </NavLink>
 
@@ -62,7 +74,7 @@ export function Sidebar({ isOpen, toggleSidebar }) {
               to="/admin/employees"
               className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
             >
-              <span className="sidebar-link-icon">👥</span>
+              <span className="sidebar-link-icon"><Users size={18} strokeWidth={2} /></span>
               <span>Xodimlar</span>
             </NavLink>
 
@@ -70,7 +82,7 @@ export function Sidebar({ isOpen, toggleSidebar }) {
               to="/admin/kanban"
               className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
             >
-              <span className="sidebar-link-icon">📋</span>
+              <span className="sidebar-link-icon"><KanbanSquare size={18} strokeWidth={2} /></span>
               <span>Kanban Doska</span>
             </NavLink>
 
@@ -79,7 +91,7 @@ export function Sidebar({ isOpen, toggleSidebar }) {
                 to="/admin/invites"
                 className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
               >
-                <span className="sidebar-link-icon">🔗</span>
+                <span className="sidebar-link-icon"><Link2 size={18} strokeWidth={2} /></span>
                 <span>Taklifnomalar</span>
               </NavLink>
             )}
@@ -88,8 +100,24 @@ export function Sidebar({ isOpen, toggleSidebar }) {
               to="/admin/ejm"
               className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
             >
-              <span className="sidebar-link-icon">📄</span>
+              <span className="sidebar-link-icon"><FileText size={18} strokeWidth={2} /></span>
               <span>EJM</span>
+            </NavLink>
+
+            <NavLink
+              to="/admin/attendance"
+              className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+            >
+              <span className="sidebar-link-icon"><CalendarCheck2 size={18} strokeWidth={2} /></span>
+              <span>Davomat</span>
+            </NavLink>
+
+            <NavLink
+              to="/admin/devices"
+              className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+            >
+              <span className="sidebar-link-icon"><ScanFace size={18} strokeWidth={2} /></span>
+              <span>Qurilmalar</span>
             </NavLink>
           </>
         )}
@@ -99,19 +127,19 @@ export function Sidebar({ isOpen, toggleSidebar }) {
           <>
             <div className="sidebar-section-title">HR Panel</div>
             
-            <NavLink 
-              to="/hr/dashboard" 
+            <NavLink
+              to="/hr/dashboard"
               className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
             >
-              <span className="sidebar-link-icon">📈</span>
+              <span className="sidebar-link-icon"><TrendingUp size={18} strokeWidth={2} /></span>
               <span>Dashboard</span>
             </NavLink>
 
-            <NavLink 
-              to="/hr/kanban" 
+            <NavLink
+              to="/hr/kanban"
               className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
             >
-              <span className="sidebar-link-icon">📋</span>
+              <span className="sidebar-link-icon"><KanbanSquare size={18} strokeWidth={2} /></span>
               <span>Kanban Doska</span>
             </NavLink>
           </>
@@ -132,13 +160,13 @@ export function Sidebar({ isOpen, toggleSidebar }) {
                 {getRoleLabel(user.role)}
               </div>
             </div>
-            <button 
+            <button
               onClick={handleLogout}
               className="btn btn-ghost btn-icon"
               title="Chiqish"
               style={{ padding: '0.25rem', minWidth: 'auto', minHeight: 'auto', color: 'var(--error)' }}
             >
-              🚪
+              <LogOut size={16} strokeWidth={2} />
             </button>
           </div>
         )}
