@@ -11,6 +11,11 @@ import AdminDashboard from '../pages/admin/AdminDashboard';
 import EmployeeList from '../pages/admin/EmployeeList';
 import InviteManagement from '../pages/admin/InviteManagement';
 import EJMPage from '../pages/admin/EJMPage';
+import AttendancePage from '../pages/admin/AttendancePage';
+import OrganizationPage from '../pages/admin/OrganizationPage';
+import MonitoringPage from '../pages/admin/MonitoringPage';
+import IshJadvallariPage from '../pages/admin/IshJadvallariPage';
+import DevicesPage from '../pages/admin/DevicesPage';
 import EmployeeEJMPage from '../pages/admin/EmployeeEJMPage';
 import HRDashboard from '../pages/hr/HRDashboard';
 import KanbanPage from '../pages/hr/KanbanPage';
@@ -139,6 +144,46 @@ export function AppRouter() {
             element={
               <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
                 <EJMPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/attendance"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
+                <AttendancePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/organization"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
+                <OrganizationPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/monitoring"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
+                <MonitoringPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/ish-jadvallari"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
+                <IshJadvallariPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/devices"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
+                <DevicesPage />
               </ProtectedRoute>
             }
           />
