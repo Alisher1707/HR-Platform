@@ -102,6 +102,7 @@ export async function receiveDeviceEvent(req, res) {
 
   console.log('\n========== DEVICE EVENT RECEIVED ==========');
   console.log('Time:', receivedAt);
+  console.log('Method:', req.method);
   console.log('Device token (URL param):', deviceToken);
   console.log('From IP:', req.ip);
   console.log('Content-Type:', req.headers['content-type']);

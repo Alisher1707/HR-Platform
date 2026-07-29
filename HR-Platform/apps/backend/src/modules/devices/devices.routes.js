@@ -41,7 +41,18 @@ function captureDeviceEvent(req, res, next) {
   req.on('error', next);
 }
 
-// POST /api/v1/devices/:token/events - camera pushes face-recognition events here (no auth: device can't do our cookie/JWT auth)
-router.post('/:token/events', captureDeviceEvent, receiveDeviceEvent);
+// ANY /api/v1/devices/:token/events - camera pushes face-recognition events here.
+// Method is intentionally unrestricted (Hikvision has been seen using PUT for some
+// pushes) while we're still confirming what this device actually sends. No auth:
+// the device can't do our cookie/JWT auth.
+router.all('/:token/events', captureDeviceEvent, receiveDeviceEvent);
+
+// Catches anything under /api/v1/devices/* that doesn't match the route above —
+// so a wrong path/method from the device still shows up in the logs instead of
+// silently 404'ing.
+router.all('*', (req, res) => {
+  console.log(`\n(!) /api/v1/devices ostida mos kelmagan so'rov: ${req.method} ${req.originalUrl}`);
+  res.status(200).json({ success: true });
+});
 
 export default router;

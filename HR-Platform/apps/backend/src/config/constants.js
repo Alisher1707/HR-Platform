@@ -85,7 +85,7 @@ export const COOKIE_OPTIONS = {
 // Rate Limiting
 export const RATE_LIMIT = {
   WINDOW_MS: 15 * 60 * 1000, // 15 minutes
-  MAX_REQUESTS: 100,
+  MAX_REQUESTS: 600,
 };
 
 // Pagination
