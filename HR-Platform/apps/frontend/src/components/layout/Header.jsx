@@ -1,82 +1,130 @@
-import React from 'react';
-import { useLocation } from 'react-router-dom';
-import { useAuthStore } from '../../store/authStore';
+import React, { useEffect, useRef, useState } from 'react';
+import { Link, NavLink, useLocation } from 'react-router-dom';
+import {
+  LayoutDashboard,
+  Building2,
+  CreditCard,
+  Radar,
+  CalendarDays,
+  Globe,
+  Settings,
+  Factory,
+  ChevronDown,
+  Sparkles,
+  Check,
+} from 'lucide-react';
+import { useLanguageStore, LANGUAGES } from '../../store/languageStore';
 import ThemeToggle from '../ui/ThemeToggle';
 
 /**
  * Header Component
- * Premium header displaying page title, theme switcher and responsive menu toggler
+ * Premium top navigation bar with module pills, theme switcher and
+ * responsive menu toggler
  */
 export function Header({ onMenuClick }) {
-  const { user } = useAuthStore();
+  const { language, setLanguage } = useLanguageStore();
   const location = useLocation();
+  const activeSection = new URLSearchParams(location.search).get('section') || 'davomat';
+  const isAttendancePage = location.pathname === '/admin/attendance';
 
-  // Determine page title based on path
-  const getPageDetails = () => {
-    const path = location.pathname;
-    if (path.includes('/admin/dashboard')) {
-      return { title: 'Tizim statistikasi', subtitle: 'Tizimning umumiy holati va xizmatlar' };
-    }
-    if (path.includes('/admin/employees')) {
-      return { title: 'Xodimlar ro\'yxati', subtitle: 'Kompaniyadagi barcha faol xodimlar boshqaruvi' };
-    }
-    if (path.includes('/admin/invites')) {
-      return { title: 'Taklifnomalar', subtitle: 'Yangi a\'zolar taklif qilish havolalari' };
-    }
-    if (path.includes('/hr/dashboard')) {
-      return { title: 'HR Dashboard', subtitle: 'Kandidatlar va ishga qabul qilish monitoringi' };
-    }
-    if (path.includes('/hr/kanban')) {
-      return { title: 'Ishga Qabul Kanban Doskasi', subtitle: 'Nomzodlarni bosqichma-bosqich saralash' };
-    }
-    return { title: 'HR Platform', subtitle: 'Recruiting Management System' };
-  };
+  const [isLangOpen, setIsLangOpen] = useState(false);
+  const langRef = useRef(null);
 
-  const { title, subtitle } = getPageDetails();
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (langRef.current && !langRef.current.contains(e.target)) {
+        setIsLangOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <header className="header">
       <div className="header-left">
-        <button 
-          className="btn btn-ghost btn-icon" 
+        <button
+          className="btn btn-ghost btn-icon"
           onClick={onMenuClick}
           style={{ display: 'none' /* Will be toggled on mobile via CSS */ }}
           id="mobile-menu-toggle"
         >
           ☰
         </button>
-        <div>
-          <div className="header-title">{title}</div>
-          <div className="header-subtitle" style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            {subtitle}
-          </div>
+
+        <div className="header-logo">
+          <Sparkles size={17} strokeWidth={2.25} />
         </div>
+
+        <nav className="header-nav">
+          <Link
+            to="/admin/attendance"
+            className={`header-pill ${isAttendancePage && activeSection === 'davomat' ? 'active' : ''}`}
+          >
+            <LayoutDashboard size={15} strokeWidth={2.25} /> Boshqaruv paneli <ChevronDown size={13} />
+          </Link>
+          <NavLink
+            to="/admin/organization"
+            className={({ isActive }) => `header-pill ${isActive ? 'active' : ''}`}
+          >
+            <Building2 size={15} strokeWidth={2.25} /> Tashkilot tuzilmasi <ChevronDown size={13} />
+          </NavLink>
+          <Link
+            to="/admin/attendance?section=moliya"
+            className={`header-pill ${isAttendancePage && activeSection === 'moliya' ? 'active' : ''}`}
+          >
+            <CreditCard size={15} strokeWidth={2.25} /> Moliya <ChevronDown size={13} />
+          </Link>
+          <Link
+            to="/admin/attendance?section=monitoring"
+            className={`header-pill ${isAttendancePage && activeSection === 'monitoring' ? 'active' : ''}`}
+          >
+            <Radar size={15} strokeWidth={2.25} /> Monitoring <ChevronDown size={13} />
+          </Link>
+          <NavLink
+            to="/admin/ish-jadvallari"
+            className={({ isActive }) => `header-pill ${isActive ? 'active' : ''}`}
+          >
+            <CalendarDays size={15} strokeWidth={2.25} /> Ish jadvallari <ChevronDown size={13} />
+          </NavLink>
+        </nav>
       </div>
 
       <div className="header-right">
-        <ThemeToggle />
-        <div style={{ width: '1px', height: '24px', background: 'var(--border)', margin: '0 0.5rem' }}></div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <span style={{ fontSize: '0.8125rem', fontWeight: '600' }}>
-            {user?.firstName}
-          </span>
-          <div 
-            style={{ 
-              width: '32px', 
-              height: '32px', 
-              borderRadius: '50%', 
-              background: 'var(--accent-light)', 
-              color: 'var(--accent)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: '700',
-              fontSize: '0.8125rem'
-            }}
+        <div className="header-lang" ref={langRef}>
+          <button
+            type="button"
+            className="header-pill"
+            onClick={() => setIsLangOpen((prev) => !prev)}
           >
-            {user?.firstName ? user.firstName[0].toUpperCase() : 'U'}
-          </div>
+            <Globe size={15} strokeWidth={2.25} /> {language.toUpperCase()} <ChevronDown size={13} />
+          </button>
+          {isLangOpen && (
+            <div className="header-lang-menu">
+              {LANGUAGES.map((lang) => (
+                <button
+                  type="button"
+                  key={lang.code}
+                  className={`header-lang-option ${lang.code === language ? 'active' : ''}`}
+                  onClick={() => {
+                    setLanguage(lang.code);
+                    setIsLangOpen(false);
+                  }}
+                >
+                  <span>{lang.label}</span>
+                  {lang.code === language && <Check size={14} strokeWidth={2.5} />}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
+        <ThemeToggle className="header-icon-btn" />
+        <span className="header-icon-btn" title="Sozlamalar">
+          <Settings size={16} strokeWidth={2.25} />
+        </span>
+        <span className="header-pill">
+          <Factory size={15} strokeWidth={2.25} /> IT Live
+        </span>
       </div>
     </header>
   );

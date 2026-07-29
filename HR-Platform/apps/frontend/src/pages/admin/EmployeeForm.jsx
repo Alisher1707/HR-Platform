@@ -1,8 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
+import ReactDOM from 'react-dom';
+import { CalendarDays, Plus } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import employeeService from '../../services/employeeService';
 import useToast from '../../hooks/useToast';
+import ScheduleFormPanel from './ScheduleFormPanel';
+
+// Ish jadvallari backend'i hali qo'shilmagan (EmployeeQuickAddForm'dagi
+// DEFAULT_SCHEDULES bilan bir xil vaqtinchalik namunaviy ro'yxat).
+const DEFAULT_SCHEDULES = ['8:00 - 18:00'];
 
 /**
  * EmployeeForm Component
@@ -42,6 +49,12 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
   const [formErrors, setFormErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [photoPreview, setPhotoPreview] = useState(null);
+
+  // Jadval — bazada joyi hali yo'q (EmployeeQuickAddForm'dagi kabi), shuning
+  // uchun formData'dan alohida, faqat UI darajasidagi state.
+  const [schedules, setSchedules] = useState(DEFAULT_SCHEDULES);
+  const [schedule, setSchedule] = useState('');
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
 
   // Branch options
   const branches = [
@@ -638,8 +651,58 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
               <option value="management">Boshqaruv KPI</option>
             </select>
           </div>
+
+          {/* Jadval */}
+          <div className="form-field">
+            <label className="form-label">Jadval</label>
+            <div className="schedule-field-row">
+              <div className="schedule-field-select-wrap">
+                <CalendarDays size={16} strokeWidth={2} className="schedule-field-icon" />
+                <select
+                  name="schedule"
+                  value={schedule}
+                  onChange={(e) => setSchedule(e.target.value)}
+                  className="form-input"
+                >
+                  <option value="">Jadval tanlang</option>
+                  {schedules.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                className="schedule-field-add"
+                onClick={() => setIsScheduleModalOpen(true)}
+                title="Yangi jadval qo'shish"
+                aria-label="Yangi jadval qo'shish"
+              >
+                <Plus size={18} strokeWidth={2.5} />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
+
+      {isScheduleModalOpen && ReactDOM.createPortal(
+        <div className="modal-overlay" onClick={() => setIsScheduleModalOpen(false)}>
+          <ScheduleFormPanel
+            isOpen={isScheduleModalOpen}
+            onClose={() => setIsScheduleModalOpen(false)}
+            onSave={(scheduleForm) => {
+              const name = scheduleForm.name.trim();
+              if (!name) return;
+              if (!schedules.includes(name)) {
+                setSchedules((prev) => [...prev, name]);
+              }
+              setSchedule(name);
+              setIsScheduleModalOpen(false);
+            }}
+            title="Yangi jadval qo'shish"
+          />
+        </div>,
+        document.body
+      )}
 
       {/* Shartnoma muddati - side by side */}
       <div className="form-grid">
@@ -813,6 +876,53 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
           display: flex;
           flex-direction: column;
           gap: 0.5rem;
+        }
+
+        .schedule-field-row {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .schedule-field-select-wrap {
+          position: relative;
+          flex: 1;
+          min-width: 0;
+        }
+
+        .schedule-field-icon {
+          position: absolute;
+          top: 50%;
+          left: 1rem;
+          transform: translateY(-50%);
+          color: var(--text-secondary);
+          pointer-events: none;
+        }
+
+        .schedule-field-select-wrap .form-input {
+          padding-left: 2.75rem;
+        }
+
+        .schedule-field-add {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 44px;
+          height: 44px;
+          flex-shrink: 0;
+          background: var(--accent-gradient);
+          border: none;
+          border-radius: var(--radius-lg);
+          color: #ffffff;
+          cursor: pointer;
+          box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+          transition: all 0.2s;
+        }
+
+        .schedule-field-add:hover {
+          background: var(--accent-gradient-hover);
+          box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
+          transform: translateY(-1px);
         }
 
         .form-label {

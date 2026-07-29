@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
 
@@ -9,6 +9,9 @@ import Header from './Header';
  */
 export function AppLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const location = useLocation();
+  const HEADER_NAV_PATHS = ['/admin/attendance', '/admin/organization', '/admin/monitoring', '/admin/ish-jadvallari'];
+  const showHeader = HEADER_NAV_PATHS.includes(location.pathname);
 
   const toggleSidebar = () => {
     setIsSidebarOpen((prev) => !prev);
@@ -38,8 +41,8 @@ export function AppLayout() {
       )}
 
       {/* Main Content Area */}
-      <div className="app-content">
-        <Header onMenuClick={toggleSidebar} />
+      <div className={`app-content ${showHeader ? '' : 'app-content--no-header'}`}>
+        {showHeader && <Header onMenuClick={toggleSidebar} />}
         <main className="app-content-inner animate-fade-in-up">
           <Outlet />
         </main>

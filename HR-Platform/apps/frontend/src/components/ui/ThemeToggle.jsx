@@ -5,13 +5,13 @@ import { useThemeStore } from '../../store/themeStore';
  * Theme Toggle Component
  * Switch between light and dark mode with smooth transition
  */
-export function ThemeToggle() {
+export function ThemeToggle({ className = '' }) {
   const { theme, toggleTheme } = useThemeStore();
 
   return (
     <button
       onClick={toggleTheme}
-      className="btn btn-ghost btn-icon"
+      className={`btn btn-ghost btn-icon ${className}`.trim()}
       aria-label="Toggle theme"
       title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
       style={{ borderRadius: 'var(--radius-lg)' }}

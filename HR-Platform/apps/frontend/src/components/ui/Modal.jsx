@@ -12,6 +12,7 @@ export function Modal({
   children,
   footer,
   size = 'md', // 'sm', 'md', 'lg'
+  align, // undefined (centered, default) | 'top'
 }) {
   // Close on Escape key press
   useEffect(() => {
@@ -35,7 +36,7 @@ export function Modal({
   if (!isOpen) return null;
 
   return ReactDOM.createPortal(
-    <div className="modal-overlay" onClick={onClose}>
+    <div className={`modal-overlay ${align === 'top' ? 'modal-overlay-top' : ''}`} onClick={onClose}>
       <div 
         className={`modal-content modal-${size}`} 
         onClick={(e) => e.stopPropagation()}

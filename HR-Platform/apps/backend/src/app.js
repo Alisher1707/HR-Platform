@@ -16,6 +16,7 @@ import inviteRoutes from './modules/invite/invite.routes.js';
 import employeesRoutes from './modules/employees/employees.routes.js';
 import applicationsRoutes from './modules/applications/applications.routes.js';
 import ejmRoutes from './modules/ejm/ejm.routes.js';
+import devicesRoutes from './modules/devices/devices.routes.js';
 
 /**
  * Initialize Express Application
@@ -87,6 +88,18 @@ app.use(
 );
 
 /**
+ * Static Files - Captured device event snapshots (diagnostic)
+ */
+app.use(
+  '/uploads/device-events',
+  express.static(path.join(__dirname, '../uploads/device-events'), {
+    setHeaders: (res) => {
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    },
+  })
+);
+
+/**
  * Rate Limiting
  */
 app.use(generalLimiter);
@@ -113,6 +126,7 @@ app.use(`${API_PREFIX}/invites`, inviteRoutes);
 app.use(`${API_PREFIX}/employees`, employeesRoutes);
 app.use(`${API_PREFIX}/applications`, applicationsRoutes);
 app.use(`${API_PREFIX}/ejm`, ejmRoutes);
+app.use(`${API_PREFIX}/devices`, devicesRoutes);
 
 /**
  * API Documentation Root
@@ -128,6 +142,7 @@ app.get(API_PREFIX, (req, res) => {
       employees: `${API_PREFIX}/employees`,
       applications: `${API_PREFIX}/applications`,
       ejm: `${API_PREFIX}/ejm`,
+      devices: `${API_PREFIX}/devices`,
     },
     documentation: 'See README.md for API documentation',
   });
