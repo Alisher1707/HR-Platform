@@ -74,11 +74,11 @@ const employeeQuerySchema = Joi.object({
  * Routes
  */
 
-// POST /api/v1/employees - Create employee (ADMIN only)
+// POST /api/v1/employees - Create employee (ADMIN, HR)
 router.post(
   '/',
   authenticate,
-  authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.HR),
   validate(createEmployeeSchema),
   employeesController.createEmployee
 );
@@ -101,32 +101,32 @@ router.get(
   employeesController.getEmployeeById
 );
 
-// PUT /api/v1/employees/:id - Update employee (ADMIN only)
+// PUT /api/v1/employees/:id - Update employee (ADMIN, HR)
 router.put(
   '/:id',
   authenticate,
-  authorize(USER_ROLES.ADMIN),
+  authorize(USER_ROLES.ADMIN, USER_ROLES.HR),
   validateParams(uuidParamSchema),
   validate(updateEmployeeSchema),
   employeesController.updateEmployee
 );
 
-// POST /api/v1/employees/:id/photo - Upload employee photo (ADMIN only)
+// POST /api/v1/employees/:id/photo - Upload employee photo (ADMIN, HR)
 router.post(
   '/:id/photo',
   authenticate,
-  authorize(USER_ROLES.ADMIN),
+  authorize(USER_ROLES.ADMIN, USER_ROLES.HR),
   validateParams(uuidParamSchema),
   uploadEmployeePhoto,
   handleMulterError,
   employeesController.uploadPhoto
 );
 
-// POST /api/v1/employees/:id/resume - Upload employee resume (ADMIN only)
+// POST /api/v1/employees/:id/resume - Upload employee resume (ADMIN, HR)
 router.post(
   '/:id/resume',
   authenticate,
-  authorize(USER_ROLES.ADMIN),
+  authorize(USER_ROLES.ADMIN, USER_ROLES.HR),
   validateParams(uuidParamSchema),
   uploadResume,
   handleMulterError,

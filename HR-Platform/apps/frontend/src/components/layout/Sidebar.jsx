@@ -83,7 +83,7 @@ export function Sidebar({ isOpen, toggleSidebar }) {
               className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
             >
               <span className="sidebar-link-icon"><KanbanSquare size={18} strokeWidth={2} /></span>
-              <span>Kanban Doska</span>
+              <span>Lead</span>
             </NavLink>
 
             {isSuperAdmin && (
@@ -136,11 +136,43 @@ export function Sidebar({ isOpen, toggleSidebar }) {
             </NavLink>
 
             <NavLink
+              to="/hr/employees"
+              className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+            >
+              <span className="sidebar-link-icon"><Users size={18} strokeWidth={2} /></span>
+              <span>Xodimlar</span>
+            </NavLink>
+
+            <NavLink
               to="/hr/kanban"
               className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
             >
               <span className="sidebar-link-icon"><KanbanSquare size={18} strokeWidth={2} /></span>
-              <span>Kanban Doska</span>
+              <span>Lead</span>
+            </NavLink>
+
+            <NavLink
+              to="/hr/invites"
+              className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+            >
+              <span className="sidebar-link-icon"><Link2 size={18} strokeWidth={2} /></span>
+              <span>Taklifnomalar</span>
+            </NavLink>
+
+            <NavLink
+              to="/hr/ejm"
+              className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+            >
+              <span className="sidebar-link-icon"><FileText size={18} strokeWidth={2} /></span>
+              <span>EJM</span>
+            </NavLink>
+
+            <NavLink
+              to="/hr/attendance"
+              className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+            >
+              <span className="sidebar-link-icon"><CalendarCheck2 size={18} strokeWidth={2} /></span>
+              <span>Davomat</span>
             </NavLink>
           </>
         )}

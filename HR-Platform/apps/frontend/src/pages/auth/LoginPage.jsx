@@ -149,7 +149,7 @@ export function LoginPage() {
                 <path d="M3 9h18" />
                 <path d="M9 21V9" />
               </svg>
-              <span>Kanban Board</span>
+              <span>Lead Board</span>
             </div>
             <div className="feature-item">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

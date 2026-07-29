@@ -56,21 +56,21 @@ router.post(
   inviteController.submitApplication
 );
 
-// POST /api/v1/invites - Create new invite (SUPER_ADMIN only)
+// POST /api/v1/invites - Create new invite (SUPER_ADMIN, HR)
 router.post(
   '/',
   authenticate,
-  authorize(USER_ROLES.SUPER_ADMIN),
+  authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.HR),
   inviteLimiter,
   validate(createInviteSchema),
   inviteController.createInvite
 );
 
-// GET /api/v1/invites - Get all invites (SUPER_ADMIN only)
+// GET /api/v1/invites - Get all invites (SUPER_ADMIN, HR)
 router.get(
   '/',
   authenticate,
-  authorize(USER_ROLES.SUPER_ADMIN),
+  authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.HR),
   validateQuery(inviteQuerySchema),
   inviteController.getAllInvites
 );
@@ -82,11 +82,11 @@ router.get(
   inviteController.validateToken
 );
 
-// GET /api/v1/invites/:id - Get invite by ID (SUPER_ADMIN only)
+// GET /api/v1/invites/:id - Get invite by ID (SUPER_ADMIN, HR)
 router.get(
   '/:id',
   authenticate,
-  authorize(USER_ROLES.SUPER_ADMIN),
+  authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.HR),
   validateParams(uuidParamSchema),
   inviteController.getInviteById
 );

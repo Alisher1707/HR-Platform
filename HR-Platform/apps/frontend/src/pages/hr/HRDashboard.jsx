@@ -75,7 +75,7 @@ export function HRDashboard() {
         </div>
         <div className="page-header-right">
           <Button variant="primary" onClick={() => navigate('/hr/kanban')} icon="📋">
-            Kanban taxtasiga o'tish
+            Lead taxtasiga o'tish
           </Button>
         </div>
       </div>
@@ -109,7 +109,7 @@ export function HRDashboard() {
           <div className="flex justify-between items-center mb-4">
             <h3 style={{ fontSize: '1.125rem', fontWeight: '700' }}>Oxirgi kelgan arizalar</h3>
             <Button variant="ghost" size="sm" onClick={() => navigate('/hr/kanban')}>
-              Kanbanda ko'rish →
+              Lead'da ko'rish →
             </Button>
           </div>
 
@@ -170,7 +170,7 @@ export function HRDashboard() {
           <div style={{ padding: '1rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', borderLeft: '3px solid var(--accent)' }}>
             <div className="font-semibold text-sm mb-1">Nomzodlarni saralash</div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-              Yangi kelgan nomzodlar bilan bog'lanib, ularning rezyumelari va suhbat vaqtini belgilang. Kanban taxtasida kartalarni surish orqali nomzod holatini tez o'zgartiring.
+              Yangi kelgan nomzodlar bilan bog'lanib, ularning rezyumelari va suhbat vaqtini belgilang. Lead taxtasida kartalarni surish orqali nomzod holatini tez o'zgartiring.
             </p>
           </div>
 
