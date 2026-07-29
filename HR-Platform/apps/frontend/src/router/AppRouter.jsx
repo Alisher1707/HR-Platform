@@ -213,6 +213,38 @@ export function AppRouter() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/hr/employees"
+            element={
+              <ProtectedRoute allowedRoles={['HR']}>
+                <EmployeeList />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/invites"
+            element={
+              <ProtectedRoute allowedRoles={['HR']}>
+                <InviteManagement />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/ejm"
+            element={
+              <ProtectedRoute allowedRoles={['HR']}>
+                <EJMPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/attendance"
+            element={
+              <ProtectedRoute allowedRoles={['HR']}>
+                <AttendancePage />
+              </ProtectedRoute>
+            }
+          />
         </Route>
 
         {/* Fallbacks */}

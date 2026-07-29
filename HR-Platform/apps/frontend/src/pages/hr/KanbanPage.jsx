@@ -394,11 +394,11 @@ export function KanbanPage() {
 
       {/* Kanban Board rendering */}
       {isLoading ? (
-        <LoadingSpinner text="Kanban doskasi yuklanmoqda..." />
+        <LoadingSpinner text="Lead doskasi yuklanmoqda..." />
       ) : (
         <KanbanBoard 
           applications={filteredApps} 
-          onStatusChange={(id, status) => handleStatusChange(id, status, 'Kanban taxtasida ko\'chirildi')} 
+          onStatusChange={(id, status) => handleStatusChange(id, status, 'Lead taxtasida ko\'chirildi')}
           onCardClick={setSelectedApp}
         />
       )}

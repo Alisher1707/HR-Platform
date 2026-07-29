@@ -8,6 +8,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import Modal from '../../components/ui/Modal';
 import Input from '../../components/ui/Input';
 import useToast from '../../hooks/useToast';
+import { useAuthStore } from '../../store/authStore';
 
 // Job templates directly derived from LAVOZIM YO'RIQNOMASI.md and generic roles
 const JOB_TEMPLATES = {
@@ -32,7 +33,7 @@ const JOB_TEMPLATES = {
   'HR Manager': [
     'Nomzodlarni intervyuga chaqirish va suhbat o\'tkazish',
     'Ishchilar ma\'lumotlarini to\'ldirish va yangilab borish',
-    'Kanban doskasini faol yuritish',
+    'Lead doskasini faol yuritish',
     'Tizim taklifnomalarini boshqarish'
   ],
   'SMM mutaxassisi': [
@@ -49,6 +50,8 @@ const JOB_TEMPLATES = {
  */
 export function InviteManagement() {
   const { toast } = useToast();
+  const { user } = useAuthStore();
+  const canManage = user?.role === 'SUPER_ADMIN';
   const [loading, setLoading] = useState(true);
   const [invites, setInvites] = useState([]);
   const [creating, setCreating] = useState(false);
@@ -282,24 +285,28 @@ export function InviteManagement() {
                               >
                                 Nusxalash
                               </Button>
-                              <Button 
-                                variant="secondary" 
-                                size="sm" 
-                                onClick={() => handleDeactivate(inv.id)}
-                                style={{ color: 'var(--warning)' }}
-                              >
-                                Faolsizlantirish
-                              </Button>
+                              {canManage && (
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => handleDeactivate(inv.id)}
+                                  style={{ color: 'var(--warning)' }}
+                                >
+                                  Faolsizlantirish
+                                </Button>
+                              )}
                             </>
                           )}
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => handleDelete(inv.id)}
-                            style={{ color: 'var(--error)' }}
-                          >
-                            O'chirish
-                          </Button>
+                          {canManage && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDelete(inv.id)}
+                              style={{ color: 'var(--error)' }}
+                            >
+                              O'chirish
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>

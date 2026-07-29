@@ -15,10 +15,10 @@ const router = express.Router();
 router.get('/', authenticate, authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.HR), ejmController.getEJM);
 
 // Save user's EJM data
-router.post('/', authenticate, authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN), ejmController.saveEJM);
+router.post('/', authenticate, authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.HR), ejmController.saveEJM);
 
 // Upload files to specific node
-router.post('/upload', authenticate, authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN), uploadEJMFile, handleMulterError, ejmController.uploadFiles);
+router.post('/upload', authenticate, authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.HR), uploadEJMFile, handleMulterError, ejmController.uploadFiles);
 
 // Get files for specific node
 router.get('/files/:phaseIndex/:nodeIndex', authenticate, authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.HR), ejmController.getNodeFiles);

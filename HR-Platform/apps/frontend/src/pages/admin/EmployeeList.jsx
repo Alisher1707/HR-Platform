@@ -9,6 +9,7 @@ import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import EmptyState from '../../components/ui/EmptyState';
 import EmployeeForm from './EmployeeForm';
 import useToast from '../../hooks/useToast';
+import { useAuthStore } from '../../store/authStore';
 
 /**
  * EmployeeList Component
@@ -17,6 +18,8 @@ import useToast from '../../hooks/useToast';
 export function EmployeeList() {
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const canDelete = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
   const [searchParams, setSearchParams] = useSearchParams();
   
   const [loading, setLoading] = useState(true);
@@ -334,14 +337,16 @@ export function EmployeeList() {
                           <Button variant="outline" size="sm" onClick={() => handleEditClick(emp)}>
                             Tahrirlash
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(emp.id)}
-                            style={{ color: 'var(--error)' }}
-                          >
-                            O'chirish
-                          </Button>
+                          {canDelete && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDelete(emp.id)}
+                              style={{ color: 'var(--error)' }}
+                            >
+                              O'chirish
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>

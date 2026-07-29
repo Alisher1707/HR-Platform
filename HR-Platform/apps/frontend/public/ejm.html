@@ -171,6 +171,19 @@ let editMode = false;
 let currentEmployeeId = null; // Current employee ID for employee-specific EJM
 let currentEmployeeName = ''; // Current employee name for display
 
+// Decodes the role claim out of the JWT so file-delete (backend-restricted to
+// ADMIN/SUPER_ADMIN) isn't even shown to HR users.
+function getUserRole() {
+  try {
+    const token = localStorage.getItem('accessToken') || parent.localStorage?.getItem('accessToken');
+    if (!token) return null;
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return payload.role || null;
+  } catch (e) {
+    return null;
+  }
+}
+
 // Check URL parameters for employee context (when opened in new tab)
 (function initFromURLParams() {
   const params = new URLSearchParams(window.location.search);
@@ -817,13 +830,15 @@ function renderModalFiles() {
     return;
   }
 
+  const canDeleteFiles = getUserRole() !== 'HR';
+
   container.innerHTML = tempFiles.map((file, i) => {
     const icon = getFileIcon(file.name);
     return `
       <div class="file-item">
         <span class="file-item-name" style="cursor:pointer; color:#0d47a1; text-decoration:underline;" onclick="downloadModalFile(${i})">${icon} ${file.name}</span>
         <span class="file-item-size">${file.size}</span>
-        <button class="file-item-del" onclick="removeModalFile(${i})">✕</button>
+        ${canDeleteFiles ? `<button class="file-item-del" onclick="removeModalFile(${i})">✕</button>` : ''}
       </div>
     `;
   }).join('');
