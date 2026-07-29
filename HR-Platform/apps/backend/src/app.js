@@ -23,6 +23,9 @@ import devicesRoutes from './modules/devices/devices.routes.js';
  */
 const app = express();
 
+// Trust first proxy (nginx) — req.ip va req.hostname to'g'ri ishlashi uchun
+app.set('trust proxy', 1);
+
 /**
  * Validate environment variables
  */

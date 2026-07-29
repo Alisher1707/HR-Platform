@@ -26,7 +26,13 @@ export const generalLimiter = rateLimit({
  */
 export const authLimiter = rateLimit({
   windowMs: RATE_LIMIT.WINDOW_MS,
-  max: 5,
+  max: 20,
+  keyGenerator: (req) => {
+    // Nginx proxy orqasida haqiqiy IP manzilni olish
+    return req.headers['x-forwarded-for']?.split(',')[0]?.trim()
+      || req.headers['x-real-ip']
+      || req.ip;
+  },
   message: {
     success: false,
     message: 'Too many authentication attempts, please try again later.',
