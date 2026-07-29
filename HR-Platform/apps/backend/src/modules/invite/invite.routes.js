@@ -91,11 +91,11 @@ router.get(
   inviteController.getInviteById
 );
 
-// PATCH /api/v1/invites/:id/deactivate - Deactivate invite (SUPER_ADMIN only)
+// PATCH /api/v1/invites/:id/deactivate - Deactivate invite (SUPER_ADMIN, HR)
 router.patch(
   '/:id/deactivate',
   authenticate,
-  authorize(USER_ROLES.SUPER_ADMIN),
+  authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.HR),
   validateParams(uuidParamSchema),
   inviteController.deactivateInvite
 );

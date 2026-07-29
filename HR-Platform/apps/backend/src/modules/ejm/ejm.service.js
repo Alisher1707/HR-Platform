@@ -222,7 +222,7 @@ export async function deleteEJMFile(fileId, userId) {
 
     // Get file info and verify ownership
     const fileResult = await client.query(
-      `SELECT f.*, e.user_id
+      `SELECT f.*, e.user_id, e.employee_id
        FROM ejm_files f
        JOIN ejm_data e ON f.ejm_data_id = e.id
        WHERE f.id = $1`,
@@ -237,7 +237,10 @@ export async function deleteEJMFile(fileId, userId) {
 
     const fileData = fileResult.rows[0];
 
-    if (fileData.user_id !== userId) {
+    // Employee-scoped files: any authorized staff member (route already
+    // restricts this to ADMIN/SUPER_ADMIN) can manage them, not just whoever
+    // originally uploaded it. Personal (non-employee) EJMs stay owner-only.
+    if (fileData.employee_id === null && fileData.user_id !== userId) {
       const error = new Error('Ruxsat yo\'q');
       error.statusCode = HTTP_STATUS.FORBIDDEN;
       throw error;
@@ -270,7 +273,7 @@ export async function deleteEJMFile(fileId, userId) {
  */
 export async function getEJMFile(fileId, userId) {
   const result = await query(
-    `SELECT f.*, e.user_id
+    `SELECT f.*, e.user_id, e.employee_id
      FROM ejm_files f
      JOIN ejm_data e ON f.ejm_data_id = e.id
      WHERE f.id = $1`,
@@ -285,7 +288,9 @@ export async function getEJMFile(fileId, userId) {
 
   const fileData = result.rows[0];
 
-  if (fileData.user_id !== userId) {
+  // Employee-scoped files are shared across authorized staff (route already
+  // restricts access to ADMIN/SUPER_ADMIN/HR) — only personal EJMs are owner-only.
+  if (fileData.employee_id === null && fileData.user_id !== userId) {
     const error = new Error('Ruxsat yo\'q');
     error.statusCode = HTTP_STATUS.FORBIDDEN;
     throw error;

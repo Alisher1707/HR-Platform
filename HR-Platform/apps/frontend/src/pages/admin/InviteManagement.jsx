@@ -51,7 +51,8 @@ const JOB_TEMPLATES = {
 export function InviteManagement() {
   const { toast } = useToast();
   const { user } = useAuthStore();
-  const canManage = user?.role === 'SUPER_ADMIN';
+  const canDeactivate = user?.role === 'SUPER_ADMIN' || user?.role === 'HR';
+  const canDelete = user?.role === 'SUPER_ADMIN';
   const [loading, setLoading] = useState(true);
   const [invites, setInvites] = useState([]);
   const [creating, setCreating] = useState(false);
@@ -285,7 +286,7 @@ export function InviteManagement() {
                               >
                                 Nusxalash
                               </Button>
-                              {canManage && (
+                              {canDeactivate && (
                                 <Button
                                   variant="secondary"
                                   size="sm"
@@ -297,7 +298,7 @@ export function InviteManagement() {
                               )}
                             </>
                           )}
-                          {canManage && (
+                          {canDelete && (
                             <Button
                               variant="ghost"
                               size="sm"

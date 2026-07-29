@@ -612,7 +612,10 @@ async function loadNodeFilesFromServer(pi, ni) {
   if (!token) return; // Skip if not logged in
 
   try {
-    const response = await fetch(`/api/v1/ejm/files/${pi}/${ni}`, {
+    const url = currentEmployeeId
+      ? `/api/v1/ejm/files/${pi}/${ni}?employeeId=${currentEmployeeId}`
+      : `/api/v1/ejm/files/${pi}/${ni}`;
+    const response = await fetch(url, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
