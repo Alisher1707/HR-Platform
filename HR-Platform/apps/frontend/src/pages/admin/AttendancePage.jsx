@@ -61,7 +61,9 @@ import {
   Paperclip,
 } from 'lucide-react';
 import employeeService from '../../services/employeeService';
+import attendanceService from '../../services/attendanceService';
 import useToast from '../../hooks/useToast';
+import { useAuthStore } from '../../store/authStore';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
@@ -1158,7 +1160,10 @@ export function AttendancePage() {
   const [terminalClock, setTerminalClock] = useState(new Date());
   const [isManualAttendanceOpen, setIsManualAttendanceOpen] = useState(false);
   const [manualForm, setManualForm] = useState(getDefaultManualForm());
+  const [isSavingManualAttendance, setIsSavingManualAttendance] = useState(false);
   const [detailEmployee, setDetailEmployee] = useState(null);
+  const [attendanceRecords, setAttendanceRecords] = useState([]);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
   const [taskForm, setTaskForm] = useState(getDefaultTaskForm());
   const [taskPriorityFilter, setTaskPriorityFilter] = useState(null);
@@ -1168,6 +1173,19 @@ export function AttendancePage() {
   const taskFileInputRef = useRef(null);
   const [isTaskDropzoneActive, setIsTaskDropzoneActive] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuthStore();
+  const canDeleteAttendance = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
+
+  const handleDeleteAttendanceRecord = async (id) => {
+    try {
+      await attendanceService.deleteAttendance(id);
+      toast.success("Yozuv o'chirildi");
+      await refreshAttendance();
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Yozuvni o'chirishda xatolik");
+    }
+  };
 
   const branchOptions = useMemo(() => (
     [...new Set(employees.map((e) => e.branch).filter(Boolean))]
@@ -1505,6 +1523,122 @@ export function AttendancePage() {
     fetchEmployees();
   }, []);
 
+  const selectedDateKey = format(selectedDate, 'yyyy-MM-dd');
+
+  const refreshAttendance = async () => {
+    setAttendanceLoading(true);
+    try {
+      const records = await attendanceService.getAttendance({ date: selectedDateKey });
+      setAttendanceRecords(records || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setAttendanceLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    refreshAttendance();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDateKey]);
+
+  // Standard ish boshlanish vaqti — "kech kelgan" hisoblash uchun (Ish
+  // Jadvallari bo'limidagi standart smena bilan bir xil, hali filialga
+  // qarab moslashtirilmagan).
+  const WORK_START_TIME = '09:00';
+
+  const recordsByEmployee = useMemo(() => {
+    const map = {};
+    attendanceRecords.forEach((r) => {
+      if (!map[r.employee_id]) map[r.employee_id] = [];
+      map[r.employee_id].push(r);
+    });
+    return map;
+  }, [attendanceRecords]);
+
+  const getAttendanceSummary = (employeeId) => {
+    const records = recordsByEmployee[employeeId] || [];
+    const keldiRecords = records.filter((r) => r.type === 'keldi');
+    const ketdiRecords = records.filter((r) => r.type === 'ketdi');
+    const firstKeldi = keldiRecords[0] || null;
+    const lastKetdi = ketdiRecords[ketdiRecords.length - 1] || null;
+
+    let totalLabel = '-';
+    if (firstKeldi && lastKetdi) {
+      const minutes = Math.max(0, Math.round(
+        (new Date(lastKetdi.recorded_at) - new Date(firstKeldi.recorded_at)) / 60000
+      ));
+      const h = Math.floor(minutes / 60);
+      const m = minutes % 60;
+      totalLabel = `${h}s ${m}d`;
+    }
+
+    const hasKeldi = Boolean(firstKeldi);
+    const hasKetdi = Boolean(lastKetdi);
+    const isLate = hasKeldi && format(new Date(firstKeldi.recorded_at), 'HH:mm') > WORK_START_TIME;
+
+    // done: keldi+ketdi ikkalasi ham bor (ish kuni yakunlangan)
+    // present: keldi bor, ketdi yo'q (hozir ishda)
+    // none: hech narsa yo'q (kelmagan)
+    const status = hasKeldi && hasKetdi ? 'done' : hasKeldi ? 'present' : 'none';
+
+    return {
+      records,
+      kirish: hasKeldi ? format(new Date(firstKeldi.recorded_at), 'HH:mm') : '-',
+      chiqish: hasKetdi ? format(new Date(lastKetdi.recorded_at), 'HH:mm') : '-',
+      jami: totalLabel,
+      status,
+      hasKeldi,
+      hasKetdi,
+      isLate,
+    };
+  };
+
+  const attendanceStats = useMemo(() => {
+    let ishda = 0;
+    let kechKelgan = 0;
+    let kelganlar = 0;
+    employees.forEach((emp) => {
+      const summary = getAttendanceSummary(emp.id);
+      if (summary.hasKeldi) kelganlar += 1;
+      if (summary.hasKeldi && !summary.hasKetdi) ishda += 1;
+      if (summary.isLate) kechKelgan += 1;
+    });
+    return {
+      ishda,
+      kechKelgan,
+      ishdaEmas: Math.max(0, total - kelganlar),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employees, recordsByEmployee, total]);
+
+  const handleSaveManualAttendance = async () => {
+    if (!manualForm.employeeId) return;
+
+    setIsSavingManualAttendance(true);
+    try {
+      const [hh, mm] = manualForm.time.split(':').map(Number);
+      const recordedAt = new Date(manualForm.date);
+      recordedAt.setHours(hh || 0, mm || 0, 0, 0);
+
+      await attendanceService.createAttendance({
+        employeeId: manualForm.employeeId,
+        type: manualForm.type === 'ketish' ? 'ketdi' : 'keldi',
+        recordedAt: recordedAt.toISOString(),
+        notes: manualForm.comment,
+      });
+
+      toast.success("Davomat yozuvi qo'shildi");
+      setIsManualAttendanceOpen(false);
+      await refreshAttendance();
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Davomat yozuvini saqlashda xatolik");
+    } finally {
+      setIsSavingManualAttendance(false);
+    }
+  };
+
   useEffect(() => {
     if (activeSection !== 'monitoring' || monitoringTab !== 'terminallar') return;
     const id = setInterval(() => setTerminalClock(new Date()), 1000);
@@ -1566,9 +1700,9 @@ export function AttendancePage() {
           {/* Stats */}
           <div className="stats-grid attendance-stats-grid mb-6">
             <StatsCard label="Barchasi" value={total} icon={<Briefcase size={20} strokeWidth={2} />} iconColor="emerald" />
-            <StatsCard label="Ishda" value={0} icon={<Briefcase size={20} strokeWidth={2} />} iconColor="blue" />
-            <StatsCard label="Kech kelgan" value={0} icon={<Briefcase size={20} strokeWidth={2} />} iconColor="amber" />
-            <StatsCard label="Ishda emas" value={total} icon={<Briefcase size={20} strokeWidth={2} />} iconColor="rose" />
+            <StatsCard label="Ishda" value={attendanceStats.ishda} icon={<Briefcase size={20} strokeWidth={2} />} iconColor="blue" />
+            <StatsCard label="Kech kelgan" value={attendanceStats.kechKelgan} icon={<Briefcase size={20} strokeWidth={2} />} iconColor="amber" />
+            <StatsCard label="Ishda emas" value={attendanceStats.ishdaEmas} icon={<Briefcase size={20} strokeWidth={2} />} iconColor="rose" />
           </div>
 
           {/* Arizalar */}
@@ -1624,19 +1758,61 @@ export function AttendancePage() {
                         <th>Vaqt</th>
                         <th>Faoliyat</th>
                         <th>Holati</th>
-                        <th>Izohlar va Manzil</th>
+                        <th>Izohlar</th>
                         <th>Manba</th>
                         <th>Tasdiqlash</th>
                       </tr>
                     </thead>
+                    {(recordsByEmployee[detailEmployee.id] || []).length > 0 && (
+                      <tbody>
+                        {(recordsByEmployee[detailEmployee.id] || []).map((record) => {
+                          const isLateRecord = record.type === 'keldi'
+                            && format(new Date(record.recorded_at), 'HH:mm') > WORK_START_TIME;
+                          return (
+                            <tr key={record.id}>
+                              <td>{format(new Date(record.recorded_at), 'HH:mm')}</td>
+                              <td>{record.type === 'keldi' ? 'Keldi' : 'Ketdi'}</td>
+                              <td>
+                                {record.type === 'keldi' ? (
+                                  <Badge variant={isLateRecord ? 'warning' : 'success'}>
+                                    {isLateRecord ? 'Kech' : 'Vaqtida'}
+                                  </Badge>
+                                ) : '-'}
+                              </td>
+                              <td>{record.notes || '-'}</td>
+                              <td>
+                                <Badge variant="info">
+                                  {record.source === 'manual' ? "Qo'lda" : 'Qurilma'}
+                                </Badge>
+                              </td>
+                              <td>
+                                {record.source === 'manual' && canDeleteAttendance ? (
+                                  <button
+                                    type="button"
+                                    className="attendance-toggle-btn"
+                                    title="O'chirish"
+                                    style={{ color: 'var(--error)' }}
+                                    onClick={() => handleDeleteAttendanceRecord(record.id)}
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                ) : '-'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    )}
                   </table>
                 </div>
 
-                <EmptyState
-                  icon="📦"
-                  title="Belgilar topilmadi"
-                  text=""
-                />
+                {(recordsByEmployee[detailEmployee.id] || []).length === 0 && (
+                  <EmptyState
+                    icon="📦"
+                    title="Belgilar topilmadi"
+                    text=""
+                  />
+                )}
 
                 <div className="attendance-table-footer">
                   <button type="button" className="attendance-toggle-btn" title="Ustunlar sozlamasi">
@@ -1676,7 +1852,9 @@ export function AttendancePage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {employees.map((emp) => (
+                      {employees.map((emp) => {
+                        const summary = getAttendanceSummary(emp.id);
+                        return (
                         <tr key={emp.id}>
                           <td>
                             <div className="attendance-employee-cell">
@@ -1701,9 +1879,9 @@ export function AttendancePage() {
                               </div>
                             </div>
                           </td>
-                          <td>-</td>
-                          <td>-</td>
-                          <td>-</td>
+                          <td>{summary.kirish}</td>
+                          <td>{summary.chiqish}</td>
+                          <td>{summary.jami}</td>
                           <td>-</td>
                           <td>
                             <div className="attendance-branch-cell">
@@ -1712,7 +1890,17 @@ export function AttendancePage() {
                           </td>
                           <td>
                             <div className="attendance-status-cell">
-                              <Badge variant="error">Kelmagan</Badge>
+                              {summary.status === 'none' && <Badge variant="error">Kelmagan</Badge>}
+                              {summary.status === 'present' && (
+                                <Badge variant={summary.isLate ? 'warning' : 'info'}>
+                                  {summary.isLate ? 'Kech keldi' : 'Ishda'}
+                                </Badge>
+                              )}
+                              {summary.status === 'done' && (
+                                <Badge variant={summary.isLate ? 'warning' : 'success'}>
+                                  {summary.isLate ? 'Kech keldi' : 'Keldi'}
+                                </Badge>
+                              )}
                               <button
                                 type="button"
                                 className="attendance-toggle-btn"
@@ -1724,7 +1912,8 @@ export function AttendancePage() {
                             </div>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -2975,8 +3164,9 @@ export function AttendancePage() {
             variant="primary"
             fullWidth
             className="attendance-primary-btn"
-            disabled={!manualForm.employeeId}
-            onClick={() => setIsManualAttendanceOpen(false)}
+            disabled={!manualForm.employeeId || isSavingManualAttendance}
+            loading={isSavingManualAttendance}
+            onClick={handleSaveManualAttendance}
           >
             Saqlash
           </Button>
