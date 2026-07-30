@@ -52,9 +52,6 @@ router.all('/:token/events', captureDeviceEvent, receiveDeviceEvent);
 // silently 404'ing.
 router.all('*', (req, res) => {
   console.log(`\n(!) /api/v1/devices ostida mos kelmagan so'rov: ${req.method} ${req.originalUrl}`);
-  notifyTelegram(
-    `⚠️ /api/v1/devices ostida mos kelmagan so'rov\nMetod: ${req.method}\nYo'l: ${req.originalUrl}\nIP: ${req.ip}`
-  );
   res.status(200).json({ success: true });
 });
 
