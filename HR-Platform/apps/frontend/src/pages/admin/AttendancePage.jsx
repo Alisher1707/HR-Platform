@@ -1542,6 +1542,18 @@ export function AttendancePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDateKey]);
 
+  // Kameradan hodisalar istalgan vaqt kelishi mumkin — sahifa ochiq turganda
+  // Davomat bo'limi o'zi vaqti-vaqti bilan yangilanib tursin, foydalanuvchi
+  // har safar qo'lda yangilashi shart bo'lmasin.
+  useEffect(() => {
+    if (activeSection !== 'davomat') return;
+    const intervalId = setInterval(() => {
+      refreshAttendance();
+    }, 20000);
+    return () => clearInterval(intervalId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSection, selectedDateKey]);
+
   // Standard ish boshlanish vaqti — "kech kelgan" hisoblash uchun (Ish
   // Jadvallari bo'limidagi standart smena bilan bir xil, hali filialga
   // qarab moslashtirilmagan).
@@ -1920,7 +1932,7 @@ export function AttendancePage() {
                                 type="button"
                                 className="attendance-toggle-btn"
                                 title="Batafsil"
-                                onClick={() => setDetailEmployee(emp)}
+                                onClick={() => { setDetailEmployee(emp); refreshAttendance(); }}
                               >
                                 <ExternalLink size={14} />
                               </button>
