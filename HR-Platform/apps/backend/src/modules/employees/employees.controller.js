@@ -42,6 +42,7 @@ export const createEmployee = asyncHandler(async (req, res) => {
     notes: req.body.notes,
     contractStartDate: req.body.contractStartDate,
     contractEndDate: req.body.contractEndDate,
+    // personId intentionally omitted — always auto-assigned, see employees.service.js
   };
 
   const result = await employeesService.createEmployee(employeeData, req.user.id);
@@ -105,6 +106,7 @@ export const updateEmployee = asyncHandler(async (req, res) => {
     experience: req.body.experience,
     contractStartDate: req.body.contractStartDate,
     contractEndDate: req.body.contractEndDate,
+    // personId intentionally omitted — not editable, see employees.service.js
   };
 
   // Remove undefined values

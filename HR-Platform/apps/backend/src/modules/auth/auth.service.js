@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { query, getClient } from '../../config/database.js';
 import { generateTokenPair, verifyRefreshToken } from '../../shared/utils/token.js';
 import { HTTP_STATUS, MESSAGES } from '../../config/constants.js';
+import { getNextAutoPersonId } from '../employees/employees.service.js';
 
 /**
  * Auth Service
@@ -121,7 +122,14 @@ export async function registerUser(inviteToken, userData) {
     const passwordHash = await bcrypt.hash(userData.password, SALT_ROUNDS);
 
     // Create user
-    const userRole = invite.position ? 'EMPLOYEE' : (userData.role || 'ADMIN');
+    // NOTE: role is intentionally never taken from client-supplied userData —
+    // that would let anyone registering via a link self-assign a role,
+    // including ADMIN. A position-bearing invite (candidate/job invite,
+    // creatable by HR too) always resolves to EMPLOYEE. A position-less
+    // invite is a staff invite that only SUPER_ADMIN can create in the first
+    // place (enforced in invite.controller.js#createInvite), so defaulting
+    // it to ADMIN here is safe.
+    const userRole = invite.position ? 'EMPLOYEE' : 'ADMIN';
 
     const userResult = await client.query(
       `INSERT INTO users (email, password_hash, role, first_name, last_name)
@@ -134,11 +142,12 @@ export async function registerUser(inviteToken, userData) {
 
     // Automatically create employee and application records if a position is set
     if (invite.position) {
+      const personId = await getNextAutoPersonId(client);
       const employeeResult = await client.query(
-        `INSERT INTO employees (first_name, last_name, created_by)
-         VALUES ($1, $2, $3)
+        `INSERT INTO employees (first_name, last_name, person_id, created_by)
+         VALUES ($1, $2, $3, $4)
          RETURNING id`,
-        [user.first_name, user.last_name, invite.created_by]
+        [user.first_name, user.last_name, personId, invite.created_by]
       );
       const employeeId = employeeResult.rows[0].id;
 

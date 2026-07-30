@@ -282,7 +282,11 @@ export async function submitApplication(applicationData, resumeFile = null) {
     }
 
     // 2. Insert employee as candidate ('Nomzod')
-    // Xodimlar bo'limida ko'rinmaydi — SHARTNOMA bosqichiga o'tganda 'Faol' bo'ladi
+    // Xodimlar bo'limida ko'rinmaydi — SHARTNOMA bosqichiga o'tganda 'Faol' bo'ladi.
+    // person_id (kamera identifikatori) qasddan bu yerda berilmaydi — hali
+    // ishga qabul qilinmagan har bir arizachiga kamera/bino kirish ID
+    // berishning ma'nosi yo'q. U SHARTNOMA bosqichida (applications.service.js)
+    // avtomatik beriladi.
     const employeeResult = await client.query(
       `INSERT INTO employees (first_name, last_name, phone, address, birth_date, experience, telegram_username, resume_url, resume_original_name, status, created_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)

@@ -7,6 +7,18 @@ import { HTTP_STATUS, MESSAGES } from '../../config/constants.js';
  */
 
 /**
+ * Next auto-numbered person_id (kamera Employee ID), drawn from a single
+ * database sequence shared by every place that can create an employee row
+ * (direct create, invite registration, candidate application) — see
+ * migrations/024_add_person_id_sequence.sql. A sequence is atomic, so
+ * concurrent creates can never be handed the same number.
+ */
+export async function getNextAutoPersonId(client) {
+  const result = await client.query(`SELECT nextval('employees_person_id_seq') AS next_id`);
+  return String(result.rows[0].next_id);
+}
+
+/**
  * Create employee and automatically create application
  */
 export async function createEmployee(employeeData, createdBy) {
@@ -15,40 +27,56 @@ export async function createEmployee(employeeData, createdBy) {
   try {
     await client.query('BEGIN');
 
+    // Person ID (kamera/yuz-tanish identifikatori) is system-managed —
+    // always auto-assigned, never accepted from the caller, so it can never
+    // be typed in wrong or collide with what's actually on the device.
+    const personId = await getNextAutoPersonId(client);
+
     // Insert employee with all new fields
-    const employeeResult = await client.query(
-      `INSERT INTO employees (
-        employee_number, first_name, last_name, branch, department, position,
-        join_date, birth_date, pnfl, phone, email, address,
-        salary_type, salary_amount, status, kpi_template, experience, telegram_username,
-        contract_start_date, contract_end_date, created_by
-      )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
-       RETURNING *`,
-      [
-        employeeData.employeeNumber || null,
-        employeeData.firstName,
-        employeeData.lastName,
-        employeeData.branch || null,
-        employeeData.department || null,
-        employeeData.position || null,
-        employeeData.joinDate || null,
-        employeeData.birthDate || null,
-        employeeData.pnfl || null,
-        employeeData.phone || null,
-        employeeData.email || null,
-        employeeData.address || null,
-        employeeData.salaryType || 'Oylik',
-        employeeData.salaryAmount || null,
-        employeeData.status || 'Faol',
-        employeeData.kpiTemplate || null,
-        employeeData.experience || 0,
-        employeeData.telegramUsername || null,
-        employeeData.contractStartDate || null,
-        employeeData.contractEndDate || null,
-        createdBy,
-      ]
-    );
+    let employeeResult;
+    try {
+      employeeResult = await client.query(
+        `INSERT INTO employees (
+          employee_number, first_name, last_name, branch, department, position,
+          join_date, birth_date, pnfl, phone, email, address,
+          salary_type, salary_amount, status, kpi_template, experience, telegram_username,
+          contract_start_date, contract_end_date, person_id, created_by
+        )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+         RETURNING *`,
+        [
+          employeeData.employeeNumber || null,
+          employeeData.firstName,
+          employeeData.lastName,
+          employeeData.branch || null,
+          employeeData.department || null,
+          employeeData.position || null,
+          employeeData.joinDate || null,
+          employeeData.birthDate || null,
+          employeeData.pnfl || null,
+          employeeData.phone || null,
+          employeeData.email || null,
+          employeeData.address || null,
+          employeeData.salaryType || 'Oylik',
+          employeeData.salaryAmount || null,
+          employeeData.status || 'Faol',
+          employeeData.kpiTemplate || null,
+          employeeData.experience || 0,
+          employeeData.telegramUsername || null,
+          employeeData.contractStartDate || null,
+          employeeData.contractEndDate || null,
+          personId,
+          createdBy,
+        ]
+      );
+    } catch (err) {
+      if (err.code === '23505' && err.constraint === 'idx_employees_person_id') {
+        const error = new Error('Bu Person ID allaqachon boshqa xodimga biriktirilgan');
+        error.statusCode = HTTP_STATUS.CONFLICT;
+        throw error;
+      }
+      throw err;
+    }
 
     const employee = employeeResult.rows[0];
 
@@ -180,6 +208,7 @@ export async function getAllEmployees(filters = {}, pagination = {}) {
       experience: row.experience,
       contract_start_date: row.contract_start_date,
       contract_end_date: row.contract_end_date,
+      person_id: row.person_id,
       created_at: row.created_at,
       updated_at: row.updated_at,
       created_by: row.created_by ? {
@@ -249,6 +278,7 @@ export async function getEmployeeById(id) {
     experience: row.experience,
     contract_start_date: row.contract_start_date,
     contract_end_date: row.contract_end_date,
+    person_id: row.person_id,
     created_at: row.created_at,
     updated_at: row.updated_at,
     created_by: row.created_by ? {
@@ -264,6 +294,8 @@ export async function getEmployeeById(id) {
  * Update employee
  */
 export async function updateEmployee(id, updates) {
+  // person_id is intentionally excluded — it's system-managed (auto-assigned
+  // at creation only) and can never be edited afterwards.
   const allowedFields = [
     'employee_number', 'first_name', 'last_name', 'branch', 'department', 'position',
     'join_date', 'birth_date', 'pnfl', 'phone', 'email', 'address',
@@ -303,7 +335,17 @@ export async function updateEmployee(id, updates) {
     RETURNING *
   `;
 
-  const result = await query(sql, params);
+  let result;
+  try {
+    result = await query(sql, params);
+  } catch (err) {
+    if (err.code === '23505' && err.constraint === 'idx_employees_person_id') {
+      const error = new Error('Bu Person ID allaqachon boshqa xodimga biriktirilgan');
+      error.statusCode = HTTP_STATUS.CONFLICT;
+      throw error;
+    }
+    throw err;
+  }
 
   if (result.rows.length === 0) {
     const error = new Error(MESSAGES.EMPLOYEE_NOT_FOUND);
