@@ -245,6 +245,22 @@ export function AppRouter() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/hr/organization"
+            element={
+              <ProtectedRoute allowedRoles={['HR']}>
+                <OrganizationPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/ish-jadvallari"
+            element={
+              <ProtectedRoute allowedRoles={['HR']}>
+                <IshJadvallariPage />
+              </ProtectedRoute>
+            }
+          />
         </Route>
 
         {/* Fallbacks */}

@@ -1,5 +1,19 @@
 import React from 'react';
 import { useDraggable } from '@dnd-kit/core';
+import {
+  Phone,
+  CalendarDays,
+  Hourglass,
+  AlarmClock,
+  FileText,
+  AlertTriangle,
+  Bell,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  FileSearch,
+} from 'lucide-react';
+import { useAuthStore } from '../../store/authStore';
 
 /**
  * ApplicationCard Component
@@ -7,7 +21,12 @@ import { useDraggable } from '@dnd-kit/core';
  */
 export function ApplicationCard({ application, onClick }) {
   const { id, firstName, lastName, position, phone, createdAt, interviewDate, interviewStatus, status, sinovStartDate, sinovEndDate, contractStartDate, contractEndDate } = application;
-  
+  const { user } = useAuthStore();
+  // Unified brand styling — same modern design for Admin and HR alike.
+  const isHR = true;
+  const detailBtnBg = isHR ? '#0f1b2d' : '#4338ca';
+  const detailBtnBgHover = isHR ? '#16233a' : '#3730a3';
+
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: id,
     data: {
@@ -81,7 +100,7 @@ export function ApplicationCard({ application, onClick }) {
     <div
       ref={setNodeRef}
       style={style}
-      className={`kanban-card ${isDragging ? 'dragging' : ''} ${(sinovEndState || contractEndState) ? 'sinov-ends' : (isInterviewToday ? 'interview-today' : '')}`}
+      className={`kanban-card ${isHR ? 'hr-dash-kanban-card' : ''} ${isDragging ? 'dragging' : ''} ${(sinovEndState || contractEndState) ? 'sinov-ends' : (isInterviewToday ? 'interview-today' : '')}`}
       {...attributes}
       {...listeners}
     >
@@ -93,47 +112,50 @@ export function ApplicationCard({ application, onClick }) {
       </div>
       <div className="kanban-card-footer">
         <div className="kanban-card-phone">
-          📞 {phone || 'Noma\'lum'}
+          <Phone size={11} strokeWidth={2.25} /> {phone || 'Noma\'lum'}
         </div>
         <div className="kanban-card-date">
-          📅 {formatDate(createdAt)}
+          <CalendarDays size={11} strokeWidth={2.25} /> {formatDate(createdAt)}
         </div>
       </div>
       {status === 'SINOV_MUDDATI' && (sinovStartDate || sinovEndDate) && (
         <div className="kanban-card-date" style={{ marginTop: '0.375rem' }}>
-          ⏳ Sinov: {formatDate(sinovStartDate) || '—'} — {formatDate(sinovEndDate) || '—'}
+          <Hourglass size={11} strokeWidth={2.25} /> Sinov: {formatDate(sinovStartDate) || '—'} — {formatDate(sinovEndDate) || '—'}
         </div>
       )}
       {sinovEndState && (
         <div className="sinov-ends-badge">
+          <AlarmClock size={12} strokeWidth={2.25} />
           {sinovEndState === 'today'
-            ? '⏰ Bugun sinov muddati tugaydi'
-            : '⏰ Sinov muddati tugagan'}
+            ? 'Bugun sinov muddati tugaydi'
+            : 'Sinov muddati tugagan'}
         </div>
       )}
       {status === 'SHARTNOMA' && (contractStartDate || contractEndDate) && (
         <div className="kanban-card-date" style={{ marginTop: '0.375rem' }}>
-          📄 Shartnoma: {formatDate(contractStartDate) || '—'} — {formatDate(contractEndDate) || '—'}
+          <FileText size={11} strokeWidth={2.25} /> Shartnoma: {formatDate(contractStartDate) || '—'} — {formatDate(contractEndDate) || '—'}
         </div>
       )}
       {contractEndState && (
         <div className="sinov-ends-badge">
+          <AlertTriangle size={12} strokeWidth={2.25} />
           {contractEndState === 'expired'
-            ? '⚠️ Shartnoma muddati tugagan'
-            : '⚠️ Shartnomaga 2 oydan kam qoldi'}
+            ? 'Shartnoma muddati tugagan'
+            : 'Shartnomaga 2 oydan kam qoldi'}
         </div>
       )}
       {interviewDate && (
         isInterviewToday ? (
           <div className="interview-today-badge">
-            🔔 Bugun suhbat — {new Date(interviewDate).toLocaleTimeString('uz-UZ', {
+            <Bell size={12} strokeWidth={2.25} />
+            Bugun suhbat — {new Date(interviewDate).toLocaleTimeString('uz-UZ', {
               hour: '2-digit',
               minute: '2-digit',
             })}
           </div>
         ) : (
           <div className="kanban-card-date" style={{ marginTop: '0.375rem' }}>
-            🕐 Suhbat: {new Date(interviewDate).toLocaleString('uz-UZ', {
+            <Clock size={11} strokeWidth={2.25} /> Suhbat: {new Date(interviewDate).toLocaleString('uz-UZ', {
               day: '2-digit',
               month: '2-digit',
               year: 'numeric',
@@ -145,7 +167,8 @@ export function ApplicationCard({ application, onClick }) {
       )}
       {interviewStatus && (
         <div className={interviewStatus === 'KELDI' ? 'interview-today-badge' : 'sinov-ends-badge'}>
-          {interviewStatus === 'KELDI' ? '✅ Suhbatga keldi' : '❌ Suhbatga kelmadi'}
+          {interviewStatus === 'KELDI' ? <CheckCircle2 size={12} strokeWidth={2.25} /> : <XCircle size={12} strokeWidth={2.25} />}
+          {interviewStatus === 'KELDI' ? 'Suhbatga keldi' : 'Suhbatga kelmadi'}
         </div>
       )}
       <button
@@ -158,38 +181,32 @@ export function ApplicationCard({ application, onClick }) {
           marginTop: '0.5rem',
           width: '100%',
           padding: '0.375rem 0.625rem',
-          background: '#4338ca',
-          color: 'white',
-          border: 'none',
-          borderRadius: 'var(--radius)',
+          background: detailBtnBg,
+          color: isHR ? '#ff9d6f' : 'white',
+          border: isHR ? '1px solid rgba(255, 128, 80, 0.35)' : 'none',
+          borderRadius: 'var(--radius-sm)',
           fontSize: '0.6875rem',
           fontWeight: '600',
           cursor: 'pointer',
           transition: 'all 0.2s ease',
-          boxShadow: '0 1px 2px rgba(67, 56, 202, 0.15)',
+          boxShadow: isHR ? 'none' : '0 1px 2px rgba(67, 56, 202, 0.15)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           gap: '0.25rem',
         }}
         onMouseEnter={(e) => {
-          e.target.style.background = '#3730a3';
-          e.target.style.boxShadow = '0 2px 4px rgba(67, 56, 202, 0.25)';
+          e.target.style.background = detailBtnBgHover;
+          if (!isHR) e.target.style.boxShadow = '0 2px 4px rgba(67, 56, 202, 0.25)';
           e.target.style.transform = 'translateY(-0.5px)';
         }}
         onMouseLeave={(e) => {
-          e.target.style.background = '#4338ca';
-          e.target.style.boxShadow = '0 1px 2px rgba(67, 56, 202, 0.15)';
+          e.target.style.background = detailBtnBg;
+          if (!isHR) e.target.style.boxShadow = '0 1px 2px rgba(67, 56, 202, 0.15)';
           e.target.style.transform = 'translateY(0)';
         }}
       >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-          <polyline points="14 2 14 8 20 8" />
-          <line x1="16" y1="13" x2="8" y2="13" />
-          <line x1="16" y1="17" x2="8" y2="17" />
-          <polyline points="10 9 9 9 8 9" />
-        </svg>
+        <FileSearch size={12} strokeWidth={2.25} />
         <span>Batafsil</span>
       </button>
     </div>

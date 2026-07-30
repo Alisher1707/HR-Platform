@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Users, FileText, Link2, UserPlus } from 'lucide-react';
 import StatsCard from '../../components/ui/StatsCard';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
@@ -64,7 +65,12 @@ export function AdminDashboard() {
           <p className="page-subtitle">Tizimning umumiy ko'rsatkichlari va boshqaruv asboblari.</p>
         </div>
         <div className="page-header-right">
-          <Button variant="primary" onClick={() => navigate('/admin/employees')} icon="👤">
+          <Button
+            variant="primary"
+            className="hr-dash-cta"
+            onClick={() => navigate('/admin/employees')}
+            icon={<Users size={16} strokeWidth={2.25} />}
+          >
             Xodimlarni boshqarish
           </Button>
         </div>
@@ -73,29 +79,32 @@ export function AdminDashboard() {
       {/* Stats Cards Grid */}
       <div className="stats-grid mb-6">
         <StatsCard
+          className="hr-dash-stat"
           label="Jami xodimlar"
           value={stats.totalEmployees}
-          icon="👥"
-          iconColor="indigo"
+          icon={<Users size={20} strokeWidth={2} />}
+          iconColor="brand-gold"
         />
         <StatsCard
+          className="hr-dash-stat"
           label="Nomzodlar arizalari"
           value={stats.totalApplications}
-          icon="📋"
-          iconColor="amber"
+          icon={<FileText size={20} strokeWidth={2} />}
+          iconColor="brand-orange"
         />
         <StatsCard
+          className="hr-dash-stat"
           label="Faol taklifnomalar"
           value={stats.totalInvites}
-          icon="🔗"
-          iconColor="emerald"
+          icon={<Link2 size={20} strokeWidth={2} />}
+          iconColor="brand-red"
         />
       </div>
 
       {/* Main Content Grid: Recent Employees & Quick Actions */}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.5rem' }} className="responsive-grid">
         {/* Recent Employees List */}
-        <Card>
+        <Card className="hr-dash-card">
           <div className="flex justify-between items-center mb-4">
             <h3 style={{ fontSize: '1.125rem', fontWeight: '700' }}>Oxirgi qo'shilgan xodimlar</h3>
             <Button variant="ghost" size="sm" onClick={() => navigate('/admin/employees')}>
@@ -137,26 +146,26 @@ export function AdminDashboard() {
         </Card>
 
         {/* Quick Actions Panel */}
-        <Card variant="glass" className="flex flex-col gap-4">
+        <Card variant="glass" className="hr-dash-card flex flex-col gap-4">
           <h3 style={{ fontSize: '1.125rem', fontWeight: '700', marginBottom: '0.5rem' }}>Tezkor Amallar</h3>
-          
-          <Button 
-            variant="outline" 
-            fullWidth 
+
+          <Button
+            variant="outline"
+            fullWidth
             onClick={() => navigate('/admin/employees?action=add')}
+            icon={<UserPlus size={18} strokeWidth={2.25} />}
             style={{ justifyContent: 'flex-start', padding: '0.75rem 1rem' }}
           >
-            <span style={{ marginRight: '0.75rem', fontSize: '1.25rem' }}>➕</span>
             Yangi xodim qo'shish
           </Button>
 
-          <Button 
-            variant="outline" 
-            fullWidth 
+          <Button
+            variant="outline"
+            fullWidth
             onClick={() => navigate('/admin/invites')}
+            icon={<Link2 size={18} strokeWidth={2.25} />}
             style={{ justifyContent: 'flex-start', padding: '0.75rem 1rem' }}
           >
-            <span style={{ marginRight: '0.75rem', fontSize: '1.25rem' }}>🔗</span>
             Taklifnoma yaratish
           </Button>
 
