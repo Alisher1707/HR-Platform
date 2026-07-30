@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link2, Copy, Ban, Trash2, Plus, Send } from 'lucide-react';
 import inviteService from '../../services/inviteService';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
@@ -53,6 +54,9 @@ export function InviteManagement() {
   const { user } = useAuthStore();
   const canDeactivate = user?.role === 'SUPER_ADMIN' || user?.role === 'HR';
   const canDelete = user?.role === 'SUPER_ADMIN';
+  // Unified brand styling — same modern design for Admin and HR alike.
+  const isHR = true;
+  const accentColor = isHR ? '#ff8050' : 'var(--accent)';
   const [loading, setLoading] = useState(true);
   const [invites, setInvites] = useState([]);
   const [creating, setCreating] = useState(false);
@@ -200,24 +204,25 @@ export function InviteManagement() {
           <p className="page-subtitle">Kompaniyaning boshqa xodimlari ro'yxatdan o'tishi uchun taklifnomalar boshqaruvi.</p>
         </div>
         <div className="page-header-right">
-          <Button 
-            variant="primary" 
-            onClick={handleOpenModal} 
-            icon="🔗"
+          <Button
+            variant="primary"
+            className={isHR ? 'hr-dash-cta' : ''}
+            onClick={handleOpenModal}
+            icon={<Link2 size={16} strokeWidth={2.25} />}
           >
             Havola yaratish
           </Button>
         </div>
       </div>
 
-      <Card>
+      <Card className={isHR ? 'hr-dash-card' : ''}>
         {invites.length === 0 ? (
           <EmptyState
             title="Taklifnomalar mavjud emas"
             text="Hozircha hech qanday taklifnoma yaratilmagan. Yuqoridagi tugmani bosib yangi havola yaratishingiz mumkin."
-            icon="🔗"
+            icon={<Link2 size={40} strokeWidth={1.75} style={{ opacity: 0.5 }} />}
             action={
-              <Button variant="primary" onClick={handleOpenModal}>
+              <Button variant="primary" className={isHR ? 'hr-dash-cta' : ''} onClick={handleOpenModal}>
                 Yangi havola yaratish
               </Button>
             }
@@ -242,15 +247,16 @@ export function InviteManagement() {
                   const isUsed = !!inv.used_at;
                   const isJobInvite = !!inv.position;
                   
-                  let statusBadge = <Badge variant="success">Faol</Badge>;
+                  const badgeShapeClass = isHR ? 'hr-dash-sharp-badge' : '';
+                  let statusBadge = <Badge variant="success" className={badgeShapeClass}>Faol</Badge>;
                   if (isExpired) {
-                    statusBadge = <Badge variant="error">Muddati o'tgan</Badge>;
+                    statusBadge = <Badge variant="error" className={badgeShapeClass}>Muddati o'tgan</Badge>;
                   } else if (!inv.is_active) {
-                    statusBadge = <Badge variant="warning">Nofaol</Badge>;
+                    statusBadge = <Badge variant="warning" className={badgeShapeClass}>Nofaol</Badge>;
                   } else if (isUsed && !isJobInvite) {
-                    statusBadge = <Badge variant="info">Ishlatilgan</Badge>;
+                    statusBadge = <Badge variant="info" className={badgeShapeClass}>Ishlatilgan</Badge>;
                   } else if (isUsed && isJobInvite) {
-                    statusBadge = <Badge variant="success">Faol (Arizalar tushgan)</Badge>;
+                    statusBadge = <Badge variant="success" className={badgeShapeClass}>Faol (Arizalar tushgan)</Badge>;
                   }
 
                   const canCopy = inv.is_active && !isExpired && (!isUsed || isJobInvite);
@@ -259,7 +265,7 @@ export function InviteManagement() {
                     <tr key={inv.id}>
                       <td>{formatDate(inv.created_at)}</td>
                       <td>
-                        <strong style={{ color: 'var(--accent)' }}>
+                        <strong style={{ color: accentColor }}>
                           {inv.position || 'Umumiy (Lavozimsiz)'}
                         </strong>
                       </td>
@@ -279,9 +285,10 @@ export function InviteManagement() {
                         <div className="table-actions" style={{ justifyContent: 'flex-end' }}>
                           {canCopy && (
                             <>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                icon={<Copy size={13} strokeWidth={2.25} />}
                                 onClick={() => copyToClipboard(inv.invite_url)}
                               >
                                 Nusxalash
@@ -290,6 +297,7 @@ export function InviteManagement() {
                                 <Button
                                   variant="secondary"
                                   size="sm"
+                                  icon={<Ban size={13} strokeWidth={2.25} />}
                                   onClick={() => handleDeactivate(inv.id)}
                                   style={{ color: 'var(--warning)' }}
                                 >
@@ -302,6 +310,7 @@ export function InviteManagement() {
                             <Button
                               variant="ghost"
                               size="sm"
+                              icon={<Trash2 size={13} strokeWidth={2.25} />}
                               onClick={() => handleDelete(inv.id)}
                               style={{ color: 'var(--error)' }}
                             >
@@ -407,7 +416,7 @@ export function InviteManagement() {
                     onChange={() => handleToggleRequirement(req)}
                     style={{ marginTop: '0.2rem' }}
                   />
-                  <span style={{ color: 'var(--accent)' }}>{req} (Qo'shilgan)</span>
+                  <span style={{ color: accentColor }}>{req} (Qo'shilgan)</span>
                 </label>
               ))}
 
@@ -428,8 +437,8 @@ export function InviteManagement() {
               placeholder="Yangi talab yoki vazifa qo'shish..."
               style={{ flex: 1 }}
             />
-            <Button type="button" variant="outline" onClick={handleAddCustomReq}>
-              + Qo'shish
+            <Button type="button" variant="outline" icon={<Plus size={14} strokeWidth={2.5} />} onClick={handleAddCustomReq}>
+              Qo'shish
             </Button>
           </div>
 
@@ -437,7 +446,14 @@ export function InviteManagement() {
             <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)} disabled={creating}>
               Bekor qilish
             </Button>
-            <Button type="submit" variant="primary" loading={creating} disabled={creating || (!customJob.trim() && selectedJob === 'Boshqa')}>
+            <Button
+              type="submit"
+              variant="primary"
+              className={isHR ? 'hr-dash-cta' : ''}
+              icon={<Send size={14} strokeWidth={2.25} />}
+              loading={creating}
+              disabled={creating || (!customJob.trim() && selectedJob === 'Boshqa')}
+            >
               Havola yaratish
             </Button>
           </div>

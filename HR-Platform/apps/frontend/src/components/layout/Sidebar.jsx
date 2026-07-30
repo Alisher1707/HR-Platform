@@ -47,19 +47,21 @@ export function Sidebar({ isOpen, toggleSidebar }) {
 
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
-  const isHR = user?.role === 'HR';
+  // Unified brand styling — same modern design for Admin and HR alike.
+  const isHR = true;
+  const isHRRole = user?.role === 'HR';
 
   return (
     <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
       <div className="sidebar-logo">
-        <div className="sidebar-logo-icon"><Briefcase size={18} strokeWidth={2.25} /></div>
-        <span className="sidebar-logo-text">Platform</span>
+        <div className={`sidebar-logo-icon ${isHR ? 'sidebar-brand-icon' : ''}`}><Briefcase size={18} strokeWidth={2.25} /></div>
+        <span className={`sidebar-logo-text ${isHR ? 'sidebar-brand-text' : ''}`}>Platform</span>
       </div>
 
       <nav className="sidebar-nav">
         {/* Admin Section */}
         {isAdmin && (
-          <>
+          <div className="sidebar-hr-section">
             <div className="sidebar-section-title">Admin Panel</div>
             
             <NavLink
@@ -119,12 +121,12 @@ export function Sidebar({ isOpen, toggleSidebar }) {
               <span className="sidebar-link-icon"><ScanFace size={18} strokeWidth={2} /></span>
               <span>Qurilmalar</span>
             </NavLink>
-          </>
+          </div>
         )}
 
         {/* HR Section */}
-        {isHR && (
-          <>
+        {isHRRole && (
+          <div className="sidebar-hr-section">
             <div className="sidebar-section-title">HR Panel</div>
             
             <NavLink
@@ -174,21 +176,21 @@ export function Sidebar({ isOpen, toggleSidebar }) {
               <span className="sidebar-link-icon"><CalendarCheck2 size={18} strokeWidth={2} /></span>
               <span>Davomat</span>
             </NavLink>
-          </>
+          </div>
         )}
       </nav>
 
       <div className="sidebar-footer">
         {user && (
           <div className="sidebar-user">
-            <div className="sidebar-avatar">
+            <div className={`sidebar-avatar ${isHR ? 'sidebar-brand-icon' : ''}`}>
               {getUserInitials()}
             </div>
             <div className="sidebar-user-info">
               <div className="sidebar-user-name">
                 {user.firstName} {user.lastName}
               </div>
-              <div className="sidebar-user-role">
+              <div className={`sidebar-user-role ${isHR ? 'sidebar-brand-role' : ''}`}>
                 {getRoleLabel(user.role)}
               </div>
             </div>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import ApplicationCard from './ApplicationCard';
+import { useAuthStore } from '../../store/authStore';
 
 /**
  * KanbanColumn Component
@@ -10,13 +11,16 @@ export function KanbanColumn({ status, title, applications = [], onCardClick }) 
   const { setNodeRef, isOver } = useDroppable({
     id: status,
   });
+  const { user } = useAuthStore();
+  // Unified brand styling — same modern design for Admin and HR alike.
+  const isHR = true;
 
   const getDotClass = (stat) => {
     return stat.toLowerCase();
   };
 
   return (
-    <div className="kanban-column">
+    <div className={`kanban-column ${isHR ? 'hr-dash-kanban-column' : ''}`}>
       <div className="kanban-column-header">
         <div className="kanban-column-header-left">
           <span className={`kanban-column-dot ${getDotClass(status)}`} />

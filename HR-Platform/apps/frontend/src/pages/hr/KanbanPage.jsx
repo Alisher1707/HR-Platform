@@ -1,4 +1,22 @@
 import React, { useState, useEffect } from 'react';
+import {
+  Search,
+  Bell,
+  Info,
+  RefreshCw,
+  Briefcase,
+  XCircle,
+  Pencil,
+  Hourglass,
+  Save,
+  ScrollText,
+  Clock,
+  MessageSquare,
+  User,
+  CheckCircle2,
+  FileText,
+} from 'lucide-react';
+import { useAuthStore } from '../../store/authStore';
 import useKanban from '../../hooks/useKanban';
 import applicationService from '../../services/applicationService';
 import employeeService from '../../services/employeeService';
@@ -19,7 +37,14 @@ import useToast from '../../hooks/useToast';
  */
 export function KanbanPage() {
   const { toast } = useToast();
-  
+  const { user } = useAuthStore();
+  // Unified brand styling — same modern design for Admin and HR alike.
+  const isHR = true;
+  const accentColor = isHR ? '#ff8050' : 'var(--accent)';
+  const accentLightColor = isHR ? 'rgba(255, 128, 80, 0.12)' : 'var(--accent-light)';
+  const accentGradientBg = isHR ? 'linear-gradient(135deg, #ff2b00 0%, #ff8050 100%)' : 'var(--accent-gradient)';
+  const activeBtnClass = (isActive) => (isHR && isActive ? 'hr-dash-cta' : '');
+
   // State for search and position filters
   const [search, setSearch] = useState('');
   const [selectedPosition, setSelectedPosition] = useState('');
@@ -334,9 +359,9 @@ export function KanbanPage() {
       </div>
 
       {/* Filters Bar */}
-      <Card className="mb-6 flex gap-4 flex-wrap items-center" style={{ padding: '1rem' }}>
+      <Card className={`mb-6 flex gap-4 flex-wrap items-center ${isHR ? 'hr-dash-card' : ''}`} style={{ padding: '1rem' }}>
         <div className="search-bar" style={{ flex: 1, minWidth: '240px' }}>
-          <span className="search-icon">🔍</span>
+          <span className="search-icon"><Search size={16} strokeWidth={2.25} /></span>
           <input
             type="text"
             className="form-input"
@@ -345,7 +370,7 @@ export function KanbanPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        
+
         <div style={{ width: '200px' }}>
           <Select
             placeholder="Barcha lavozimlar"
@@ -360,7 +385,7 @@ export function KanbanPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <input
             type="date"
-            className="form-input"
+            className={`form-input ${isHR ? 'hr-dash-date-input' : ''}`}
             title="Boshlanish sanasi"
             value={startDate}
             max={endDate || undefined}
@@ -370,7 +395,7 @@ export function KanbanPage() {
           <span>—</span>
           <input
             type="date"
-            className="form-input"
+            className={`form-input ${isHR ? 'hr-dash-date-input' : ''}`}
             title="Tugash sanasi"
             value={endDate}
             min={startDate || undefined}
@@ -380,8 +405,9 @@ export function KanbanPage() {
         </div>
 
         {todayInterviewCount > 0 && (
-          <div className="interview-today-badge" style={{ marginTop: 0, padding: '0.375rem 0.75rem', fontSize: '0.8125rem' }}>
-            🔔 Bugun suhbatlar: {todayInterviewCount} ta
+          <div className={`interview-today-badge ${isHR ? 'hr-dash-interview-badge' : ''}`} style={{ marginTop: 0, padding: '0.375rem 0.75rem', fontSize: '0.8125rem', display: 'inline-flex', alignItems: 'center', gap: '0.375rem' }}>
+            <Bell size={13} strokeWidth={2.25} />
+            Bugun suhbatlar: {todayInterviewCount} ta
           </div>
         )}
 
@@ -407,7 +433,7 @@ export function KanbanPage() {
       <Modal
         isOpen={!!selectedApp}
         onClose={() => setSelectedApp(null)}
-        title="📋 Nomzod haqida batafsil ma'lumot"
+        title="Nomzod haqida batafsil ma'lumot"
         size="xl"
       >
         {selectedApp && (
@@ -416,25 +442,27 @@ export function KanbanPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               {/* Candidate Header */}
               <div style={{
-                background: 'linear-gradient(135deg, var(--accent-light) 0%, rgba(99, 102, 241, 0.05) 100%)',
+                background: isHR
+                  ? 'linear-gradient(135deg, rgba(255, 43, 0, 0.1) 0%, rgba(255, 128, 80, 0.04) 100%)'
+                  : 'linear-gradient(135deg, var(--accent-light) 0%, rgba(99, 102, 241, 0.05) 100%)',
                 padding: '1.5rem',
-                borderRadius: 'var(--radius-xl)',
-                border: '1px solid var(--accent)',
+                borderRadius: isHR ? 'var(--radius-sm)' : 'var(--radius-xl)',
+                border: `1px solid ${accentColor}`,
                 borderWidth: '2px'
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.75rem' }}>
                   <div style={{
                     width: '64px',
                     height: '64px',
-                    borderRadius: 'var(--radius-lg)',
-                    background: 'var(--accent-gradient)',
+                    borderRadius: isHR ? 'var(--radius-sm)' : 'var(--radius-lg)',
+                    background: accentGradientBg,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     color: 'white',
                     fontSize: '1.75rem',
                     fontWeight: '800',
-                    boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)'
+                    boxShadow: isHR ? '0 4px 12px rgba(255, 43, 0, 0.3)' : '0 4px 12px rgba(99, 102, 241, 0.3)'
                   }}>
                     {selectedApp.firstName?.charAt(0)}{selectedApp.lastName?.charAt(0)}
                   </div>
@@ -449,14 +477,17 @@ export function KanbanPage() {
                       {selectedApp.position && (
                         <span style={{
                           fontSize: '0.875rem',
-                          color: 'var(--accent)',
+                          color: accentColor,
                           fontWeight: '600',
                           background: 'var(--bg-card-solid)',
                           padding: '0.25rem 0.75rem',
-                          borderRadius: 'var(--radius-full)',
-                          border: '1px solid var(--accent)'
+                          borderRadius: isHR ? 'var(--radius-sm)' : 'var(--radius-full)',
+                          border: `1px solid ${accentColor}`,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.25rem'
                         }}>
-                          💼 {selectedApp.position}
+                          <Briefcase size={12} strokeWidth={2.25} /> {selectedApp.position}
                         </span>
                       )}
                     </div>
@@ -467,7 +498,7 @@ export function KanbanPage() {
               {/* General details card */}
               <Card style={{ padding: '1.5rem', background: 'var(--bg-card)' }}>
                 <h5 style={{ fontWeight: '700', marginBottom: '1rem', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span>ℹ️</span> Umumiy ma'lumotlar
+                  <Info size={16} strokeWidth={2.25} color={accentColor} /> Umumiy ma'lumotlar
                 </h5>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
@@ -548,23 +579,20 @@ export function KanbanPage() {
                           textDecoration: 'none',
                           transition: 'border-color 0.2s ease'
                         }}
-                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = accentColor; }}
                         onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
                       >
                         <div style={{
                           width: '40px',
                           height: '40px',
                           borderRadius: 'var(--radius-md)',
-                          background: 'var(--accent-light, rgba(99, 102, 241, 0.12))',
+                          background: isHR ? 'rgba(255, 128, 80, 0.14)' : 'var(--accent-light, rgba(99, 102, 241, 0.12))',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           flexShrink: 0
                         }}>
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2Z" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            <path d="M14 2V8H20" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
+                          <FileText size={18} strokeWidth={2} color={accentColor} />
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -574,7 +602,7 @@ export function KanbanPage() {
                             Nomzod yuklagan rezyume
                           </div>
                         </div>
-                        <span style={{ fontSize: '0.8125rem', fontWeight: '700', color: 'var(--accent)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                        <span style={{ fontSize: '0.8125rem', fontWeight: '700', color: accentColor, flexShrink: 0, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                           Ochish
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                             <path d="M7 17L17 7M17 7H8M17 7V16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -601,12 +629,13 @@ export function KanbanPage() {
               {/* Status transition section */}
               <Card style={{ padding: '1.5rem', background: 'var(--bg-card)' }}>
                 <h5 style={{ fontWeight: '700', marginBottom: '1rem', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span>🔄</span> Bosqichni o'zgartirish
+                  <RefreshCw size={16} strokeWidth={2.25} color={accentColor} /> Bosqichni o'zgartirish
                 </h5>
                 
                 <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }} className="status-buttons">
                   <Button
                     variant={selectedApp.status === 'KELDI' ? 'primary' : 'outline'}
+                    className={activeBtnClass(selectedApp.status === 'KELDI')}
                     size="sm"
                     disabled={changingStatus}
                     onClick={() => handleStatusChange(selectedApp.id, 'KELDI', statusComment || 'Suhbatga qaytarildi')}
@@ -615,6 +644,7 @@ export function KanbanPage() {
                   </Button>
                   <Button
                     variant={selectedApp.status === 'QOSHILDI' ? 'primary' : 'outline'}
+                    className={activeBtnClass(selectedApp.status === 'QOSHILDI')}
                     size="sm"
                     disabled={changingStatus}
                     onClick={() => setShowInterviewPicker((v) => !v)}
@@ -623,6 +653,7 @@ export function KanbanPage() {
                   </Button>
                   <Button
                     variant={selectedApp.status === 'SINOV_MUDDATI' ? 'primary' : 'outline'}
+                    className={activeBtnClass(selectedApp.status === 'SINOV_MUDDATI')}
                     size="sm"
                     disabled={changingStatus}
                     onClick={() => setShowSinovPicker((v) => !v)}
@@ -631,6 +662,7 @@ export function KanbanPage() {
                   </Button>
                   <Button
                     variant={selectedApp.status === 'SHARTNOMA' ? 'primary' : 'outline'}
+                    className={activeBtnClass(selectedApp.status === 'SHARTNOMA')}
                     size="sm"
                     disabled={changingStatus}
                     onClick={() => handleStatusChange(selectedApp.id, 'SHARTNOMA', statusComment || 'Shartnoma tuzishga kelishildi')}
@@ -656,9 +688,9 @@ export function KanbanPage() {
                     flexWrap: 'wrap',
                     marginBottom: '1rem',
                     padding: '0.75rem',
-                    background: 'var(--accent-light)',
-                    borderRadius: 'var(--radius)',
-                    border: '1px solid var(--accent)',
+                    background: accentLightColor,
+                    borderRadius: isHR ? 'var(--radius-sm)' : 'var(--radius)',
+                    border: `1px solid ${accentColor}`,
                   }}>
                     <div style={{ flex: 1, minWidth: '150px' }}>
                       <Input
@@ -678,12 +710,14 @@ export function KanbanPage() {
                     </div>
                     <Button
                       variant="primary"
+                      className={isHR ? 'hr-dash-cta' : ''}
+                      icon={<CheckCircle2 size={14} strokeWidth={2.25} />}
                       size="sm"
                       disabled={!interviewDatePart || changingStatus}
                       loading={changingStatus}
                       onClick={handleInterviewConfirm}
                     >
-                      ✅ Tasdiqlash
+                      Tasdiqlash
                     </Button>
                     <Button
                       variant="ghost"
@@ -705,9 +739,9 @@ export function KanbanPage() {
                     flexWrap: 'wrap',
                     marginBottom: '1rem',
                     padding: '0.75rem',
-                    background: 'var(--accent-light)',
-                    borderRadius: 'var(--radius)',
-                    border: '1px solid var(--accent)',
+                    background: accentLightColor,
+                    borderRadius: isHR ? 'var(--radius-sm)' : 'var(--radius)',
+                    border: `1px solid ${accentColor}`,
                   }}>
                     <div style={{ flex: 1, minWidth: '150px' }}>
                       <div style={{ fontSize: '0.8125rem', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '0.25rem' }}>
@@ -728,12 +762,14 @@ export function KanbanPage() {
                     </div>
                     <Button
                       variant="primary"
+                      className={isHR ? 'hr-dash-cta' : ''}
+                      icon={<CheckCircle2 size={14} strokeWidth={2.25} />}
                       size="sm"
                       disabled={!sinovEndPart || changingStatus}
                       loading={changingStatus}
                       onClick={handleSinovConfirm}
                     >
-                      ✅ Tasdiqlash
+                      Tasdiqlash
                     </Button>
                     <Button
                       variant="ghost"
@@ -758,24 +794,29 @@ export function KanbanPage() {
                     gap: '0.5rem',
                     flexWrap: 'wrap',
                   }}>
-                    <span>🕐 Belgilangan suhbat vaqti: {formatInterviewDate(selectedApp.interviewDate)}</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.375rem' }}>
+                      <Clock size={13} strokeWidth={2.25} /> Belgilangan suhbat vaqti: {formatInterviewDate(selectedApp.interviewDate)}
+                    </span>
                     <Button
                       variant={selectedApp.interviewStatus === 'KELDI' ? 'primary' : 'outline'}
+                      className={activeBtnClass(selectedApp.interviewStatus === 'KELDI')}
+                      icon={<CheckCircle2 size={14} strokeWidth={2.25} />}
                       size="sm"
                       disabled={changingStatus}
                       title="Nomzod suhbatga keldi"
                       onClick={() => handleInterviewStatus('KELDI')}
                     >
-                      ✅ Keldi
+                      Keldi
                     </Button>
                     <Button
                       variant={selectedApp.interviewStatus === 'KELMADI' ? 'danger' : 'outline'}
+                      icon={<XCircle size={14} strokeWidth={2.25} />}
                       size="sm"
                       disabled={changingStatus}
                       title="Nomzod suhbatga kelmadi"
                       onClick={() => handleInterviewStatus('KELMADI')}
                     >
-                      ❌ Kelmadi
+                      Kelmadi
                     </Button>
                   </div>
                 )}
@@ -792,17 +833,18 @@ export function KanbanPage() {
                     gap: '0.5rem',
                     flexWrap: 'wrap',
                   }}>
-                    <span>
-                      ⏳ Sinov muddati: {formatSinovDate(selectedApp.sinovStartDate) || '—'} — {formatSinovDate(selectedApp.sinovEndDate) || '—'}
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.375rem' }}>
+                      <Hourglass size={13} strokeWidth={2.25} /> Sinov muddati: {formatSinovDate(selectedApp.sinovStartDate) || '—'} — {formatSinovDate(selectedApp.sinovEndDate) || '—'}
                     </span>
                     {selectedApp.status === 'SINOV_MUDDATI' && (
                       <Button
                         variant="ghost"
+                        icon={<Pencil size={13} strokeWidth={2.25} />}
                         size="sm"
                         disabled={changingStatus}
                         onClick={() => setShowSinovPicker(true)}
                       >
-                        ✏️ Tugash sanasini tahrirlash
+                        Tugash sanasini tahrirlash
                       </Button>
                     )}
                   </div>
@@ -820,7 +862,7 @@ export function KanbanPage() {
               {/* Edit Application Form */}
               <Card style={{ padding: '1.5rem', background: 'var(--bg-card)' }}>
                 <h5 style={{ fontWeight: '700', marginBottom: '1rem', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span>✏️</span> Qo'shimcha ma'lumotlar
+                  <Pencil size={16} strokeWidth={2.25} color={accentColor} /> Qo'shimcha ma'lumotlar
                 </h5>
                 <form onSubmit={handleSaveDetails} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                   <Select
@@ -841,11 +883,13 @@ export function KanbanPage() {
                   <Button
                     type="submit"
                     variant="primary"
+                    className={isHR ? 'hr-dash-cta' : ''}
+                    icon={<Save size={15} strokeWidth={2.25} />}
                     loading={updatingInfo}
                     disabled={updatingInfo}
                     style={{ width: '100%' }}
                   >
-                    💾 Saqlash
+                    Saqlash
                   </Button>
                 </form>
               </Card>
@@ -854,14 +898,14 @@ export function KanbanPage() {
             {/* Right side: History timeline */}
             <div style={{
               background: 'var(--bg-secondary)',
-              borderRadius: 'var(--radius-xl)',
+              borderRadius: isHR ? 'var(--radius-sm)' : 'var(--radius-xl)',
               padding: '1.5rem',
               display: 'flex',
               flexDirection: 'column',
               border: '1px solid var(--border)'
             }}>
               <h4 style={{ fontSize: '1.125rem', fontWeight: '800', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span>📜</span> O'zgarishlar tarixi
+                <ScrollText size={18} strokeWidth={2.25} color={accentColor} /> O'zgarishlar tarixi
               </h4>
               
               {loadingHistory ? (
@@ -878,8 +922,8 @@ export function KanbanPage() {
                   borderRadius: 'var(--radius-lg)',
                   border: '1px dashed var(--border)'
                 }}>
-                  <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📋</div>
-                  O'zgarishlar tarixi mavjud emas
+                  <ScrollText size={28} strokeWidth={1.75} style={{ marginBottom: '0.5rem', opacity: 0.6 }} />
+                  <div>O'zgarishlar tarixi mavjud emas</div>
                 </div>
               ) : (
                 <div
@@ -908,9 +952,9 @@ export function KanbanPage() {
                           width: '12px',
                           height: '12px',
                           borderRadius: '50%',
-                          background: 'var(--accent)',
+                          background: accentColor,
                           border: '3px solid var(--bg-secondary)',
-                          boxShadow: '0 0 0 3px var(--accent-light)'
+                          boxShadow: `0 0 0 3px ${accentLightColor}`
                         }}
                       />
                       <div style={{
@@ -919,9 +963,12 @@ export function KanbanPage() {
                         marginBottom: '0.5rem',
                         fontWeight: '600',
                         textTransform: 'uppercase',
-                        letterSpacing: '0.05em'
+                        letterSpacing: '0.05em',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.25rem'
                       }}>
-                        🕐 {formatDate(log.changedAt || log.changed_at)}
+                        <Clock size={11} strokeWidth={2.25} /> {formatDate(log.changedAt || log.changed_at)}
                       </div>
                       <div style={{
                         fontSize: '0.875rem',
@@ -944,12 +991,16 @@ export function KanbanPage() {
                           color: 'var(--text-primary)',
                           background: 'var(--bg-card)',
                           padding: '0.75rem',
-                          borderRadius: 'var(--radius-lg)',
+                          borderRadius: isHR ? 'var(--radius-sm)' : 'var(--radius-lg)',
                           marginTop: '0.5rem',
-                          borderLeft: '3px solid var(--accent)',
-                          lineHeight: '1.5'
+                          borderLeft: `3px solid ${accentColor}`,
+                          lineHeight: '1.5',
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: '0.5rem'
                         }}>
-                          💬 {log.comment}
+                          <MessageSquare size={13} strokeWidth={2.25} style={{ flexShrink: 0, marginTop: '0.125rem' }} />
+                          <span>{log.comment}</span>
                         </div>
                       )}
                       {log.changedBy && (
@@ -961,7 +1012,7 @@ export function KanbanPage() {
                           alignItems: 'center',
                           gap: '0.375rem'
                         }}>
-                          <span>👤</span>
+                          <User size={12} strokeWidth={2.25} />
                           <span style={{ fontWeight: '600' }}>
                             {log.changedBy.firstName || log.changedBy.first_name} {log.changedBy.lastName || log.changedBy.last_name}
                           </span>

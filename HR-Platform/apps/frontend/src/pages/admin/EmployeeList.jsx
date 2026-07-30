@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { UserPlus, Search, Users, Eye, Pencil, Trash2, BarChart3, AlertTriangle, CreditCard, Phone, Briefcase, Wallet, FileText } from 'lucide-react';
 import employeeService from '../../services/employeeService';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
@@ -20,6 +21,9 @@ export function EmployeeList() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const canDelete = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
+  // Unified brand styling — same modern design for Admin and HR alike.
+  const isHR = true;
+  const sectionAccentColor = isHR ? '#ff8050' : 'var(--accent)';
   const [searchParams, setSearchParams] = useSearchParams();
   
   const [loading, setLoading] = useState(true);
@@ -185,16 +189,21 @@ export function EmployeeList() {
           <p className="page-subtitle">Kompaniya xodimlari ro'yxati, qidiruv, yangi xodim qo'shish va tahrirlash.</p>
         </div>
         <div className="page-header-right">
-          <Button variant="primary" onClick={handleCreateClick} icon="👤">
+          <Button
+            variant="primary"
+            className={isHR ? 'hr-dash-cta' : ''}
+            onClick={handleCreateClick}
+            icon={<UserPlus size={16} strokeWidth={2.25} />}
+          >
             Yangi xodim qo'shish
           </Button>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <Card className="mb-6 flex justify-between items-center gap-4 flex-wrap" style={{ padding: '1rem' }}>
+      <Card className={`mb-6 flex justify-between items-center gap-4 flex-wrap ${isHR ? 'hr-dash-card' : ''}`} style={{ padding: '1rem' }}>
         <div className="search-bar w-full" style={{ maxWidth: '400px' }}>
-          <span className="search-icon">🔍</span>
+          <span className="search-icon"><Search size={16} strokeWidth={2.25} /></span>
           <input
             type="text"
             className="form-input"
@@ -213,7 +222,7 @@ export function EmployeeList() {
           <EmptyState
             title="Xodimlar topilmadi"
             text={search ? `"${search}" so'rovi bo'yicha hech qanday xodim topilmadi.` : "Kompaniyada xodimlar mavjud emas."}
-            icon="👥"
+            icon={<Users size={32} strokeWidth={1.75} />}
             action={
               !search && (
                 <Button variant="primary" onClick={handleCreateClick}>
@@ -299,10 +308,11 @@ export function EmployeeList() {
                               {emp.contract_start_date ? formatDate(emp.contract_start_date) : '—'} — {emp.contract_end_date ? formatDate(emp.contract_end_date) : '—'}
                             </div>
                             {getContractState(emp) && (
-                              <div className="contract-expiring-badge">
+                              <div className={`contract-expiring-badge ${getContractState(emp) === 'expired' ? 'is-expired' : 'is-soon'}`}>
+                                <AlertTriangle size={12} strokeWidth={2.25} />
                                 {getContractState(emp) === 'expired'
-                                  ? '⚠️ Muddati tugagan'
-                                  : '⚠️ 2 oydan kam qoldi'}
+                                  ? 'Muddati tugagan'
+                                  : '2 oydan kam qoldi'}
                               </div>
                             )}
                           </div>
@@ -316,31 +326,39 @@ export function EmployeeList() {
                           <Button
                             variant="outline"
                             size="sm"
+                            icon={<Eye size={14} strokeWidth={2.25} />}
                             onClick={() => handleDetailClick(emp)}
-                            style={{ borderColor: '#ffffff' }}
                           >
                             Batafsil
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
+                            icon={<BarChart3 size={14} strokeWidth={2.25} />}
                             onClick={() => handleEJMClick(emp)}
-                            style={{
+                            className={isHR ? 'hr-dash-ejm-btn' : ''}
+                            style={isHR ? undefined : {
                               background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                               color: 'white',
                               border: 'none',
                               fontWeight: '600'
                             }}
                           >
-                            📊 EJM
+                            EJM
                           </Button>
-                          <Button variant="outline" size="sm" onClick={() => handleEditClick(emp)}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            icon={<Pencil size={14} strokeWidth={2.25} />}
+                            onClick={() => handleEditClick(emp)}
+                          >
                             Tahrirlash
                           </Button>
                           {canDelete && (
                             <Button
                               variant="ghost"
                               size="sm"
+                              icon={<Trash2 size={14} strokeWidth={2.25} />}
                               onClick={() => handleDelete(emp.id)}
                               style={{ color: 'var(--error)' }}
                             >
@@ -459,14 +477,14 @@ export function EmployeeList() {
                   fontSize: '0.875rem',
                   fontWeight: '700',
                   marginBottom: '1rem',
-                  color: 'var(--accent)',
+                  color: sectionAccentColor,
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.5rem'
                 }}>
-                  <span style={{ fontSize: '1.1rem' }}>📋</span> Shaxsiy ma'lumotlar
+                  <CreditCard size={16} strokeWidth={2.25} /> Shaxsiy ma'lumotlar
                 </h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
                   <div>
@@ -485,7 +503,7 @@ export function EmployeeList() {
                     <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem', fontWeight: '600' }}>Tajriba</label>
                     <div style={{ fontSize: '0.9rem', fontWeight: '500' }}>
                       {selectedEmployee.experience ? (
-                        <span style={{ color: 'var(--accent)' }}>{selectedEmployee.experience} yil</span>
+                        <span style={{ color: sectionAccentColor }}>{selectedEmployee.experience} yil</span>
                       ) : '—'}
                     </div>
                   </div>
@@ -504,14 +522,14 @@ export function EmployeeList() {
                   fontSize: '0.875rem',
                   fontWeight: '700',
                   marginBottom: '1rem',
-                  color: 'var(--accent)',
+                  color: sectionAccentColor,
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.5rem'
                 }}>
-                  <span style={{ fontSize: '1.1rem' }}>📞</span> Aloqa
+                  <Phone size={16} strokeWidth={2.25} /> Aloqa
                 </h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
                   <div>
@@ -524,7 +542,7 @@ export function EmployeeList() {
                   </div>
                   <div>
                     <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem', fontWeight: '600' }}>Telegram</label>
-                    <div style={{ fontSize: '0.9rem', fontWeight: '500', color: 'var(--accent)' }}>
+                    <div style={{ fontSize: '0.9rem', fontWeight: '500', color: sectionAccentColor }}>
                       {selectedEmployee.telegram_username || '—'}
                     </div>
                   </div>
@@ -547,14 +565,14 @@ export function EmployeeList() {
                   fontSize: '0.875rem',
                   fontWeight: '700',
                   marginBottom: '1rem',
-                  color: 'var(--accent)',
+                  color: sectionAccentColor,
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.5rem'
                 }}>
-                  <span style={{ fontSize: '1.1rem' }}>💼</span> Ish ma'lumotlari
+                  <Briefcase size={16} strokeWidth={2.25} /> Ish ma'lumotlari
                 </h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
                   <div>
@@ -602,14 +620,14 @@ export function EmployeeList() {
                   fontSize: '0.875rem',
                   fontWeight: '700',
                   marginBottom: '1rem',
-                  color: 'var(--accent)',
+                  color: sectionAccentColor,
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.5rem'
                 }}>
-                  <span style={{ fontSize: '1.1rem' }}>💰</span> Maosh va KPI
+                  <Wallet size={16} strokeWidth={2.25} /> Maosh va KPI
                 </h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
                   <div>
@@ -641,14 +659,14 @@ export function EmployeeList() {
                 fontSize: '0.875rem',
                 fontWeight: '700',
                 marginBottom: '1rem',
-                color: 'var(--accent)',
+                color: sectionAccentColor,
                 textTransform: 'uppercase',
                 letterSpacing: '0.5px',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.5rem'
               }}>
-                <span style={{ fontSize: '1.1rem' }}>📄</span> Rezyume
+                <FileText size={16} strokeWidth={2.25} /> Rezyume
               </h3>
               {selectedEmployee.resume_url ? (
                 <a
@@ -666,23 +684,20 @@ export function EmployeeList() {
                     textDecoration: 'none',
                     transition: 'border-color 0.2s ease'
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = sectionAccentColor; }}
                   onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
                 >
                   <div style={{
                     width: '40px',
                     height: '40px',
                     borderRadius: '8px',
-                    background: 'var(--accent-light, rgba(99, 102, 241, 0.12))',
+                    background: isHR ? 'rgba(255, 128, 80, 0.14)' : 'var(--accent-light, rgba(99, 102, 241, 0.12))',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     flexShrink: 0
                   }}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2Z" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      <path d="M14 2V8H20" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
+                    <FileText size={18} strokeWidth={2} color={sectionAccentColor} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -692,7 +707,7 @@ export function EmployeeList() {
                       Ariza topshirishda yuklangan rezyume
                     </div>
                   </div>
-                  <span style={{ fontSize: '0.8125rem', fontWeight: '700', color: 'var(--accent)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <span style={{ fontSize: '0.8125rem', fontWeight: '700', color: sectionAccentColor, flexShrink: 0, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                     Ochish
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                       <path d="M7 17L17 7M17 7H8M17 7V16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -742,22 +757,29 @@ export function EmployeeList() {
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', paddingTop: '0.5rem' }}>
               <Button
                 variant="outline"
+                icon={<BarChart3 size={15} strokeWidth={2.25} />}
                 onClick={() => { handleDetailModalClose(); handleEJMClick(selectedEmployee); }}
-                style={{
+                className={isHR ? 'hr-dash-ejm-btn' : ''}
+                style={isHR ? undefined : {
                   background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                   color: 'white',
                   border: 'none',
                   fontWeight: '600'
                 }}
               >
-                📊 EJM
+                EJM
               </Button>
               <div style={{ display: 'flex', gap: '0.75rem' }}>
                 <Button variant="outline" onClick={handleDetailModalClose}>
                   Yopish
                 </Button>
-                <Button variant="primary" onClick={() => { handleDetailModalClose(); handleEditClick(selectedEmployee); }}>
-                  ✏️ Tahrirlash
+                <Button
+                  variant="primary"
+                  className={isHR ? 'hr-dash-cta' : ''}
+                  icon={<Pencil size={15} strokeWidth={2.25} />}
+                  onClick={() => { handleDetailModalClose(); handleEditClick(selectedEmployee); }}
+                >
+                  Tahrirlash
                 </Button>
               </div>
             </div>

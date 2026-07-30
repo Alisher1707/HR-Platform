@@ -14,6 +14,7 @@ import {
   Check,
 } from 'lucide-react';
 import { useLanguageStore, LANGUAGES } from '../../store/languageStore';
+import { useAuthStore } from '../../store/authStore';
 import ThemeToggle from '../ui/ThemeToggle';
 
 /**
@@ -23,9 +24,11 @@ import ThemeToggle from '../ui/ThemeToggle';
  */
 export function Header({ onMenuClick }) {
   const { language, setLanguage } = useLanguageStore();
+  const { user } = useAuthStore();
   const location = useLocation();
+  const basePath = user?.role === 'HR' ? '/hr' : '/admin';
   const activeSection = new URLSearchParams(location.search).get('section') || 'davomat';
-  const isAttendancePage = location.pathname === '/admin/attendance';
+  const isAttendancePage = location.pathname === `${basePath}/attendance`;
 
   const [isLangOpen, setIsLangOpen] = useState(false);
   const langRef = useRef(null);
@@ -58,31 +61,31 @@ export function Header({ onMenuClick }) {
 
         <nav className="header-nav">
           <Link
-            to="/admin/attendance"
+            to={`${basePath}/attendance`}
             className={`header-pill ${isAttendancePage && activeSection === 'davomat' ? 'active' : ''}`}
           >
             <LayoutDashboard size={15} strokeWidth={2.25} /> Boshqaruv paneli <ChevronDown size={13} />
           </Link>
           <NavLink
-            to="/admin/organization"
+            to={`${basePath}/organization`}
             className={({ isActive }) => `header-pill ${isActive ? 'active' : ''}`}
           >
             <Building2 size={15} strokeWidth={2.25} /> Tashkilot tuzilmasi <ChevronDown size={13} />
           </NavLink>
           <Link
-            to="/admin/attendance?section=moliya"
+            to={`${basePath}/attendance?section=moliya`}
             className={`header-pill ${isAttendancePage && activeSection === 'moliya' ? 'active' : ''}`}
           >
             <CreditCard size={15} strokeWidth={2.25} /> Moliya <ChevronDown size={13} />
           </Link>
           <Link
-            to="/admin/attendance?section=monitoring"
+            to={`${basePath}/attendance?section=monitoring`}
             className={`header-pill ${isAttendancePage && activeSection === 'monitoring' ? 'active' : ''}`}
           >
             <Radar size={15} strokeWidth={2.25} /> Monitoring <ChevronDown size={13} />
           </Link>
           <NavLink
-            to="/admin/ish-jadvallari"
+            to={`${basePath}/ish-jadvallari`}
             className={({ isActive }) => `header-pill ${isActive ? 'active' : ''}`}
           >
             <CalendarDays size={15} strokeWidth={2.25} /> Ish jadvallari <ChevronDown size={13} />

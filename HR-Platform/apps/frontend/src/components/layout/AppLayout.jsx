@@ -10,7 +10,10 @@ import Header from './Header';
 export function AppLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const location = useLocation();
-  const HEADER_NAV_PATHS = ['/admin/attendance', '/admin/organization', '/admin/monitoring', '/admin/ish-jadvallari'];
+  const HEADER_NAV_PATHS = [
+    '/admin/attendance', '/admin/organization', '/admin/monitoring', '/admin/ish-jadvallari',
+    '/hr/attendance', '/hr/organization', '/hr/ish-jadvallari',
+  ];
   const showHeader = HEADER_NAV_PATHS.includes(location.pathname);
 
   const toggleSidebar = () => {

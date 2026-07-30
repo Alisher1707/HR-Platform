@@ -1383,11 +1383,26 @@ button.header-pill {
   padding: 0.125rem 0.5rem;
   font-size: 0.6875rem;
   font-weight: 700;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+/* Expired (past due) — critical, red */
+.contract-expiring-badge.is-expired {
   color: var(--error);
   background: var(--error-bg);
   border: 1px solid var(--error);
-  border-radius: 999px;
-  white-space: nowrap;
+}
+
+/* Expiring soon (within 2 months) — warning, amber (not yet critical) */
+.contract-expiring-badge.is-soon {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+:root[data-theme="dark"] .contract-expiring-badge.is-soon {
+  color: #f59e0b;
 }
 
 .kanban-card-name {
@@ -1473,6 +1488,15 @@ button.header-pill {
 .stats-icon.amber { background: rgba(245, 158, 11, 0.12); color: #f59e0b; }
 .stats-icon.blue { background: rgba(59, 130, 246, 0.12); color: #3b82f6; }
 .stats-icon.rose { background: rgba(244, 63, 94, 0.12); color: #f43f5e; }
+
+/* Brand palette variants — used on HR Dashboard only */
+.stats-icon.brand-gold { background: rgba(255, 184, 0, 0.14); color: #b87d00; }
+.stats-icon.brand-orange { background: rgba(255, 128, 80, 0.16); color: #d9532b; }
+.stats-icon.brand-red { background: rgba(255, 43, 0, 0.12); color: #ff2b00; }
+
+:root[data-theme="dark"] .stats-icon.brand-gold { color: #ffb800; }
+:root[data-theme="dark"] .stats-icon.brand-orange { color: #ff8050; }
+:root[data-theme="dark"] .stats-icon.brand-red { color: #ff5c3d; }
 
 .stats-info {
   flex: 1;
@@ -1957,6 +1981,9 @@ button.header-pill {
   color: var(--text-muted);
   pointer-events: none;
   font-size: 1rem;
+  display: flex;
+  align-items: center;
+  line-height: 0;
 }
 
 .search-bar .form-input {
@@ -5588,6 +5615,210 @@ tr.finance-debt-row td {
 .org-map-locate {
   bottom: 0.625rem;
   right: 0.625rem;
+}
+
+/* ========== HR DASHBOARD — brand palette accents ========== */
+.btn.hr-dash-cta {
+  background: linear-gradient(135deg, #ff2b00 0%, #ff8050 100%);
+  box-shadow: 0 2px 10px rgba(255, 43, 0, 0.35);
+  border-radius: var(--radius-sm);
+}
+
+/* EJM row button — solid navy with a warm accent, calmer than a gradient
+   repeated down every table row */
+.btn.hr-dash-ejm-btn {
+  background: #0f1b2d !important;
+  color: #ff9d6f !important;
+  border: 1px solid rgba(255, 128, 80, 0.4) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+.btn.hr-dash-ejm-btn:hover:not(:disabled) {
+  background: #16233a !important;
+  border-color: rgba(255, 128, 80, 0.65) !important;
+}
+
+/* Sharper corners for the employee table's status pill only (Devices page
+   status badges, which live outside a table, are unaffected) */
+.table .status-badge {
+  border-radius: var(--radius-sm);
+}
+
+.btn.hr-dash-cta:hover:not(:disabled) {
+  background: linear-gradient(135deg, #e02600 0%, #ff6a35 100%);
+  box-shadow: 0 4px 16px rgba(255, 43, 0, 0.45);
+}
+
+.hr-dash-tip-gold {
+  border-left: 3px solid #ffb800 !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+.hr-dash-tip-red {
+  border-left: 3px solid #ff2b00 !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+.hr-dash-card {
+  border-radius: var(--radius-sm) !important;
+  border-color: var(--border-hover) !important;
+}
+
+/* HR-only sidebar section — brand-colored active/hover state, sharper corners.
+   Scoped under .sidebar-hr-section so the Admin section is untouched. */
+.sidebar-hr-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.sidebar-hr-section .sidebar-link {
+  border-radius: var(--radius-sm);
+  position: relative;
+}
+
+.sidebar-hr-section .sidebar-link:hover {
+  background: rgba(255, 128, 80, 0.1);
+  color: var(--text-primary);
+}
+
+.sidebar-hr-section .sidebar-link.active {
+  background: rgba(255, 43, 0, 0.12);
+  color: #ff5c3d;
+  font-weight: 600;
+}
+
+:root[data-theme="dark"] .sidebar-hr-section .sidebar-link.active {
+  color: #ff8050;
+}
+
+.sidebar-hr-section .sidebar-link.active::before {
+  background: linear-gradient(180deg, #ff2b00 0%, #ff8050 100%);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+/* HR brand — logo icon, avatar, wordmark and role label */
+.sidebar-brand-icon {
+  background: linear-gradient(135deg, #ff2b00 0%, #ff8050 100%) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+.sidebar-brand-text {
+  background: linear-gradient(135deg, #ff2b00 0%, #ff8050 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.sidebar-brand-role {
+  color: #d9532b !important;
+  font-weight: 600;
+}
+
+:root[data-theme="dark"] .sidebar-brand-role {
+  color: #ff8050 !important;
+}
+
+.hr-dash-badge {
+  border-radius: var(--radius-sm) !important;
+  border: 1px solid transparent;
+  display: inline-flex !important;
+  justify-content: center;
+  min-width: 96px;
+  white-space: nowrap;
+}
+
+.hr-dash-badge-gold {
+  background: rgba(255, 184, 0, 0.14) !important;
+  color: #b87d00 !important;
+  border-color: rgba(255, 184, 0, 0.35) !important;
+}
+
+.hr-dash-badge-orange {
+  background: rgba(255, 128, 80, 0.16) !important;
+  color: #d9532b !important;
+  border-color: rgba(255, 128, 80, 0.35) !important;
+}
+
+.hr-dash-badge-red {
+  background: rgba(255, 43, 0, 0.12) !important;
+  color: #ff2b00 !important;
+  border-color: rgba(255, 43, 0, 0.35) !important;
+}
+
+.hr-dash-sharp-badge {
+  border-radius: var(--radius-sm) !important;
+}
+
+.hr-dash-kanban-column {
+  border-radius: var(--radius-sm) !important;
+}
+
+.hr-dash-kanban-card {
+  border-radius: var(--radius-sm) !important;
+}
+
+.hr-dash-kanban-card:hover {
+  border-color: rgba(255, 128, 80, 0.5) !important;
+}
+
+.hr-dash-date-input {
+  border-radius: var(--radius-sm) !important;
+}
+
+.hr-dash-date-input:focus {
+  border-color: #ff8050 !important;
+  box-shadow: 0 0 0 3px rgba(255, 128, 80, 0.15) !important;
+}
+
+.hr-dash-interview-badge {
+  color: #b87d00 !important;
+  background: rgba(255, 184, 0, 0.14) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+:root[data-theme="dark"] .hr-dash-interview-badge {
+  color: #ffb800 !important;
+}
+
+.hr-dash-badge-green {
+  background: rgba(16, 185, 129, 0.14) !important;
+  color: #059669 !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+
+.hr-dash-badge-blue {
+  background: rgba(59, 130, 246, 0.14) !important;
+  color: #2563eb !important;
+  border-color: rgba(59, 130, 246, 0.35) !important;
+}
+
+.hr-dash-badge-violet {
+  background: rgba(139, 92, 246, 0.14) !important;
+  color: #7c3aed !important;
+  border-color: rgba(139, 92, 246, 0.35) !important;
+}
+
+.hr-dash-badge-gray {
+  background: rgba(148, 163, 184, 0.14) !important;
+  color: #64748b !important;
+  border-color: rgba(148, 163, 184, 0.35) !important;
+}
+
+:root[data-theme="dark"] .hr-dash-badge-gold { color: #ffb800; }
+:root[data-theme="dark"] .hr-dash-badge-orange { color: #ff8050; }
+:root[data-theme="dark"] .hr-dash-badge-red { color: #ff5c3d; }
+:root[data-theme="dark"] .hr-dash-badge-green { color: #34d399; }
+:root[data-theme="dark"] .hr-dash-badge-blue { color: #60a5fa; }
+:root[data-theme="dark"] .hr-dash-badge-violet { color: #a78bfa; }
+:root[data-theme="dark"] .hr-dash-badge-gray { color: #94a3b8; }
+
+.hr-dash-stat {
+  border-radius: var(--radius-sm) !important;
+}
+
+.hr-dash-stat .stats-icon {
+  border-radius: var(--radius) !important;
 }
 
 .org-map-verify {
