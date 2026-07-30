@@ -1,7 +1,6 @@
 import express from 'express';
 import multer from 'multer';
 import { receiveDeviceEvent } from './devices.controller.js';
-import { notifyTelegram } from '../../shared/utils/telegram.js';
 
 const router = express.Router();
 

@@ -2,7 +2,6 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { query } from '../../config/database.js';
-import { notifyTelegram } from '../../shared/utils/telegram.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const eventsDir = path.join(__dirname, '../../../uploads/device-events');
@@ -100,16 +99,6 @@ export async function receiveDeviceEvent(req, res) {
   const receivedAt = new Date().toISOString();
   const stamp = Date.now();
   const deviceToken = req.params.token;
-  // Built up as we go and sent to Telegram once at the end — gives full
-  // visibility into production without needing server/log access.
-  const summary = [
-    '📷 Qurilma hodisasi keldi',
-    `Vaqt: ${receivedAt}`,
-    `Metod: ${req.method}`,
-    `Token: ${deviceToken}`,
-    `IP: ${req.ip}`,
-    `Content-Type: ${req.headers['content-type'] || '-'}`,
-  ];
 
   console.log('\n========== DEVICE EVENT RECEIVED ==========');
   console.log('Time:', receivedAt);
@@ -142,25 +131,15 @@ export async function receiveDeviceEvent(req, res) {
     });
   }
 
-  if (req.body && Object.keys(req.body).length > 0) {
-    summary.push(`Body maydonlari: ${Object.keys(req.body).join(', ')}`);
-  }
-  if (req.files && req.files.length > 0) {
-    summary.push(`Fayllar: ${req.files.map((f) => `${f.fieldname} (${f.mimetype}, ${f.size}B)`).join(', ')}`);
-  }
-
   const personId = extractPersonId(req);
 
   if (!personId) {
     console.log("(bu hodisada employeeNo/person_id topilmadi — ehtimol heartbeat yoki boshqa turdagi voqea)");
     console.log('=============================================\n');
-    summary.push('❔ Natija: employeeNo/person_id topilmadi (heartbeat yoki boshqa turdagi voqea bo\'lishi mumkin)');
-    await notifyTelegram(summary.join('\n'));
     return res.status(200).json({ success: true });
   }
 
   console.log('Aniqlangan person_id:', personId);
-  summary.push(`Aniqlangan person_id: ${personId}`);
 
   try {
     const employee = await findEmployeeByPersonId(personId);
@@ -168,8 +147,6 @@ export async function receiveDeviceEvent(req, res) {
     if (!employee) {
       console.log(`Person_id="${personId}" bo'yicha xodim topilmadi (employees.person_id mos kelmadi)`);
       console.log('=============================================\n');
-      summary.push(`❌ Natija: person_id="${personId}" bo'yicha xodim topilmadi`);
-      await notifyTelegram(summary.join('\n'));
       return res.status(200).json({ success: true });
     }
 
@@ -177,17 +154,13 @@ export async function receiveDeviceEvent(req, res) {
 
     if (result.skipped) {
       console.log(`Xodim: ${employee.first_name} ${employee.last_name} — yozilmadi (${result.reason})`);
-      summary.push(`⏭ Xodim: ${employee.first_name} ${employee.last_name} — yozilmadi (${result.reason})`);
     } else {
       console.log(`Xodim: ${employee.first_name} ${employee.last_name} — "${result.type}" deb yozildi`);
-      summary.push(`✅ Xodim: ${employee.first_name} ${employee.last_name} — "${result.type}" deb yozildi`);
     }
   } catch (err) {
     console.error('Davomat yozishda xatolik:', err.message);
-    summary.push(`⚠️ Xatolik: ${err.message}`);
   }
 
   console.log('=============================================\n');
-  await notifyTelegram(summary.join('\n'));
   res.status(200).json({ success: true });
 }

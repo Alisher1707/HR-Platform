@@ -35,12 +35,6 @@ export const config = {
   invite: {
     expiresInDays: parseInt(process.env.INVITE_TOKEN_EXPIRES_DAYS || '7', 10),
   },
-
-  // Telegram notifications (device/camera event debugging)
-  telegram: {
-    botToken: process.env.TELEGRAM_BOT_TOKEN || null,
-    chatId: process.env.TELEGRAM_CHAT_ID || null,
-  },
 };
 
 /**
