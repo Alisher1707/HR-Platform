@@ -1,5 +1,6 @@
 import { query, getClient } from '../../config/database.js';
 import { HTTP_STATUS, MESSAGES, APPLICATION_STATUS } from '../../config/constants.js';
+import { getNextAutoPersonId } from '../employees/employees.service.js';
 
 /**
  * Applications Service
@@ -312,15 +313,22 @@ export async function updateApplicationStatus(id, newStatus, changedBy, comment 
         const employeeId = appDetailsResult.rows[0].employee_id;
         const position = appDetailsResult.rows[0].position;
 
+        // Ishga rasman qabul qilingan paytda (SHARTNOMA) kamera Person ID
+        // avtomatik beriladi. COALESCE — agar bu xodim avval ham SHARTNOMA
+        // bosqichida bo'lib (keyin ortga qaytarilib) qayta shu bosqichga
+        // kelayotgan bo'lsa, eski ID saqlanib qoladi, yangisi berilmaydi.
+        const autoPersonId = await getNextAutoPersonId(client);
+
         // Update employee with complete hiring information
         await client.query(
           `UPDATE employees
            SET position = $1,
                join_date = CURRENT_DATE,
                status = 'Faol',
+               person_id = COALESCE(person_id, $3),
                updated_at = NOW()
            WHERE id = $2`,
-          [position, employeeId]
+          [position, employeeId, autoPersonId]
         );
       }
     } else if (oldStatus === APPLICATION_STATUS.SHARTNOMA) {

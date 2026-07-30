@@ -42,6 +42,7 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
     kpiTemplate: '',
     contractStartDate: '',
     contractEndDate: '',
+    personId: '',
     photo: null,
     resume: null,
   });
@@ -150,6 +151,7 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
         kpiTemplate: employee.kpi_template || '',
         contractStartDate: formattedContractStart,
         contractEndDate: formattedContractEnd,
+        personId: employee.person_id || '',
         photo: null,
         resume: null,
       });
@@ -316,6 +318,7 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
         kpiTemplate: formData.kpiTemplate || null,
         contractStartDate: formData.contractStartDate || null,
         contractEndDate: formData.contractEndDate || null,
+        // personId is not sent — it's system-assigned, never editable.
       };
 
       if (isEditing) {
@@ -408,6 +411,25 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
             className="form-input"
           />
         </div>
+
+        {/* Person ID — kamera (yuz tanish) tizimidagi xodim identifikatori.
+            Faqat tizim tomonidan avtomatik beriladi, shuning uchun bu yerda
+            tahrirlanmaydigan (read-only) ko'rinishda ko'rsatiladi. */}
+        {isEditing && (
+          <div className="form-field">
+            <label className="form-label">
+              Person ID <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(kamera uchun, avtomatik)</span>
+            </label>
+            <input
+              type="text"
+              value={formData.personId || 'Kiritilmagan'}
+              readOnly
+              disabled
+              className="form-input"
+              style={{ opacity: 0.7, cursor: 'not-allowed' }}
+            />
+          </div>
+        )}
       </div>
 
       {/* Two Column Layout */}

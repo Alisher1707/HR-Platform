@@ -34,6 +34,8 @@ const createEmployeeSchema = Joi.object({
   notes: Joi.string().max(1000).optional().allow('', null),
   contractStartDate: commonSchemas.date.optional().allow('', null),
   contractEndDate: commonSchemas.date.optional().allow('', null),
+  // personId is intentionally NOT accepted here — it's always auto-assigned
+  // server-side (see employees.service.js#createEmployee), never client-set.
 });
 
 const updateEmployeeSchema = Joi.object({
@@ -57,6 +59,7 @@ const updateEmployeeSchema = Joi.object({
   experience: Joi.number().integer().min(0).max(100),
   contractStartDate: commonSchemas.date.optional().allow('', null),
   contractEndDate: commonSchemas.date.optional().allow('', null),
+  // person_id is not editable — see createEmployeeSchema comment above.
 }).min(1); // At least one field required
 
 const uuidParamSchema = Joi.object({

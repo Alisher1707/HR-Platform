@@ -1870,8 +1870,23 @@ export function AttendancePage() {
                                 </div>
                               )}
                               <div>
-                                <div className="attendance-employee-name">
+                                <div className="attendance-employee-name" style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
                                   {emp.first_name} {emp.last_name}
+                                  {emp.person_id ? (
+                                    <span
+                                      className="attendance-person-id-badge"
+                                      title="Kamera Person ID"
+                                    >
+                                      ID: {emp.person_id}
+                                    </span>
+                                  ) : (
+                                    <span
+                                      className="attendance-person-id-badge attendance-person-id-badge--missing"
+                                      title="Kameraga bog'lanmagan — Person ID kiritilmagan"
+                                    >
+                                      ID yo'q
+                                    </span>
+                                  )}
                                 </div>
                                 {emp.position && (
                                   <div className="attendance-employee-role">{emp.position}</div>
