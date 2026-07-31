@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { query } from '../../config/database.js';
-import { computeLateness } from '../schedules/schedules.service.js';
+import { computeLateness, computeEarlyLeave } from '../schedules/schedules.service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const eventsDir = path.join(__dirname, '../../../uploads/device-events');
@@ -57,13 +57,8 @@ function findPersonIdInJson(value) {
   return null;
 }
 
-/**
- * Pulls the camera's reported person/employee ID out of whatever text we
- * received (multipart text fields, raw body, or an XML/text file part) —
- * Hikvision sends this as either XML (<employeeNoString>) or JSON
- * (possibly JSON-encoded as a string nested inside another field).
- */
-function extractPersonId(req) {
+/** Gathers every text blob (multipart fields, raw body, text/xml/json file parts) worth scanning. */
+function getCandidateTexts(req) {
   const candidates = [];
 
   if (req.body) {
@@ -80,12 +75,25 @@ function extractPersonId(req) {
     }
   }
 
+  return candidates;
+}
+
+/**
+ * Pulls the camera's reported person/employee ID out of the gathered text —
+ * Hikvision sends this as either XML (<employeeNoString>) or JSON
+ * (possibly JSON-encoded as a string nested inside another field).
+ */
+function extractPersonId(candidates) {
   for (const text of candidates) {
     const personId = extractTag(text, 'employeeNoString') || extractTag(text, 'employeeNo') || findPersonIdInJson(text);
     if (personId) return personId;
   }
-
   return null;
+}
+
+/** Hikvision heartbeats carry eventType: "heartBeat" somewhere in the payload. */
+function isHeartbeat(candidates) {
+  return candidates.some((text) => /heartbeat/i.test(text));
 }
 
 async function findEmployeeByPersonId(personId) {
@@ -94,6 +102,24 @@ async function findEmployeeByPersonId(personId) {
     [personId]
   );
   return result.rows[0] || null;
+}
+
+/**
+ * Lightweight log of every incoming device request — heartbeat, unmatched,
+ * or a real access event — so Monitoring > Terminallar can show which
+ * cameras are actually alive without needing any manual "add device" step.
+ * Fire-and-forget: a logging failure must never break the device's response.
+ */
+async function logDeviceEvent(deviceToken, eventType, personId, employeeId) {
+  try {
+    await query(
+      `INSERT INTO device_events (device_token, event_type, person_id, employee_id)
+       VALUES ($1, $2, $3, $4)`,
+      [deviceToken, eventType, personId || null, employeeId || null]
+    );
+  } catch (err) {
+    console.error("device_events yozishda xatolik (e'tiborsiz qoldirildi):", err.message);
+  }
 }
 
 /**
@@ -124,17 +150,18 @@ async function recordAttendance(employeeId, deviceToken, rawPersonId) {
   const type = !hasKeldi ? 'keldi' : 'ketdi';
 
   const recordedAt = new Date();
-  const { isLate, scheduleId } = type === 'keldi'
-    ? await computeLateness(employeeId, recordedAt)
-    : { isLate: null, scheduleId: null };
+  const { isLate, isEarly, scheduleId } = type === 'keldi'
+    ? { ...(await computeLateness(employeeId, recordedAt)), isEarly: null }
+    : { isLate: null, ...(await computeEarlyLeave(employeeId, recordedAt)) };
 
   await query(
-    `INSERT INTO attendance_records (employee_id, type, device_token, raw_person_id, recorded_at, is_late, schedule_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-    [employeeId, type, deviceToken, rawPersonId, recordedAt, isLate, scheduleId]
+    `INSERT INTO attendance_records
+       (employee_id, type, device_token, raw_person_id, recorded_at, is_late, is_early_leave, schedule_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [employeeId, type, deviceToken, rawPersonId, recordedAt, isLate, isEarly, scheduleId]
   );
 
-  return { skipped: false, type, isLate };
+  return { skipped: false, type, isLate, isEarly };
 }
 
 /**
@@ -178,11 +205,18 @@ export async function receiveDeviceEvent(req, res) {
     });
   }
 
-  const personId = extractPersonId(req);
+  const candidates = getCandidateTexts(req);
+  const personId = extractPersonId(candidates);
 
   if (!personId) {
-    console.log("(bu hodisada employeeNo/person_id topilmadi — ehtimol heartbeat yoki boshqa turdagi voqea)");
+    const heartbeat = isHeartbeat(candidates);
+    console.log(
+      heartbeat
+        ? '(heartbeat)'
+        : "(bu hodisada employeeNo/person_id topilmadi — ehtimol boshqa turdagi voqea)"
+    );
     console.log('=============================================\n');
+    await logDeviceEvent(deviceToken, heartbeat ? 'heartbeat' : 'boshqa', null, null);
     return res.status(200).json({ success: true });
   }
 
@@ -194,6 +228,7 @@ export async function receiveDeviceEvent(req, res) {
     if (!employee) {
       console.log(`Person_id="${personId}" bo'yicha xodim topilmadi (employees.person_id mos kelmadi)`);
       console.log('=============================================\n');
+      await logDeviceEvent(deviceToken, 'unmatched', personId, null);
       return res.status(200).json({ success: true });
     }
 
@@ -205,10 +240,54 @@ export async function receiveDeviceEvent(req, res) {
       const lateNote = result.isLate === true ? ' (KECHIKDI)' : result.isLate === false ? ' (o\'z vaqtida)' : '';
       console.log(`Xodim: ${employee.first_name} ${employee.last_name} — "${result.type}" deb yozildi${lateNote}`);
     }
+
+    await logDeviceEvent(deviceToken, 'access', personId, employee.id);
   } catch (err) {
     console.error('Davomat yozishda xatolik:', err.message);
+    await logDeviceEvent(deviceToken, 'access', personId, null);
   }
 
   console.log('=============================================\n');
   res.status(200).json({ success: true });
+}
+
+// A device that hasn't been heard from in this long is considered offline —
+// Hikvision heartbeats observed roughly every 30s, so a few missed beats
+// still counts as alive without flapping the status on a single delay.
+const TERMINAL_OFFLINE_AFTER_MS = 5 * 60 * 1000;
+
+/**
+ * GET /api/v1/devices/terminals — real device activity, derived from every
+ * request a camera has ever made (device_events), not a manually configured
+ * list. Powers Monitoring > Terminallar.
+ */
+export async function getTerminals(req, res) {
+  try {
+    const result = await query(
+      `SELECT
+         device_token,
+         MAX(received_at) AS last_seen,
+         COUNT(*) FILTER (WHERE received_at >= NOW() - INTERVAL '30 days') AS events_30d,
+         COUNT(*) FILTER (WHERE event_type = 'access' AND received_at >= NOW() - INTERVAL '30 days') AS access_events_30d,
+         COUNT(DISTINCT employee_id) FILTER (WHERE employee_id IS NOT NULL) AS matched_employees
+       FROM device_events
+       GROUP BY device_token
+       ORDER BY last_seen DESC`
+    );
+
+    const now = Date.now();
+    const terminals = result.rows.map((row) => ({
+      deviceToken: row.device_token,
+      lastSeen: row.last_seen,
+      isOnline: now - new Date(row.last_seen).getTime() < TERMINAL_OFFLINE_AFTER_MS,
+      events30d: Number(row.events_30d),
+      accessEvents30d: Number(row.access_events_30d),
+      matchedEmployees: Number(row.matched_employees),
+    }));
+
+    res.status(200).json({ success: true, message: 'Terminallar olindi', data: terminals, timestamp: new Date().toISOString() });
+  } catch (err) {
+    console.error('Get terminals error:', err.message);
+    res.status(500).json({ success: false, message: 'Terminallarni olishda xatolik', timestamp: new Date().toISOString() });
+  }
 }

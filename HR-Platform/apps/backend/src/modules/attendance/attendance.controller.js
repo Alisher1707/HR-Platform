@@ -8,11 +8,12 @@ import { HTTP_STATUS } from '../../config/constants.js';
 
 /**
  * GET /api/v1/attendance?date=YYYY-MM-DD&employeeId=...
+ * GET /api/v1/attendance?startDate=...&endDate=...&employeeId=...
  */
 export async function getAttendance(req, res) {
   try {
-    const { date, employeeId } = req.query;
-    const records = await attendanceService.listAttendance({ date, employeeId });
+    const { date, startDate, endDate, employeeId } = req.query;
+    const records = await attendanceService.listAttendance({ date, startDate, endDate, employeeId });
 
     return successResponse(res, records, 'Davomat yozuvlari olindi');
   } catch (error) {
@@ -20,6 +21,33 @@ export async function getAttendance(req, res) {
     return errorResponse(
       res,
       error.message || 'Davomat yozuvlarini olishda xatolik',
+      error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR
+    );
+  }
+}
+
+/**
+ * GET /api/v1/attendance/report?startDate=...&endDate=...&branches=a,b&departments=x&positions=y&employeeId=...
+ * Powers Monitoring > Hisobotlar (Davomat hisoboti / Davr bo'yicha hisobot).
+ */
+export async function getAttendanceReport(req, res) {
+  try {
+    const { startDate, endDate, branches, departments, positions, employeeId } = req.query;
+    const rows = await attendanceService.getAttendanceReport({
+      startDate,
+      endDate,
+      branches: branches ? branches.split(',').filter(Boolean) : [],
+      departments: departments ? departments.split(',').filter(Boolean) : [],
+      positions: positions ? positions.split(',').filter(Boolean) : [],
+      employeeId: employeeId || null,
+    });
+
+    return successResponse(res, rows, 'Davomat hisoboti tayyorlandi');
+  } catch (error) {
+    console.error('Get attendance report error:', error);
+    return errorResponse(
+      res,
+      error.message || 'Hisobotni tayyorlashda xatolik',
       error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR
     );
   }

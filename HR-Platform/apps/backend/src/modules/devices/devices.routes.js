@@ -1,6 +1,8 @@
 import express from 'express';
 import multer from 'multer';
-import { receiveDeviceEvent } from './devices.controller.js';
+import { receiveDeviceEvent, getTerminals } from './devices.controller.js';
+import { authenticate, authorize } from '../auth/auth.middleware.js';
+import { USER_ROLES } from '../../config/constants.js';
 
 const router = express.Router();
 
@@ -29,9 +31,15 @@ function captureDeviceEvent(req, res, next) {
     });
   }
 
-  // express.json()/urlencoded() only consume the stream when the content-type
-  // matches theirs, so for anything else (raw XML, unknown types) the body is
-  // still untouched here.
+  // express.json()/urlencoded() are mounted globally (app.js) and already
+  // consume the stream for content-types they match, BEFORE this middleware
+  // runs. Attaching 'data'/'end' listeners to an already-ended stream would
+  // never fire and hang the request forever — skip straight to next() then.
+  if (req.readableEnded || req.complete) {
+    return next();
+  }
+
+  // For anything else (raw XML, unknown types) the body is still untouched here.
   const chunks = [];
   req.on('data', (chunk) => chunks.push(chunk));
   req.on('end', () => {
@@ -46,6 +54,15 @@ function captureDeviceEvent(req, res, next) {
 // pushes) while we're still confirming what this device actually sends. No auth:
 // the device can't do our cookie/JWT auth.
 router.all('/:token/events', captureDeviceEvent, receiveDeviceEvent);
+
+// GET /api/v1/devices/terminals - real device activity for Monitoring > Terminallar
+// (dashboard-facing, so it needs auth — unlike the camera-facing route above).
+router.get(
+  '/terminals',
+  authenticate,
+  authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.HR),
+  getTerminals
+);
 
 // Catches anything under /api/v1/devices/* that doesn't match the route above —
 // so a wrong path/method from the device still shows up in the logs instead of

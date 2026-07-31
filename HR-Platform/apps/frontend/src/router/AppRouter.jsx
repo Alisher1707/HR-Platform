@@ -15,7 +15,6 @@ import AttendancePage from '../pages/admin/AttendancePage';
 import OrganizationPage from '../pages/admin/OrganizationPage';
 import MonitoringPage from '../pages/admin/MonitoringPage';
 import IshJadvallariPage from '../pages/admin/IshJadvallariPage';
-import DevicesPage from '../pages/admin/DevicesPage';
 import EmployeeEJMPage from '../pages/admin/EmployeeEJMPage';
 import HRDashboard from '../pages/hr/HRDashboard';
 import KanbanPage from '../pages/hr/KanbanPage';
@@ -176,14 +175,6 @@ export function AppRouter() {
             element={
               <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
                 <IshJadvallariPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/devices"
-            element={
-              <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
-                <DevicesPage />
               </ProtectedRoute>
             }
           />

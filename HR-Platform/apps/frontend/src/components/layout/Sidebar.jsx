@@ -10,7 +10,6 @@ import {
   TrendingUp,
   LogOut,
   Briefcase,
-  ScanFace,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 
@@ -112,14 +111,6 @@ export function Sidebar({ isOpen, toggleSidebar }) {
             >
               <span className="sidebar-link-icon"><CalendarCheck2 size={18} strokeWidth={2} /></span>
               <span>Davomat</span>
-            </NavLink>
-
-            <NavLink
-              to="/admin/devices"
-              className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-            >
-              <span className="sidebar-link-icon"><ScanFace size={18} strokeWidth={2} /></span>
-              <span>Qurilmalar</span>
             </NavLink>
           </div>
         )}

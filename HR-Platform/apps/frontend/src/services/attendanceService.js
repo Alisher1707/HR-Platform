@@ -31,6 +31,24 @@ export const attendanceService = {
     const response = await api.delete(`/attendance/${id}`);
     return response.data;
   },
+
+  /**
+   * Per-employee attendance summary for a date range — Monitoring > Hisobotlar.
+   * branches/departments/positions are arrays; the backend expects comma-joined strings.
+   */
+  async getReport({ startDate, endDate, branches, departments, positions, employeeId } = {}) {
+    const response = await api.get('/attendance/report', {
+      params: {
+        startDate,
+        endDate,
+        branches: branches?.length ? branches.join(',') : undefined,
+        departments: departments?.length ? departments.join(',') : undefined,
+        positions: positions?.length ? positions.join(',') : undefined,
+        employeeId: employeeId || undefined,
+      },
+    });
+    return response.data.data;
+  },
 };
 
 export default attendanceService;

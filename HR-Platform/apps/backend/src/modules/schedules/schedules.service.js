@@ -191,3 +191,24 @@ export async function computeLateness(employeeId, recordedAt) {
 
   return { isLate: scanMinutes > scheduleMinutes, scheduleId: schedule.id };
 }
+
+/**
+ * Mirror of computeLateness for the "ketdi" (left) side of the day —
+ * compares the scan time against the schedule's end_time. Returns
+ * { isEarly: boolean|null, scheduleId }.
+ */
+export async function computeEarlyLeave(employeeId, recordedAt) {
+  const schedule = await getActiveScheduleForEmployee(employeeId);
+
+  if (!schedule || !schedule.is_work_day || !schedule.end_time) {
+    return { isEarly: null, scheduleId: schedule ? schedule.id : null };
+  }
+
+  const scanTime = new Date(recordedAt);
+  const scanMinutes = scanTime.getHours() * 60 + scanTime.getMinutes();
+
+  const [endHour, endMinute] = schedule.end_time.split(':').map(Number);
+  const scheduleMinutes = endHour * 60 + endMinute;
+
+  return { isEarly: scanMinutes < scheduleMinutes, scheduleId: schedule.id };
+}

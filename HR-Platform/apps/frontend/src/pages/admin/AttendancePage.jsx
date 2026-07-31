@@ -62,6 +62,7 @@ import {
 } from 'lucide-react';
 import employeeService from '../../services/employeeService';
 import attendanceService from '../../services/attendanceService';
+import devicesService from '../../services/devicesService';
 import useToast from '../../hooks/useToast';
 import { useAuthStore } from '../../store/authStore';
 import Card from '../../components/ui/Card';
@@ -100,6 +101,60 @@ function getNoteBadgeVariant(notes) {
   if (text.includes('ketib') || text.includes('ketdi')) return 'left'; // ketib qoldi
   if (text.includes('keld')) return 'success'; // keldi (o'z vaqtida)
   return 'notes';
+}
+
+/**
+ * Renders a Monitoring > Hisobotlar result set (per-employee attendance
+ * summary) — shared by both "Davomat hisoboti" and "Davr bo'yicha hisobot",
+ * which return the same row shape from attendanceService.getReport().
+ * `results` is null before the first generate click, [] after a generate
+ * that matched nobody, or a populated array.
+ */
+function AttendanceReportTable({ results, fields, isLoading }) {
+  if (isLoading) {
+    return <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>Yuklanmoqda...</div>;
+  }
+  if (!results) return null;
+  if (results.length === 0) {
+    return (
+      <EmptyState
+        icon="📊"
+        title="Bu davr uchun ma'lumot topilmadi"
+        text="Filtrlarni o'zgartirib qayta urinib ko'ring."
+      />
+    );
+  }
+
+  return (
+    <div className="table-container" style={{ marginTop: '1rem' }}>
+      <table className="table">
+        <thead>
+          <tr>
+            <th>Xodim</th>
+            <th>Bo'lim</th>
+            <th>Kelgan kunlar</th>
+            {fields.includes('kechikishlar') && <th>Kechikishlar</th>}
+            {fields.includes('erta_ketishlar') && <th>Erta ketishlar</th>}
+            {fields.includes('qoshimcha_soatlar') && <th>Qo'shimcha soatlar</th>}
+            {fields.includes('umumiy_soatlar') && <th>Umumiy soatlar</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {results.map((row) => (
+            <tr key={row.employeeId}>
+              <td className="font-semibold">{row.firstName} {row.lastName}</td>
+              <td>{row.department || '-'}</td>
+              <td>{row.daysPresent}</td>
+              {fields.includes('kechikishlar') && <td>{row.daysLate}</td>}
+              {fields.includes('erta_ketishlar') && <td>{row.daysEarlyLeave}</td>}
+              {fields.includes('qoshimcha_soatlar') && <td>{row.overtimeHours} soat</td>}
+              {fields.includes('umumiy_soatlar') && <td>{row.totalHours} soat</td>}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function formatTerminalClock(date) {
@@ -1154,11 +1209,13 @@ export function AttendancePage() {
   const [financePanel, setFinancePanel] = useState(null); // { employeeId, type: 'bonus' | 'fine' | 'payment' }
   const [financeForm, setFinanceForm] = useState({ amount: '', note: '' });
   const [reportForm, setReportForm] = useState(getDefaultReportForm());
-  const [isReportGenerated, setIsReportGenerated] = useState(false);
+  const [reportResults, setReportResults] = useState(null); // null = not generated yet, [] = generated, no data
+  const [isReportLoading, setIsReportLoading] = useState(false);
   const [payrollForm, setPayrollForm] = useState(getDefaultPayrollReportForm());
   const [isPayrollReportGenerated, setIsPayrollReportGenerated] = useState(false);
   const [periodReportForm, setPeriodReportForm] = useState(getDefaultPeriodReportForm());
-  const [isPeriodReportGenerated, setIsPeriodReportGenerated] = useState(false);
+  const [periodReportResults, setPeriodReportResults] = useState(null);
+  const [isPeriodReportLoading, setIsPeriodReportLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [filters, setFilters] = useState({
@@ -1231,18 +1288,93 @@ export function AttendancePage() {
     UZ_MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))
   ), []);
 
-  // No attendance backend yet — trend starts at zero for every day; the
-  // chart is fully wired and will plot real counts once that data exists.
+  // Real last-30-days attendance data for the Analitika tab — fetched only
+  // while that tab is actually open, since it's a separate range query from
+  // the single-day records the rest of the page uses.
+  const [analyticsRecords, setAnalyticsRecords] = useState([]);
+  const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(false);
+
+  useEffect(() => {
+    if (activeSection !== 'monitoring' || monitoringTab !== 'analitika') return;
+    let cancelled = false;
+
+    (async () => {
+      setIsAnalyticsLoading(true);
+      try {
+        const end = new Date();
+        const start = subDays(end, 29);
+        const records = await attendanceService.getAttendance({
+          startDate: format(start, 'yyyy-MM-dd'),
+          endDate: format(end, 'yyyy-MM-dd'),
+        });
+        if (!cancelled) setAnalyticsRecords(records);
+      } catch (err) {
+        if (!cancelled) toast.error("Analitika ma'lumotlarini yuklashda xatolik");
+      } finally {
+        if (!cancelled) setIsAnalyticsLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSection, monitoringTab]);
+
   const trendData = useMemo(() => {
     const end = new Date();
-    const start = subDays(end, 30);
-    return eachDayOfInterval({ start, end }).map((date) => ({
-      label: format(date, "'M'MM d"),
-      kechQolish: 0,
-      kelmaslik: 0,
-      kelgan: 0,
-    }));
-  }, []);
+    const start = subDays(end, 29);
+    const recordsByDay = {};
+    analyticsRecords.forEach((r) => {
+      const key = format(new Date(r.recorded_at), 'yyyy-MM-dd');
+      (recordsByDay[key] ||= []).push(r);
+    });
+
+    const totalEmployees = employees.length;
+
+    return eachDayOfInterval({ start, end }).map((date) => {
+      const dayRecords = recordsByDay[format(date, 'yyyy-MM-dd')] || [];
+      const keldiToday = new Set(dayRecords.filter((r) => r.type === 'keldi').map((r) => r.employee_id));
+      const kechQolish = dayRecords.filter((r) => r.type === 'keldi' && r.is_late === true).length;
+
+      return {
+        label: format(date, "'M'MM d"),
+        kechQolish,
+        kelmaslik: Math.max(0, totalEmployees - keldiToday.size),
+        kelgan: keldiToday.size,
+      };
+    });
+  }, [analyticsRecords, employees]);
+
+  const rankingsData = useMemo(() => {
+    const late = {};
+    const onTime = {};
+    const daysPresent = {};
+
+    analyticsRecords.forEach((r) => {
+      if (r.type !== 'keldi') return;
+      const key = r.employee_id;
+      const name = `${r.first_name} ${r.last_name}`;
+      const day = format(new Date(r.recorded_at), 'yyyy-MM-dd');
+
+      (daysPresent[key] ||= { name, days: new Set() }).days.add(day);
+      if (r.is_late === true) (late[key] ||= { name, count: 0 }).count += 1;
+      if (r.is_late === false) (onTime[key] ||= { name, count: 0 }).count += 1;
+    });
+
+    const totalDays = eachDayOfInterval({ start: subDays(new Date(), 29), end: new Date() }).length;
+    const absence = {};
+    employees.forEach((e) => {
+      const present = daysPresent[e.id]?.days.size || 0;
+      absence[e.id] = { name: `${e.first_name} ${e.last_name}`, count: totalDays - present };
+    });
+
+    const toRanked = (obj) => Object.values(obj).filter((v) => v.count > 0).sort((a, b) => b.count - a.count).slice(0, 5);
+
+    return {
+      late: toRanked(late),
+      absence: toRanked(absence),
+      onTime: toRanked(onTime),
+    };
+  }, [analyticsRecords, employees]);
 
   const getFinanceKey = (employeeId) => `${employeeId}:${format(moliyaMonth, 'yyyy-MM')}`;
 
@@ -1453,8 +1585,24 @@ export function AttendancePage() {
     }));
   };
 
-  const handleGenerateReport = () => {
-    setIsReportGenerated(true);
+  const handleGenerateReport = async () => {
+    setIsReportLoading(true);
+    try {
+      const monthDate = new Date(Number(reportForm.year), Number(reportForm.month) - 1, 1);
+      const rows = await attendanceService.getReport({
+        startDate: format(startOfMonth(monthDate), 'yyyy-MM-dd'),
+        endDate: format(endOfMonth(monthDate), 'yyyy-MM-dd'),
+        branches: reportForm.branches,
+        departments: reportForm.departments,
+        positions: reportForm.positions,
+        employeeId: reportForm.employeeId,
+      });
+      setReportResults(rows);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Hisobotni tayyorlashda xatolik');
+    } finally {
+      setIsReportLoading(false);
+    }
   };
 
   const handleGeneratePayrollReport = () => {
@@ -1470,8 +1618,23 @@ export function AttendancePage() {
     }));
   };
 
-  const handleGeneratePeriodReport = () => {
-    setIsPeriodReportGenerated(true);
+  const handleGeneratePeriodReport = async () => {
+    setIsPeriodReportLoading(true);
+    try {
+      const rows = await attendanceService.getReport({
+        startDate: format(periodReportForm.startDate, 'yyyy-MM-dd'),
+        endDate: format(periodReportForm.endDate, 'yyyy-MM-dd'),
+        branches: periodReportForm.branches,
+        departments: periodReportForm.departments,
+        positions: periodReportForm.positions,
+        employeeId: periodReportForm.employeeId,
+      });
+      setPeriodReportResults(rows);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Hisobotni tayyorlashda xatolik');
+    } finally {
+      setIsPeriodReportLoading(false);
+    }
   };
 
   const handleOpenFilter = () => {
@@ -1667,6 +1830,27 @@ export function AttendancePage() {
     if (activeSection !== 'monitoring' || monitoringTab !== 'terminallar') return;
     const id = setInterval(() => setTerminalClock(new Date()), 1000);
     return () => clearInterval(id);
+  }, [activeSection, monitoringTab]);
+
+  const [terminals, setTerminals] = useState([]);
+  const [isTerminalsLoading, setIsTerminalsLoading] = useState(false);
+
+  const refreshTerminals = async () => {
+    setIsTerminalsLoading(true);
+    try {
+      const data = await devicesService.getTerminals();
+      setTerminals(data);
+    } catch (err) {
+      toast.error("Terminallar ro'yxatini yuklashda xatolik");
+    } finally {
+      setIsTerminalsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSection !== 'monitoring' || monitoringTab !== 'terminallar') return;
+    refreshTerminals();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSection, monitoringTab]);
 
   return (
@@ -2088,7 +2272,7 @@ export function AttendancePage() {
                   <span className="attendance-terminal-clock-text">
                     {formatTerminalClock(terminalClock)}
                   </span>
-                  <button type="button" className="attendance-pill">
+                  <button type="button" className="attendance-pill" onClick={refreshTerminals} disabled={isTerminalsLoading}>
                     <RefreshCw size={15} strokeWidth={2.25} /> Ro'yxatni yangilash
                   </button>
                 </div>
@@ -2211,18 +2395,13 @@ export function AttendancePage() {
                   className="attendance-primary-btn"
                   icon={<FileText size={16} strokeWidth={2.5} />}
                   onClick={handleGenerateReport}
+                  disabled={isReportLoading}
                 >
-                  Hisobotni ko'rish
+                  {isReportLoading ? 'Tayyorlanmoqda...' : "Hisobotni ko'rish"}
                 </Button>
               </div>
 
-              {isReportGenerated && (
-                <EmptyState
-                  icon="📊"
-                  title="Bu davr uchun ma'lumot topilmadi"
-                  text="Filtrlarni o'zgartirib qayta urinib ko'ring."
-                />
-              )}
+              <AttendanceReportTable results={reportResults} fields={reportForm.fields} isLoading={isReportLoading} />
               </Card>
 
               <Card>
@@ -2442,18 +2621,13 @@ export function AttendancePage() {
                     className="attendance-primary-btn"
                     icon={<Download size={16} strokeWidth={2.5} />}
                     onClick={handleGeneratePeriodReport}
+                    disabled={isPeriodReportLoading}
                   >
-                    Hisobotni yuklash
+                    {isPeriodReportLoading ? 'Tayyorlanmoqda...' : 'Hisobotni yuklash'}
                   </Button>
                 </div>
 
-                {isPeriodReportGenerated && (
-                  <EmptyState
-                    icon="📊"
-                    title="Bu davr uchun ma'lumot topilmadi"
-                    text="Filtrlarni o'zgartirib qayta urinib ko'ring."
-                  />
-                )}
+                <AttendanceReportTable results={periodReportResults} fields={periodReportForm.fields} isLoading={isPeriodReportLoading} />
               </Card>
             </div>
           )}
@@ -2485,7 +2659,37 @@ export function AttendancePage() {
                       </div>
                     </div>
                     <div className="attendance-ranking-body">
-                      <p className="attendance-muted-center">Ma'lumot yo'q</p>
+                      {rankingsData[ranking.key].length === 0 ? (
+                        <p className="attendance-muted-center">
+                          {isAnalyticsLoading ? 'Yuklanmoqda...' : "Ma'lumot yo'q"}
+                        </p>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
+                          {rankingsData[ranking.key].map((item, idx) => (
+                            <div
+                              key={`${ranking.key}-${item.name}-${idx}`}
+                              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}
+                            >
+                              <span style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', minWidth: 0 }}>
+                                <span
+                                  style={{
+                                    width: '22px', height: '22px', borderRadius: '50%',
+                                    background: 'var(--bg-secondary)', border: '1px solid var(--border)',
+                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                    fontSize: '0.6875rem', fontWeight: 700, color: 'var(--text-secondary)', flexShrink: 0,
+                                  }}
+                                >
+                                  {idx + 1}
+                                </span>
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
+                              </span>
+                              <Badge variant={ranking.tone === 'success' ? 'success' : ranking.tone === 'warning' ? 'warning' : 'error'}>
+                                {item.count} kun
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </Card>
                 ))}
@@ -2498,22 +2702,50 @@ export function AttendancePage() {
               <div className="attendance-section-header">
                 <div className="attendance-section-header-title">
                   <h3>Terminallar</h3>
+                  <p className="attendance-analytics-subtitle">
+                    Kameradan haqiqatda kelgan so'rovlar asosida — qo'shimcha sozlash shart emas.
+                  </p>
                 </div>
               </div>
 
-              <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Nomi</th>
-                      <th>Holati</th>
-                      <th>Sinxronlashtirish</th>
-                    </tr>
-                  </thead>
-                </table>
-              </div>
-
-              <EmptyState icon="📦" title="Ma'lumot yo'q" text="" />
+              {isTerminalsLoading ? (
+                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Yuklanmoqda...</div>
+              ) : terminals.length === 0 ? (
+                <EmptyState
+                  icon="📦"
+                  title="Hali qurilma faolligi qayd etilmagan"
+                  text="Kamera birinchi marta so'rov yuborganda bu yerda avtomatik paydo bo'ladi."
+                />
+              ) : (
+                <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Qurilma tokeni</th>
+                        <th>Holati</th>
+                        <th>Oxirgi faollik</th>
+                        <th>Hodisalar (30 kun)</th>
+                        <th>Tanilgan xodimlar</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {terminals.map((t) => (
+                        <tr key={t.deviceToken}>
+                          <td><span className="font-semibold">{t.deviceToken}</span></td>
+                          <td>
+                            <Badge variant={t.isOnline ? 'success' : 'error'}>
+                              {t.isOnline ? 'Faol' : 'Nofaol'}
+                            </Badge>
+                          </td>
+                          <td>{format(new Date(t.lastSeen), 'yyyy-MM-dd HH:mm:ss')}</td>
+                          <td>{t.events30d} ({t.accessEvents30d} tanilgan)</td>
+                          <td>{t.matchedEmployees}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
               <div className="attendance-table-footer">
                 <button type="button" className="attendance-toggle-btn" title="Ustunlar sozlamasi">
