@@ -2002,8 +2002,8 @@ export function AttendancePage() {
                               <td>
                                 {record.type === 'keldi' ? (
                                   record.is_late === null || record.is_late === undefined ? (
-                                    <Badge variant="info" title="Xodimga Ish jadvallari bo'limida jadval biriktirilmagan">
-                                      Jadval yo'q
+                                    <Badge variant="info" title="Xodimning biriktirilgan jadvali bu kunni dam olish kuni deb belgilagan">
+                                      Dam olish kuni
                                     </Badge>
                                   ) : (
                                     <Badge variant={record.is_late ? 'warning' : 'success'}>

@@ -169,46 +169,57 @@ export async function getActiveScheduleForEmployee(employeeId) {
   return result.rows[0] || null;
 }
 
+// Used when an employee has no schedule assigned yet (or their schedule
+// doesn't specify a time) so Davomat/Analitika stay meaningful before HR
+// gets around to setting up "Ish jadvallari" for everyone. A real assigned
+// schedule's own time always wins over this once one exists.
+const DEFAULT_START_TIME = '09:00';
+const DEFAULT_END_TIME = '18:00';
+
+function minutesSinceMidnight(date) {
+  return date.getHours() * 60 + date.getMinutes();
+}
+
+function timeStringToMinutes(timeStr) {
+  const [hour, minute] = timeStr.split(':').map(Number);
+  return hour * 60 + minute;
+}
+
 /**
  * Compares a "keldi" scan's time-of-day against the employee's assigned
- * schedule's start_time. Returns { isLate: boolean|null, scheduleId }.
- * isLate is null when the employee has no schedule, or the schedule's day
- * isn't a work day, or it has no start_time configured — there's nothing
- * to compare against.
+ * schedule's start_time, falling back to DEFAULT_START_TIME when no
+ * schedule is assigned. Returns { isLate: boolean, scheduleId }|{ isLate: null, scheduleId }.
+ * isLate is only null when an assigned schedule explicitly marks the day
+ * as a non-work day — there's genuinely nothing to compare against.
  */
 export async function computeLateness(employeeId, recordedAt) {
   const schedule = await getActiveScheduleForEmployee(employeeId);
 
-  if (!schedule || !schedule.is_work_day || !schedule.start_time) {
-    return { isLate: null, scheduleId: schedule ? schedule.id : null };
+  if (schedule && !schedule.is_work_day) {
+    return { isLate: null, scheduleId: schedule.id };
   }
 
-  const scanTime = new Date(recordedAt);
-  const scanMinutes = scanTime.getHours() * 60 + scanTime.getMinutes();
+  const scanMinutes = minutesSinceMidnight(new Date(recordedAt));
+  const scheduleMinutes = timeStringToMinutes(schedule?.start_time || DEFAULT_START_TIME);
 
-  const [startHour, startMinute] = schedule.start_time.split(':').map(Number);
-  const scheduleMinutes = startHour * 60 + startMinute;
-
-  return { isLate: scanMinutes > scheduleMinutes, scheduleId: schedule.id };
+  return { isLate: scanMinutes > scheduleMinutes, scheduleId: schedule ? schedule.id : null };
 }
 
 /**
  * Mirror of computeLateness for the "ketdi" (left) side of the day —
- * compares the scan time against the schedule's end_time. Returns
- * { isEarly: boolean|null, scheduleId }.
+ * compares the scan time against the schedule's end_time, falling back to
+ * DEFAULT_END_TIME when no schedule is assigned. Returns
+ * { isEarly: boolean, scheduleId }|{ isEarly: null, scheduleId }.
  */
 export async function computeEarlyLeave(employeeId, recordedAt) {
   const schedule = await getActiveScheduleForEmployee(employeeId);
 
-  if (!schedule || !schedule.is_work_day || !schedule.end_time) {
-    return { isEarly: null, scheduleId: schedule ? schedule.id : null };
+  if (schedule && !schedule.is_work_day) {
+    return { isEarly: null, scheduleId: schedule.id };
   }
 
-  const scanTime = new Date(recordedAt);
-  const scanMinutes = scanTime.getHours() * 60 + scanTime.getMinutes();
+  const scanMinutes = minutesSinceMidnight(new Date(recordedAt));
+  const scheduleMinutes = timeStringToMinutes(schedule?.end_time || DEFAULT_END_TIME);
 
-  const [endHour, endMinute] = schedule.end_time.split(':').map(Number);
-  const scheduleMinutes = endHour * 60 + endMinute;
-
-  return { isEarly: scanMinutes < scheduleMinutes, scheduleId: schedule.id };
+  return { isEarly: scanMinutes < scheduleMinutes, scheduleId: schedule ? schedule.id : null };
 }
