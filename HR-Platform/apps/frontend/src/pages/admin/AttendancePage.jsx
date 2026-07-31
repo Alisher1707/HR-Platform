@@ -1554,11 +1554,6 @@ export function AttendancePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSection, selectedDateKey]);
 
-  // Standard ish boshlanish vaqti — "kech kelgan" hisoblash uchun (Ish
-  // Jadvallari bo'limidagi standart smena bilan bir xil, hali filialga
-  // qarab moslashtirilmagan).
-  const WORK_START_TIME = '09:00';
-
   const recordsByEmployee = useMemo(() => {
     const map = {};
     attendanceRecords.forEach((r) => {
@@ -1587,7 +1582,9 @@ export function AttendancePage() {
 
     const hasKeldi = Boolean(firstKeldi);
     const hasKetdi = Boolean(lastKetdi);
-    const isLate = hasKeldi && format(new Date(firstKeldi.recorded_at), 'HH:mm') > WORK_START_TIME;
+    // Ish jadvallari bo'limida xodimga biriktirilgan jadval asosida backend
+    // hisoblab beradi (null — xodimga hali jadval biriktirilmagan).
+    const isLate = hasKeldi && firstKeldi.is_late === true;
 
     // done: keldi+ketdi ikkalasi ham bor (ish kuni yakunlangan)
     // present: keldi bor, ketdi yo'q (hozir ishda)
@@ -1778,17 +1775,21 @@ export function AttendancePage() {
                     {(recordsByEmployee[detailEmployee.id] || []).length > 0 && (
                       <tbody>
                         {(recordsByEmployee[detailEmployee.id] || []).map((record) => {
-                          const isLateRecord = record.type === 'keldi'
-                            && format(new Date(record.recorded_at), 'HH:mm') > WORK_START_TIME;
                           return (
                             <tr key={record.id}>
                               <td>{format(new Date(record.recorded_at), 'HH:mm')}</td>
                               <td>{record.type === 'keldi' ? 'Keldi' : 'Ketdi'}</td>
                               <td>
                                 {record.type === 'keldi' ? (
-                                  <Badge variant={isLateRecord ? 'warning' : 'success'}>
-                                    {isLateRecord ? 'Kech' : 'Vaqtida'}
-                                  </Badge>
+                                  record.is_late === null || record.is_late === undefined ? (
+                                    <Badge variant="info" title="Xodimga Ish jadvallari bo'limida jadval biriktirilmagan">
+                                      Jadval yo'q
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant={record.is_late ? 'warning' : 'success'}>
+                                      {record.is_late ? 'Kech' : 'Vaqtida'}
+                                    </Badge>
+                                  )
                                 ) : '-'}
                               </td>
                               <td>{record.notes || '-'}</td>

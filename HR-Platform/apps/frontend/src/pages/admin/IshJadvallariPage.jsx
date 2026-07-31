@@ -34,6 +34,8 @@ import {
   Building2,
   LayoutGrid,
   Network,
+  Users,
+  Trash2,
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -41,6 +43,8 @@ import Input from '../../components/ui/Input';
 import EmptyState from '../../components/ui/EmptyState';
 import SidePanel from '../../components/ui/SidePanel';
 import useToast from '../../hooks/useToast';
+import workScheduleService from '../../services/workScheduleService';
+import employeeService from '../../services/employeeService';
 
 const SCHEDULE_TABS = [
   { value: 'jadvallar', label: 'Jadvallar', icon: CalendarClock },
@@ -94,6 +98,50 @@ function emptyScheduleForm() {
     limitHours: 0,
     shiftLimitHours: 1,
     day: { isWorkDay: true, startTime: '09:00', endTime: '18:00', breakStart: '13:00', breakEnd: '14:00' },
+    employeeIds: [],
+  };
+}
+
+/** Converts a backend schedule (camelCase, from workScheduleService) into the form/table shape above. */
+function apiScheduleToItem(s) {
+  return {
+    id: s.id,
+    type: s.type,
+    name: s.name,
+    startDate: new Date(s.startDate),
+    cycle: s.cycleDays,
+    countOvertime: s.countOvertime,
+    deductBreak: s.deductBreak,
+    extendedHours: s.extendedHours,
+    limitType: s.limitType || 'kunlik',
+    limitHours: s.limitHours ?? 0,
+    shiftLimitHours: s.shiftLimitHours ?? 1,
+    day: {
+      isWorkDay: s.day.isWorkDay,
+      startTime: (s.day.startTime || '09:00').slice(0, 5),
+      endTime: (s.day.endTime || '18:00').slice(0, 5),
+      breakStart: (s.day.breakStart || '13:00').slice(0, 5),
+      breakEnd: (s.day.breakEnd || '14:00').slice(0, 5),
+    },
+    employeeIds: s.employeeIds || [],
+    employees: s.employees || [],
+  };
+}
+
+function scheduleToPayload(form) {
+  return {
+    name: form.name.trim(),
+    type: form.type,
+    startDate: form.startDate,
+    cycleDays: form.cycle,
+    countOvertime: form.countOvertime,
+    deductBreak: form.deductBreak,
+    extendedHours: form.extendedHours,
+    limitType: form.limitType,
+    limitHours: form.limitHours,
+    shiftLimitHours: form.shiftLimitHours,
+    day: form.day,
+    employeeIds: form.employeeIds,
   };
 }
 
@@ -109,14 +157,6 @@ function emptyHolidayForm() {
     scheduleIds: [],
   };
 }
-
-// Jadval boshqaruvi backend'i hali qo'shilmagan — vaqtinchalik namunaviy
-// ma'lumot, backend ulanganda API javobiga almashtiriladi. Har bir yozuv
-// "Yangi jadval" panelidagi to'liq forma shaklida saqlanadi, shunday qilib
-// "Tahrirlash" bosilganda panel xuddi shu ma'lumotlar bilan qayta ochiladi.
-const INITIAL_SCHEDULES = [
-  { id: 1, ...emptyScheduleForm(), name: '8:00 - 18:00', startDate: new Date('2026-07-20') },
-];
 
 /**
  * Inline calendar popover for the "Boshlanish sanasi" field — self-contained
@@ -265,7 +305,7 @@ function SingleSelectDropdown({ value, options, onChange, disabled }) {
  * search box + checkbox list + an explicit "Saqlash" button that closes the
  * panel, so picking several items doesn't close it after every click.
  */
-function MultiSelectDropdown({ options, selected, onChange, icon: Icon, placeholder }) {
+function MultiSelectDropdown({ options, selected, onChange, icon: Icon, placeholder, disabled }) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const wrapperRef = useRef(null);
@@ -293,7 +333,9 @@ function MultiSelectDropdown({ options, selected, onChange, icon: Icon, placehol
       <button
         type="button"
         className={`attendance-schedule-trigger ${isOpen ? 'open' : ''}`}
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={() => !disabled && setIsOpen((prev) => !prev)}
+        disabled={disabled}
+        style={disabled ? { opacity: 0.65, cursor: 'default' } : undefined}
       >
         <span className={selectedLabels ? '' : 'placeholder'}>{selectedLabels || placeholder}</span>
         <ChevronDown size={16} />
@@ -387,8 +429,9 @@ function CheckPill({ checked, onChange, label, spread, disabled }) {
 
 /**
  * IshJadvallariPage
- * Work-schedule management — no shift/schedule backend yet, so created
- * schedules are held in local state until the API is wired up.
+ * Work-schedule management — schedules are created/edited via the
+ * work-schedules API and assigned to one or more employees at once;
+ * Davomat (attendance) recording reads that assignment to flag late scans.
  */
 export function IshJadvallariPage() {
   const { toast } = useToast();
@@ -400,7 +443,10 @@ export function IshJadvallariPage() {
   const [holidays, setHolidays] = useState([]);
   const [isHolidayPanelOpen, setIsHolidayPanelOpen] = useState(false);
   const [holidayForm, setHolidayForm] = useState(emptyHolidayForm);
-  const [schedules, setSchedules] = useState(INITIAL_SCHEDULES);
+  const [schedules, setSchedules] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [panelMode, setPanelMode] = useState('create'); // 'create' | 'edit' | 'view'
   const [activeId, setActiveId] = useState(null);
@@ -409,6 +455,34 @@ export function IshJadvallariPage() {
   const notReady = () => toast.info("Bu imkoniyat tez orada qo'shiladi");
 
   const typeLabelOf = (value) => SCHEDULE_TYPES.find((t) => t.value === value)?.label || value;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const [scheduleList, employeeResp] = await Promise.all([
+          workScheduleService.getSchedules(),
+          employeeService.getEmployees({ limit: 100 }),
+        ]);
+        if (cancelled) return;
+        setSchedules(scheduleList.map(apiScheduleToItem));
+        setEmployees(employeeResp.data || []);
+      } catch (err) {
+        if (!cancelled) toast.error("Jadvallarni yuklashda xatolik yuz berdi");
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const employeeOptions = useMemo(
+    () => employees.map((e) => ({ value: e.id, label: `${e.first_name} ${e.last_name}` })),
+    [employees]
+  );
 
   const filteredSchedules = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -447,20 +521,46 @@ export function IshJadvallariPage() {
     setForm((f) => ({ ...f, day: { ...f.day, [field]: value } }));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name.trim()) {
       toast.error('Jadval nomini kiriting');
       return;
     }
-
-    if (panelMode === 'edit') {
-      setSchedules((prev) => prev.map((s) => (s.id === activeId ? { id: activeId, ...form, name: form.name.trim() } : s)));
-      toast.success('Jadval yangilandi');
-    } else {
-      setSchedules((prev) => [{ id: Date.now(), ...form, name: form.name.trim() }, ...prev]);
-      toast.success("Yangi jadval qo'shildi");
+    if (form.employeeIds.length === 0) {
+      toast.error('Kamida bitta xodim tanlang — jadval xodimga biriktirilishi shart');
+      return;
     }
-    setIsPanelOpen(false);
+
+    setIsSaving(true);
+    try {
+      const payload = scheduleToPayload(form);
+
+      if (panelMode === 'edit') {
+        const updated = await workScheduleService.updateSchedule(activeId, payload);
+        setSchedules((prev) => prev.map((s) => (s.id === activeId ? apiScheduleToItem(updated) : s)));
+        toast.success('Jadval yangilandi');
+      } else {
+        const created = await workScheduleService.createSchedule(payload);
+        setSchedules((prev) => [apiScheduleToItem(created), ...prev]);
+        toast.success("Yangi jadval qo'shildi");
+      }
+      setIsPanelOpen(false);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Jadvalni saqlashda xatolik yuz berdi');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteSchedule = async (schedule) => {
+    if (!window.confirm(`"${schedule.name}" jadvalini o'chirmoqchimisiz?`)) return;
+    try {
+      await workScheduleService.deleteSchedule(schedule.id);
+      setSchedules((prev) => prev.filter((s) => s.id !== schedule.id));
+      toast.success("Jadval o'chirildi");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Jadvalni o'chirishda xatolik yuz berdi");
+    }
   };
 
   const isReadOnly = panelMode === 'view';
@@ -586,11 +686,17 @@ export function IshJadvallariPage() {
             </div>
           </div>
 
-          {filteredSchedules.length === 0 ? (
+          {isLoading ? (
+            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Yuklanmoqda...</div>
+          ) : filteredSchedules.length === 0 ? (
             <EmptyState
               icon={<SearchX size={44} strokeWidth={1.5} />}
               title="Jadvallar topilmadi"
-              text={`"${search}" so'rovi bo'yicha hech qanday jadval topilmadi.`}
+              text={
+                search
+                  ? `"${search}" so'rovi bo'yicha hech qanday jadval topilmadi.`
+                  : "Hali jadval yaratilmagan. \"Yangi jadval\" tugmasi orqali xodimga jadval biriktiring."
+              }
             />
           ) : (
             <div className="table-container">
@@ -601,6 +707,7 @@ export function IshJadvallariPage() {
                     <th>Turi</th>
                     <th>Boshlanish sanasi</th>
                     <th>Sikl</th>
+                    <th>Xodimlar</th>
                     <th style={{ textAlign: 'right' }}>Amallar</th>
                   </tr>
                 </thead>
@@ -636,12 +743,24 @@ export function IshJadvallariPage() {
                         </span>
                       </td>
                       <td>
+                        <span
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.375rem', color: 'var(--text-secondary)' }}
+                          title={schedule.employees.map((e) => `${e.firstName} ${e.lastName}`).join(', ')}
+                        >
+                          <Users size={14} strokeWidth={2} />
+                          {schedule.employees.length} xodim
+                        </span>
+                      </td>
+                      <td>
                         <div className="table-actions" style={{ justifyContent: 'flex-end' }}>
                           <Button variant="ghost" size="sm" className="btn-icon" onClick={() => openViewPanel(schedule)} title="Ko'rish">
                             <Eye size={16} strokeWidth={2} />
                           </Button>
                           <Button variant="ghost" size="sm" className="btn-icon" onClick={() => openEditPanel(schedule)} title="Tahrirlash">
                             <Pencil size={16} strokeWidth={2} />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="btn-icon" onClick={() => handleDeleteSchedule(schedule)} title="O'chirish">
+                            <Trash2 size={16} strokeWidth={2} />
                           </Button>
                         </div>
                       </td>
@@ -729,8 +848,8 @@ export function IshJadvallariPage() {
               <Button variant="outline" onClick={closePanel} style={{ flex: 1 }}>
                 Bekor qilish
               </Button>
-              <Button variant="primary" className="attendance-primary-btn" onClick={handleSave} style={{ flex: 1 }}>
-                Saqlash
+              <Button variant="primary" className="attendance-primary-btn" onClick={handleSave} disabled={isSaving} style={{ flex: 1 }}>
+                {isSaving ? 'Saqlanmoqda...' : 'Saqlash'}
               </Button>
             </div>
           )
@@ -787,6 +906,21 @@ export function IshJadvallariPage() {
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             disabled={isReadOnly}
           />
+
+          <div className="form-group">
+            <label className="form-label">Xodim(lar)</label>
+            <MultiSelectDropdown
+              options={employeeOptions}
+              selected={form.employeeIds}
+              onChange={(v) => setForm((f) => ({ ...f, employeeIds: v }))}
+              icon={Users}
+              placeholder="Xodimlarni tanlang"
+              disabled={isReadOnly}
+            />
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.375rem' }}>
+              Bu jadval tanlangan xodim(lar)ning Davomat hisobiga ta'sir qiladi (kech qolishni aniqlash uchun).
+            </p>
+          </div>
 
           {form.type === 'gibrid' ? (
             <>

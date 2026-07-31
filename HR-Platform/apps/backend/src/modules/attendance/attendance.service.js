@@ -1,5 +1,6 @@
 import { query } from '../../config/database.js';
 import { HTTP_STATUS } from '../../config/constants.js';
+import { computeLateness } from '../schedules/schedules.service.js';
 
 /**
  * Attendance Service
@@ -30,7 +31,7 @@ export async function listAttendance({ date, employeeId } = {}) {
   const result = await query(
     `SELECT
        ar.id, ar.employee_id, ar.type, ar.recorded_at, ar.source, ar.notes,
-       ar.device_token, ar.created_at,
+       ar.device_token, ar.created_at, ar.is_late, ar.schedule_id,
        e.first_name, e.last_name, e.position, e.branch, e.photo_url
      FROM attendance_records ar
      JOIN employees e ON e.id = ar.employee_id
@@ -53,11 +54,15 @@ export async function createManualAttendance({ employeeId, type, recordedAt, not
     throw error;
   }
 
+  const { isLate, scheduleId } = type === 'keldi'
+    ? await computeLateness(employeeId, recordedAt)
+    : { isLate: null, scheduleId: null };
+
   const result = await query(
-    `INSERT INTO attendance_records (employee_id, type, recorded_at, source, notes, created_by)
-     VALUES ($1, $2, $3, 'manual', $4, $5)
-     RETURNING id, employee_id, type, recorded_at, source, notes, created_at`,
-    [employeeId, type, recordedAt, notes || null, createdBy]
+    `INSERT INTO attendance_records (employee_id, type, recorded_at, source, notes, created_by, is_late, schedule_id)
+     VALUES ($1, $2, $3, 'manual', $4, $5, $6, $7)
+     RETURNING id, employee_id, type, recorded_at, source, notes, created_at, is_late`,
+    [employeeId, type, recordedAt, notes || null, createdBy, isLate, scheduleId]
   );
 
   return result.rows[0];

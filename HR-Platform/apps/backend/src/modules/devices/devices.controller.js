@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { query } from '../../config/database.js';
+import { computeLateness } from '../schedules/schedules.service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const eventsDir = path.join(__dirname, '../../../uploads/device-events');
@@ -122,13 +123,18 @@ async function recordAttendance(employeeId, deviceToken, rawPersonId) {
   const hasKeldi = rows.some((r) => r.type === 'keldi');
   const type = !hasKeldi ? 'keldi' : 'ketdi';
 
+  const recordedAt = new Date();
+  const { isLate, scheduleId } = type === 'keldi'
+    ? await computeLateness(employeeId, recordedAt)
+    : { isLate: null, scheduleId: null };
+
   await query(
-    `INSERT INTO attendance_records (employee_id, type, device_token, raw_person_id)
-     VALUES ($1, $2, $3, $4)`,
-    [employeeId, type, deviceToken, rawPersonId]
+    `INSERT INTO attendance_records (employee_id, type, device_token, raw_person_id, recorded_at, is_late, schedule_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [employeeId, type, deviceToken, rawPersonId, recordedAt, isLate, scheduleId]
   );
 
-  return { skipped: false, type };
+  return { skipped: false, type, isLate };
 }
 
 /**
@@ -196,7 +202,8 @@ export async function receiveDeviceEvent(req, res) {
     if (result.skipped) {
       console.log(`Xodim: ${employee.first_name} ${employee.last_name} — yozilmadi (${result.reason})`);
     } else {
-      console.log(`Xodim: ${employee.first_name} ${employee.last_name} — "${result.type}" deb yozildi`);
+      const lateNote = result.isLate === true ? ' (KECHIKDI)' : result.isLate === false ? ' (o\'z vaqtida)' : '';
+      console.log(`Xodim: ${employee.first_name} ${employee.last_name} — "${result.type}" deb yozildi${lateNote}`);
     }
   } catch (err) {
     console.error('Davomat yozishda xatolik:', err.message);
