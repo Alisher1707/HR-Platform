@@ -1792,7 +1792,11 @@ export function AttendancePage() {
                                   )
                                 ) : '-'}
                               </td>
-                              <td>{record.notes || '-'}</td>
+                              <td>
+                                {record.notes ? (
+                                  <Badge variant="notes">{record.notes}</Badge>
+                                ) : '-'}
+                              </td>
                               <td>
                                 <Badge variant="info">
                                   {record.source === 'manual' ? "Qo'lda" : 'Qurilma'}
