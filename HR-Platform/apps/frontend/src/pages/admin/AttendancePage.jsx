@@ -63,6 +63,7 @@ import {
 import employeeService from '../../services/employeeService';
 import attendanceService from '../../services/attendanceService';
 import devicesService from '../../services/devicesService';
+import { exportAttendanceReportToExcel } from '../../utils/exportExcel';
 import useToast from '../../hooks/useToast';
 import { useAuthStore } from '../../store/authStore';
 import Card from '../../components/ui/Card';
@@ -1345,6 +1346,14 @@ export function AttendancePage() {
   }, [analyticsRecords, employees]);
 
   const rankingsData = useMemo(() => {
+    const employeeInfo = (e) => ({
+      employeeId: e.id,
+      name: `${e.first_name} ${e.last_name}`,
+      position: e.position || '',
+      photoUrl: e.photo_url || null,
+    });
+    const employeeById = Object.fromEntries(employees.map((e) => [e.id, employeeInfo(e)]));
+
     const late = {};
     const onTime = {};
     const daysPresent = {};
@@ -1352,22 +1361,24 @@ export function AttendancePage() {
     analyticsRecords.forEach((r) => {
       if (r.type !== 'keldi') return;
       const key = r.employee_id;
-      const name = `${r.first_name} ${r.last_name}`;
+      const info = employeeById[key] || {
+        employeeId: key, name: `${r.first_name} ${r.last_name}`, position: r.position || '', photoUrl: r.photo_url || null,
+      };
       const day = format(new Date(r.recorded_at), 'yyyy-MM-dd');
 
-      (daysPresent[key] ||= { name, days: new Set() }).days.add(day);
-      if (r.is_late === true) (late[key] ||= { name, count: 0 }).count += 1;
-      if (r.is_late === false) (onTime[key] ||= { name, count: 0 }).count += 1;
+      (daysPresent[key] ||= { ...info, days: new Set() }).days.add(day);
+      if (r.is_late === true) (late[key] ||= { ...info, count: 0 }).count += 1;
+      if (r.is_late === false) (onTime[key] ||= { ...info, count: 0 }).count += 1;
     });
 
     const totalDays = eachDayOfInterval({ start: subDays(new Date(), 29), end: new Date() }).length;
     const absence = {};
     employees.forEach((e) => {
       const present = daysPresent[e.id]?.days.size || 0;
-      absence[e.id] = { name: `${e.first_name} ${e.last_name}`, count: totalDays - present };
+      absence[e.id] = { ...employeeInfo(e), count: totalDays - present };
     });
 
-    const toRanked = (obj) => Object.values(obj).filter((v) => v.count > 0).sort((a, b) => b.count - a.count).slice(0, 5);
+    const toRanked = (obj) => Object.values(obj).filter((v) => v.count > 0).sort((a, b) => b.count - a.count).slice(0, 10);
 
     return {
       late: toRanked(late),
@@ -1375,6 +1386,8 @@ export function AttendancePage() {
       onTime: toRanked(onTime),
     };
   }, [analyticsRecords, employees]);
+
+  const [expandedRankings, setExpandedRankings] = useState({ late: false, absence: false, onTime: false });
 
   const getFinanceKey = (employeeId) => `${employeeId}:${format(moliyaMonth, 'yyyy-MM')}`;
 
@@ -1598,6 +1611,9 @@ export function AttendancePage() {
         employeeId: reportForm.employeeId,
       });
       setReportResults(rows);
+      if (rows.length > 0) {
+        exportAttendanceReportToExcel(rows, `davomat-hisoboti-${reportForm.year}-${String(reportForm.month).padStart(2, '0')}.xlsx`);
+      }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Hisobotni tayyorlashda xatolik');
     } finally {
@@ -1630,6 +1646,11 @@ export function AttendancePage() {
         employeeId: periodReportForm.employeeId,
       });
       setPeriodReportResults(rows);
+      if (rows.length > 0) {
+        const startLabel = format(periodReportForm.startDate, 'yyyy-MM-dd');
+        const endLabel = format(periodReportForm.endDate, 'yyyy-MM-dd');
+        exportAttendanceReportToExcel(rows, `davomat-hisoboti-${startLabel}_${endLabel}.xlsx`);
+      }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Hisobotni tayyorlashda xatolik');
     } finally {
@@ -2664,31 +2685,46 @@ export function AttendancePage() {
                           {isAnalyticsLoading ? 'Yuklanmoqda...' : "Ma'lumot yo'q"}
                         </p>
                       ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
-                          {rankingsData[ranking.key].map((item, idx) => (
-                            <div
-                              key={`${ranking.key}-${item.name}-${idx}`}
-                              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}
+                        <>
+                          <div className="attendance-ranking-list">
+                            {(expandedRankings[ranking.key]
+                              ? rankingsData[ranking.key]
+                              : rankingsData[ranking.key].slice(0, 3)
+                            ).map((item, idx) => (
+                              <div className="attendance-ranking-row" key={`${ranking.key}-${item.employeeId}-${idx}`}>
+                                {item.photoUrl ? (
+                                  <img
+                                    className="attendance-ranking-avatar"
+                                    src={employeeService.getPhotoUrl(item.photoUrl)}
+                                    alt={item.name}
+                                  />
+                                ) : (
+                                  <div className="attendance-ranking-avatar-fallback">
+                                    {item.name.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()}
+                                  </div>
+                                )}
+                                <div className="attendance-ranking-row-info">
+                                  <div className="attendance-ranking-row-name">{item.name}</div>
+                                  {item.position && <div className="attendance-ranking-row-position">{item.position}</div>}
+                                </div>
+                                <Badge variant={ranking.tone === 'success' ? 'success' : ranking.tone === 'warning' ? 'warning' : 'error'}>
+                                  {item.count} marta
+                                </Badge>
+                              </div>
+                            ))}
+                          </div>
+
+                          {rankingsData[ranking.key].length > 3 && (
+                            <button
+                              type="button"
+                              className="attendance-ranking-more"
+                              onClick={() => setExpandedRankings((prev) => ({ ...prev, [ranking.key]: !prev[ranking.key] }))}
                             >
-                              <span style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', minWidth: 0 }}>
-                                <span
-                                  style={{
-                                    width: '22px', height: '22px', borderRadius: '50%',
-                                    background: 'var(--bg-secondary)', border: '1px solid var(--border)',
-                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                    fontSize: '0.6875rem', fontWeight: 700, color: 'var(--text-secondary)', flexShrink: 0,
-                                  }}
-                                >
-                                  {idx + 1}
-                                </span>
-                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
-                              </span>
-                              <Badge variant={ranking.tone === 'success' ? 'success' : ranking.tone === 'warning' ? 'warning' : 'error'}>
-                                {item.count} kun
-                              </Badge>
-                            </div>
-                          ))}
-                        </div>
+                              {expandedRankings[ranking.key] ? 'Kamroq ko\'rsatish' : "Ko'proq ko'rsatish"}
+                              <ChevronRight size={14} strokeWidth={2.5} />
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   </Card>
