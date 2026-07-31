@@ -46,6 +46,16 @@ export async function updateSchedule(req, res) {
   }
 }
 
+export async function setEmployeeSchedule(req, res) {
+  try {
+    const schedule = await schedulesService.setEmployeeSchedule(req.params.employeeId, req.body.scheduleId || null);
+    return successResponse(res, schedule, 'Xodimning jadvali yangilandi');
+  } catch (error) {
+    console.error('Set employee schedule error:', error);
+    return errorResponse(res, error.message || "Xodimga jadval biriktirishda xatolik", error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+  }
+}
+
 export async function deleteSchedule(req, res) {
   try {
     const result = await schedulesService.deleteSchedule(req.params.id);

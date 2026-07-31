@@ -153,6 +153,61 @@ export async function deleteSchedule(id) {
 }
 
 /**
+ * Assigns a single employee to a schedule (or unassigns them, when
+ * scheduleId is null) — used by the Employee form's "Jadval" field, which
+ * edits the relationship from the employee's side instead of the schedule's.
+ * A schedule that ends up with zero employees is deleted rather than left
+ * behind as an orphaned, unassignable record (schedules only exist to be
+ * assigned to someone — see createSchedule's employeeIds.min(1) rule).
+ */
+export async function setEmployeeSchedule(employeeId, scheduleId) {
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+
+    const removedFrom = await client.query(
+      'DELETE FROM work_schedule_employees WHERE employee_id = $1 RETURNING schedule_id',
+      [employeeId]
+    );
+
+    for (const row of removedFrom.rows) {
+      const stillAssigned = await client.query(
+        'SELECT 1 FROM work_schedule_employees WHERE schedule_id = $1 LIMIT 1',
+        [row.schedule_id]
+      );
+      if (stillAssigned.rows.length === 0) {
+        await client.query('DELETE FROM work_schedules WHERE id = $1', [row.schedule_id]);
+      }
+    }
+
+    if (scheduleId) {
+      const scheduleCheck = await client.query('SELECT id FROM work_schedules WHERE id = $1', [scheduleId]);
+      if (scheduleCheck.rows.length === 0) {
+        const error = new Error('Jadval topilmadi');
+        error.statusCode = HTTP_STATUS.NOT_FOUND;
+        throw error;
+      }
+
+      await client.query(
+        `INSERT INTO work_schedule_employees (schedule_id, employee_id)
+         VALUES ($1, $2)
+         ON CONFLICT (schedule_id, employee_id) DO NOTHING`,
+        [scheduleId, employeeId]
+      );
+    }
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  return scheduleId ? getScheduleById(scheduleId) : null;
+}
+
+/**
  * The schedule currently governing an employee's attendance — if an
  * employee somehow ends up assigned to more than one, the most recently
  * created assignment wins.

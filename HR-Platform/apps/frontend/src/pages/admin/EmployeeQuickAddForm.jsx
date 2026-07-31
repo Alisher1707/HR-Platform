@@ -23,6 +23,7 @@ import Input from '../../components/ui/Input';
 import SidePanel from '../../components/ui/SidePanel';
 import useToast from '../../hooks/useToast';
 import employeeService from '../../services/employeeService';
+import workScheduleService from '../../services/workScheduleService';
 import ScheduleFormPanel from './ScheduleFormPanel';
 import { BranchLocationPicker } from './OrganizationPage';
 import { CheckCircle2, Circle } from 'lucide-react';
@@ -94,20 +95,16 @@ function FieldPicker({ title, icon, options, search, onSearchChange, isSelected,
   );
 }
 
-// Ish jadvallari backend'i hali qo'shilmagan (IshJadvallariPage'dagi
-// MOCK_SCHEDULES bilan bir xil namunaviy qiymat), shuning uchun bu yerda
-// ham vaqtinchalik ro'yxat sifatida qoladi.
-const DEFAULT_SCHEDULES = ['8:00 - 18:00'];
-
 /**
  * EmployeeQuickAddPanel
  * "Tashkilot tuzilmasi -> Xodimlar" tabidagi "Xodim qo'shish" tugmasi uchun
  * dizaynga mos qisqa forma — chap tomondan sirg'alib chiqadigan panel.
  * Shared Modal/SidePanel'dan mustaqil (o'lchami boshqacha bo'lgani uchun),
  * shuning uchun o'zining portal/overlay'ini o'zi boshqaradi.
- * Hozircha faqat UI: submit qilinganda "tez orada" xabari chiqadi, backend
- * bilan bog'lanmagan (Otasining ismi, Foydalanuvchi nomi, bir nechta Filial
- * va Jadval maydonlarining bazada joyi yo'q).
+ * Ism/familiya/filial/bo'lim/lavozim/telefon/username real backend'ga
+ * saqlanadi; Jadval maydoni ham work_schedules API orqali real biriktiriladi
+ * (Otasining ismi va bir nechta Filial hali employees jadvalida joyi yo'q,
+ * shu ikkitasi hozircha yuborilmaydi).
  */
 export function EmployeeQuickAddPanel({
   isOpen,
@@ -192,8 +189,9 @@ export function EmployeeQuickAddPanel({
   const [department, setDepartment] = useState('');
   const [position, setPosition] = useState('');
 
-  const [schedules, setSchedules] = useState(DEFAULT_SCHEDULES);
-  const [schedule, setSchedule] = useState(DEFAULT_SCHEDULES[0]);
+  const [schedules, setSchedules] = useState([]);
+  const [scheduleId, setScheduleId] = useState('');
+  const [initialScheduleId, setInitialScheduleId] = useState('');
   const [isScheduleAddOpen, setIsScheduleAddOpen] = useState(false);
 
   // 'filial' | 'bolim' | 'lavozim' | 'jadval' | null — bir vaqtda faqat
@@ -237,7 +235,8 @@ export function EmployeeQuickAddPanel({
     setSelectedBranches([]);
     setDepartment('');
     setPosition('');
-    setSchedule(DEFAULT_SCHEDULES[0]);
+    setScheduleId('');
+    setInitialScheduleId('');
     setOpenPicker(null);
     setPickerSearch('');
     setIsScheduleAddOpen(false);
@@ -246,8 +245,17 @@ export function EmployeeQuickAddPanel({
     setIsPositionCreateOpen(false);
   }, [isOpen]);
 
+  // Panel ochilganda real jadvallar ro'yxatini backend'dan oladi.
+  useEffect(() => {
+    if (!isOpen) return;
+    workScheduleService.getSchedules()
+      .then(setSchedules)
+      .catch(() => toast.error("Jadvallar ro'yxatini yuklashda xatolik"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
   // Tahrirlash rejimida ochilganda mavjud xodim ma'lumotlari bilan
-  // to'ldiriladi (faqat frontend — hozircha saqlash real API'ga ulanmagan).
+  // to'ldiriladi.
   useEffect(() => {
     if (!isOpen || !employee) return;
     setFirstName(employee.first_name || '');
@@ -259,6 +267,15 @@ export function EmployeeQuickAddPanel({
     setDepartment(employee.department || '');
     setPosition(employee.position || '');
   }, [isOpen, employee]);
+
+  // Xodim biriktirilgan jadvalni topib tanlangan qilib belgilaydi — jadvallar
+  // ro'yxati kelgach ham qayta ishga tushishi uchun alohida effekt.
+  useEffect(() => {
+    if (!isOpen || !employee || schedules.length === 0) return;
+    const current = schedules.find((s) => s.employeeIds.includes(employee.id));
+    setScheduleId(current ? current.id : '');
+    setInitialScheduleId(current ? current.id : '');
+  }, [isOpen, employee, schedules]);
 
   if (!isOpen) return null;
 
@@ -298,18 +315,47 @@ export function EmployeeQuickAddPanel({
   const branchOptions = branches.filter((b) => matchesSearch(b.name)).map((b) => ({ id: b.id, name: b.name, extra: b.radius }));
   const departmentOptions = departments.filter((d) => matchesSearch(d.name)).map((d) => ({ id: d.id, name: d.name }));
   const positionOptions = positions.filter((p) => matchesSearch(p.name)).map((p) => ({ id: p.id, name: p.name }));
-  const scheduleOptions = schedules.filter((s) => matchesSearch(s)).map((s) => ({ id: s, name: s }));
+  const scheduleOptions = schedules.filter((s) => matchesSearch(s.name)).map((s) => ({ id: s.id, name: s.name }));
+  const selectedScheduleName = schedules.find((s) => s.id === scheduleId)?.name || '';
 
   const handleScheduleModalClose = () => {
     setIsScheduleAddOpen(false);
   };
 
-  const handleScheduleSave = (scheduleForm) => {
-    const name = scheduleForm.name;
-    if (!name || schedules.includes(name)) return;
-    setSchedules((prev) => [...prev, name]);
-    setSchedule(name);
-    handleScheduleModalClose();
+  const openScheduleAdd = () => {
+    if (!isEditing) {
+      toast.info("Yangi jadval yaratish uchun avval xodimni saqlang");
+      return;
+    }
+    setIsScheduleAddOpen(true);
+  };
+
+  const handleScheduleSave = async (scheduleForm) => {
+    const name = scheduleForm.name.trim();
+    if (!name) return;
+    try {
+      const created = await workScheduleService.createSchedule({
+        name,
+        type: scheduleForm.type,
+        startDate: scheduleForm.startDate,
+        cycleDays: scheduleForm.cycle,
+        countOvertime: scheduleForm.countOvertime,
+        deductBreak: scheduleForm.deductBreak,
+        extendedHours: scheduleForm.extendedHours,
+        limitType: scheduleForm.limitType,
+        limitHours: scheduleForm.limitHours,
+        shiftLimitHours: scheduleForm.shiftLimitHours,
+        day: scheduleForm.day,
+        employeeIds: [employee.id],
+      });
+      setSchedules((prev) => [created, ...prev]);
+      setScheduleId(created.id);
+      setInitialScheduleId(created.id);
+      toast.success("Yangi jadval yaratildi va xodimga biriktirildi");
+      handleScheduleModalClose();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Jadval yaratishda xatolik');
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -322,10 +368,9 @@ export function EmployeeQuickAddPanel({
 
     setSubmitting(true);
     try {
-      // Otasining ismi, foydalanuvchi nomi (schedule bilan bir xil) va bir
-      // nechta filial hozircha bazada joyi yo'q (fayl boshidagi izohda
-      // aytilgan) — shu sabab bu yerda yuborilmaydi, faqat backend'da
-      // haqiqatan mavjud maydonlar jo'natiladi.
+      // Otasining ismi va bir nechta filial hozircha employees jadvalida
+      // joyi yo'q — shu ikkitasi yuborilmaydi. Jadval alohida, employee
+      // saqlangach setEmployeeSchedule orqali biriktiriladi (pastda).
       const payload = {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
@@ -336,6 +381,8 @@ export function EmployeeQuickAddPanel({
         telegramUsername: username || null,
       };
 
+      let targetEmployeeId = employee?.id;
+
       if (isEditing) {
         await employeeService.updateEmployee(employee.id, payload);
         if (photoFile) {
@@ -344,11 +391,15 @@ export function EmployeeQuickAddPanel({
         toast.success('Xodim ma\'lumotlari muvaffaqiyatli yangilandi!');
       } else {
         const created = await employeeService.createEmployee(payload);
-        const newEmployeeId = created?.employee?.id;
-        if (photoFile && newEmployeeId) {
-          await employeeService.uploadPhoto(newEmployeeId, photoFile);
+        targetEmployeeId = created?.employee?.id;
+        if (photoFile && targetEmployeeId) {
+          await employeeService.uploadPhoto(targetEmployeeId, photoFile);
         }
         toast.success('Yangi xodim muvaffaqiyatli qo\'shildi!');
+      }
+
+      if (targetEmployeeId && scheduleId !== initialScheduleId) {
+        await workScheduleService.setEmployeeSchedule(targetEmployeeId, scheduleId || null);
       }
 
       onSubmitSuccess?.();
@@ -550,13 +601,13 @@ export function EmployeeQuickAddPanel({
               <label className="qa-label">Jadval</label>
               <div className="qa-select-row">
                 <button type="button" className="qa-input qa-select-trigger" onClick={() => openPickerFor('jadval')}>
-                  <span>{schedule || 'Jadval tanlang'}</span>
+                  <span>{selectedScheduleName || 'Jadval tanlang'}</span>
                   <ChevronRight size={15} strokeWidth={2.25} />
                 </button>
                 <button
                   type="button"
                   className="qa-add-btn"
-                  onClick={() => setIsScheduleAddOpen(true)}
+                  onClick={openScheduleAdd}
                   aria-label="Yangi jadval qo'shish"
                 >
                   <Plus size={16} strokeWidth={2.5} />
@@ -628,8 +679,8 @@ export function EmployeeQuickAddPanel({
           options={scheduleOptions}
           search={pickerSearch}
           onSearchChange={setPickerSearch}
-          isSelected={(opt) => schedule === opt.name}
-          onToggle={(opt) => setSchedule(opt.name)}
+          isSelected={(opt) => scheduleId === opt.id}
+          onToggle={(opt) => setScheduleId(opt.id)}
           onClose={closePicker}
           emptyText="Jadval topilmadi"
         />

@@ -33,6 +33,8 @@ const scheduleSchema = Joi.object({
 });
 
 const uuidParamSchema = Joi.object({ id: commonSchemas.uuid });
+const employeeIdParamSchema = Joi.object({ employeeId: commonSchemas.uuid });
+const assignScheduleSchema = Joi.object({ scheduleId: Joi.string().uuid().allow(null).required() });
 
 const canManage = authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.HR);
 
@@ -53,6 +55,18 @@ router.put(
   validateParams(uuidParamSchema),
   validate(scheduleSchema),
   schedulesController.updateSchedule
+);
+
+// PUT /api/v1/schedules/assignments/:employeeId - Assign/unassign a single
+// employee to a schedule from the employee side (used by EmployeeForm's
+// "Jadval" field). Body: { scheduleId: uuid|null }.
+router.put(
+  '/assignments/:employeeId',
+  authenticate,
+  canManage,
+  validateParams(employeeIdParamSchema),
+  validate(assignScheduleSchema),
+  schedulesController.setEmployeeSchedule
 );
 
 // DELETE /api/v1/schedules/:id

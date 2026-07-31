@@ -4,12 +4,9 @@ import { CalendarDays, Plus } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import employeeService from '../../services/employeeService';
+import workScheduleService from '../../services/workScheduleService';
 import useToast from '../../hooks/useToast';
 import ScheduleFormPanel from './ScheduleFormPanel';
-
-// Ish jadvallari backend'i hali qo'shilmagan (EmployeeQuickAddForm'dagi
-// DEFAULT_SCHEDULES bilan bir xil vaqtinchalik namunaviy ro'yxat).
-const DEFAULT_SCHEDULES = ['8:00 - 18:00'];
 
 /**
  * EmployeeForm Component
@@ -51,11 +48,36 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
   const [submitting, setSubmitting] = useState(false);
   const [photoPreview, setPhotoPreview] = useState(null);
 
-  // Jadval — bazada joyi hali yo'q (EmployeeQuickAddForm'dagi kabi), shuning
-  // uchun formData'dan alohida, faqat UI darajasidagi state.
-  const [schedules, setSchedules] = useState(DEFAULT_SCHEDULES);
-  const [schedule, setSchedule] = useState('');
+  // Jadval — work_schedules jadvalidan real ma'lumot; formData'dan alohida
+  // saqlanadi va submit tugagach setEmployeeSchedule orqali biriktiriladi
+  // (schedule<->employee bog'lanishi employees jadvalining o'zida emas,
+  // alohida work_schedule_employees jadvalida yashaydi).
+  const [schedules, setSchedules] = useState([]);
+  const [scheduleId, setScheduleId] = useState('');
+  const [initialScheduleId, setInitialScheduleId] = useState('');
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+
+  useEffect(() => {
+    workScheduleService.getSchedules()
+      .then(setSchedules)
+      .catch(() => toast.error("Jadvallar ro'yxatini yuklashda xatolik"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Xodim tahrirlanayotgan bo'lsa va jadvallar ro'yxati kelgach — shu
+  // xodim biriktirilgan jadvalni topib, tanlangan qilib belgilaydi.
+  useEffect(() => {
+    if (!employee) {
+      setScheduleId('');
+      setInitialScheduleId('');
+      return;
+    }
+    if (schedules.length === 0) return;
+
+    const current = schedules.find((s) => s.employeeIds.includes(employee.id));
+    setScheduleId(current ? current.id : '');
+    setInitialScheduleId(current ? current.id : '');
+  }, [employee, schedules]);
 
   // Branch options
   const branches = [
@@ -321,6 +343,8 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
         // personId is not sent — it's system-assigned, never editable.
       };
 
+      let targetEmployeeId = employee?.id;
+
       if (isEditing) {
         await employeeService.updateEmployee(employee.id, payload);
         if (formData.photo) {
@@ -332,14 +356,18 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
         toast.success('Xodim ma\'lumotlari muvaffaqiyatli yangilandi!');
       } else {
         const created = await employeeService.createEmployee(payload);
-        const newEmployeeId = created?.employee?.id;
-        if (formData.photo && newEmployeeId) {
-          await employeeService.uploadPhoto(newEmployeeId, formData.photo);
+        targetEmployeeId = created?.employee?.id;
+        if (formData.photo && targetEmployeeId) {
+          await employeeService.uploadPhoto(targetEmployeeId, formData.photo);
         }
-        if (formData.resume && newEmployeeId) {
-          await employeeService.uploadResume(newEmployeeId, formData.resume);
+        if (formData.resume && targetEmployeeId) {
+          await employeeService.uploadResume(targetEmployeeId, formData.resume);
         }
         toast.success('Yangi xodim muvaffaqiyatli qo\'shildi!');
+      }
+
+      if (targetEmployeeId && scheduleId !== initialScheduleId) {
+        await workScheduleService.setEmployeeSchedule(targetEmployeeId, scheduleId || null);
       }
 
       if (onSubmitSuccess) {
@@ -682,20 +710,26 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
                 <CalendarDays size={16} strokeWidth={2} className="schedule-field-icon" />
                 <select
                   name="schedule"
-                  value={schedule}
-                  onChange={(e) => setSchedule(e.target.value)}
+                  value={scheduleId}
+                  onChange={(e) => setScheduleId(e.target.value)}
                   className="form-input"
                 >
                   <option value="">Jadval tanlang</option>
                   {schedules.map((s) => (
-                    <option key={s} value={s}>{s}</option>
+                    <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
                 </select>
               </div>
               <button
                 type="button"
                 className="schedule-field-add"
-                onClick={() => setIsScheduleModalOpen(true)}
+                onClick={() => {
+                  if (!isEditing) {
+                    toast.info("Yangi jadval yaratish uchun avval xodimni saqlang");
+                    return;
+                  }
+                  setIsScheduleModalOpen(true);
+                }}
                 title="Yangi jadval qo'shish"
                 aria-label="Yangi jadval qo'shish"
               >
@@ -711,14 +745,32 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
           <ScheduleFormPanel
             isOpen={isScheduleModalOpen}
             onClose={() => setIsScheduleModalOpen(false)}
-            onSave={(scheduleForm) => {
+            onSave={async (scheduleForm) => {
               const name = scheduleForm.name.trim();
               if (!name) return;
-              if (!schedules.includes(name)) {
-                setSchedules((prev) => [...prev, name]);
+              try {
+                const created = await workScheduleService.createSchedule({
+                  name,
+                  type: scheduleForm.type,
+                  startDate: scheduleForm.startDate,
+                  cycleDays: scheduleForm.cycle,
+                  countOvertime: scheduleForm.countOvertime,
+                  deductBreak: scheduleForm.deductBreak,
+                  extendedHours: scheduleForm.extendedHours,
+                  limitType: scheduleForm.limitType,
+                  limitHours: scheduleForm.limitHours,
+                  shiftLimitHours: scheduleForm.shiftLimitHours,
+                  day: scheduleForm.day,
+                  employeeIds: [employee.id],
+                });
+                setSchedules((prev) => [created, ...prev]);
+                setScheduleId(created.id);
+                setInitialScheduleId(created.id);
+                setIsScheduleModalOpen(false);
+                toast.success("Yangi jadval yaratildi va xodimga biriktirildi");
+              } catch (err) {
+                toast.error(err.response?.data?.message || 'Jadval yaratishda xatolik');
               }
-              setSchedule(name);
-              setIsScheduleModalOpen(false);
             }}
             title="Yangi jadval qo'shish"
           />

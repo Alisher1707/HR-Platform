@@ -32,6 +32,16 @@ export const workScheduleService = {
     const response = await api.delete(`/schedules/${id}`);
     return response.data;
   },
+
+  /**
+   * Assigns (or, with scheduleId=null, unassigns) a single employee to a
+   * schedule from the employee's side — used by the Employee form's
+   * "Jadval" field.
+   */
+  async setEmployeeSchedule(employeeId, scheduleId) {
+    const response = await api.put(`/schedules/assignments/${employeeId}`, { scheduleId });
+    return response.data.data;
+  },
 };
 
 export default workScheduleService;
