@@ -87,6 +87,21 @@ function formatUzDate(date) {
   return `${UZ_MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
 }
 
+/**
+ * Colors a Davomat "Izohlar" note by what it says happened — keyword match
+ * against the free-text notes managers type on manual entries, since the
+ * field itself carries no structured status.
+ */
+function getNoteBadgeVariant(notes) {
+  if (!notes) return null;
+  const text = notes.toLowerCase();
+  if (text.includes('kech')) return 'warning'; // kech keldi
+  if (text.includes('kelmadi') || text.includes('kelmagan')) return 'error'; // ishga kelmadi
+  if (text.includes('ketib') || text.includes('ketdi')) return 'left'; // ketib qoldi
+  if (text.includes('keld')) return 'success'; // keldi (o'z vaqtida)
+  return 'notes';
+}
+
 function formatTerminalClock(date) {
   const pad = (n) => String(n).padStart(2, '0');
   return `${date.getFullYear()} ${date.getMonth() + 1} ${date.getDate()} - ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
@@ -1794,7 +1809,7 @@ export function AttendancePage() {
                               </td>
                               <td>
                                 {record.notes ? (
-                                  <Badge variant="notes">{record.notes}</Badge>
+                                  <Badge variant={getNoteBadgeVariant(record.notes)}>{record.notes}</Badge>
                                 ) : '-'}
                               </td>
                               <td>
