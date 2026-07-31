@@ -17,9 +17,50 @@ function extractTag(xml, tagName) {
 }
 
 /**
+ * Hikvision access-event payloads are JSON, and often JSON-encoded as a
+ * *string* nested inside another JSON object's field (e.g. the multipart
+ * "AccessControllerEvent" text field is itself a JSON string containing a
+ * further "AccessControllerEvent" object with employeeNoString inside it).
+ * This walks strings/objects/arrays recursively, JSON.parse-ing strings as
+ * it goes, until it finds an employeeNoString/employeeNo key.
+ */
+function findPersonIdInJson(value) {
+  if (value === null || value === undefined) return null;
+
+  if (typeof value === 'string') {
+    try {
+      return findPersonIdInJson(JSON.parse(value));
+    } catch {
+      return null;
+    }
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findPersonIdInJson(item);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  if (typeof value === 'object') {
+    if (value.employeeNoString) return String(value.employeeNoString);
+    if (value.employeeNo) return String(value.employeeNo);
+
+    for (const nested of Object.values(value)) {
+      const found = findPersonIdInJson(nested);
+      if (found) return found;
+    }
+  }
+
+  return null;
+}
+
+/**
  * Pulls the camera's reported person/employee ID out of whatever text we
  * received (multipart text fields, raw body, or an XML/text file part) —
- * Hikvision access events carry it as <employeeNoString> or <employeeNo>.
+ * Hikvision sends this as either XML (<employeeNoString>) or JSON
+ * (possibly JSON-encoded as a string nested inside another field).
  */
 function extractPersonId(req) {
   const candidates = [];
@@ -39,7 +80,7 @@ function extractPersonId(req) {
   }
 
   for (const text of candidates) {
-    const personId = extractTag(text, 'employeeNoString') || extractTag(text, 'employeeNo');
+    const personId = extractTag(text, 'employeeNoString') || extractTag(text, 'employeeNo') || findPersonIdInJson(text);
     if (personId) return personId;
   }
 
