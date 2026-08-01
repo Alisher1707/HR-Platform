@@ -4110,6 +4110,35 @@ button.attendance-pill {
   margin-bottom: 1.125rem;
 }
 
+.fine-template-type-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+  margin-bottom: 1.125rem;
+}
+
+.fine-template-type-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.625rem 1rem;
+  border-radius: var(--radius-full);
+  border: 1.5px solid color-mix(in srgb, var(--fine-pill-color) 35%, var(--border));
+  background: color-mix(in srgb, var(--fine-pill-color) 14%, transparent);
+  color: var(--fine-pill-color);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.fine-template-type-pill:hover {
+  background: color-mix(in srgb, var(--fine-pill-color) 24%, transparent);
+  border-color: var(--fine-pill-color);
+  transform: translateY(-1px);
+}
+
 .fine-type-select-add {
   display: flex;
   align-items: center;

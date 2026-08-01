@@ -4142,20 +4142,19 @@ export function AttendancePage() {
             <h4 className="fine-step-title">Jarima shablonlari</h4>
             <p className="fine-step-subtitle">Sozlamoqchi bo'lgan jarima turlarini tanlang</p>
 
-            <div className="fine-template-add-row">
-              <SearchableSelect
-                options={allFineTypeOptions}
-                selected=""
-                onChange={(value) => {
-                  const type = allFineTypes.find((t) => t.value === value);
-                  if (type) addFineTemplate(type);
-                }}
-                getOptionIcon={getFineTypeOptionIcon}
-                icon={AlertTriangle}
-                placeholder="Jazolar"
-                searchPlaceholder="Jazo turini qidirish"
-                variant="pill"
-              />
+            <div className="fine-template-type-pills">
+              {allFineTypes.map((type) => (
+                <button
+                  key={type.value}
+                  type="button"
+                  className="fine-template-type-pill"
+                  style={{ '--fine-pill-color': type.color }}
+                  onClick={() => addFineTemplate(type)}
+                >
+                  <Plus size={14} strokeWidth={2.5} />
+                  {type.label}
+                </button>
+              ))}
             </div>
 
             {fineForm.templates.length === 0 ? (
