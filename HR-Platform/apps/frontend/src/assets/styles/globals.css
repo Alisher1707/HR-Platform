@@ -3003,6 +3003,9 @@ button.header-pill {
 }
 
 .attendance-detail-title {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
   font-size: 1rem;
   font-weight: 700;
   color: var(--text-primary);
@@ -3012,6 +3015,28 @@ button.header-pill {
   font-size: 0.8125rem;
   color: var(--text-muted);
   margin-top: 0.125rem;
+}
+
+.attendance-presence-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.attendance-presence-badge.inside {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.attendance-presence-badge.outside {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
 }
 
 .attendance-branch-cell {

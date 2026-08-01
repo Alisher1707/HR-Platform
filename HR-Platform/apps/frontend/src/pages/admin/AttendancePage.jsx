@@ -57,11 +57,13 @@ import {
   X,
   LogOut,
   DoorClosed,
+  DoorOpen,
   CalendarOff,
   Paperclip,
   Copy,
   Check,
   KeyRound,
+  LogIn,
 } from 'lucide-react';
 import employeeService from '../../services/employeeService';
 import attendanceService from '../../services/attendanceService';
@@ -2032,6 +2034,18 @@ export function AttendancePage() {
                   <div>
                     <div className="attendance-detail-title">
                       {detailEmployee.first_name} {detailEmployee.last_name}
+                      {(() => {
+                        const dayRecords = recordsByEmployee[detailEmployee.id] || [];
+                        if (dayRecords.length === 0) return null;
+                        const lastRecord = dayRecords[dayRecords.length - 1];
+                        const isInside = lastRecord.type === 'keldi';
+                        return (
+                          <span className={`attendance-presence-badge ${isInside ? 'inside' : 'outside'}`}>
+                            {isInside ? <DoorOpen size={13} strokeWidth={2.25} /> : <DoorClosed size={13} strokeWidth={2.25} />}
+                            {isInside ? 'Ichkarida' : 'Tashqarida'}
+                          </span>
+                        );
+                      })()}
                     </div>
                     <div className="attendance-detail-subtitle">
                       {format(selectedDate, 'yyyy-MM-dd')} ga tegishli belgilar
@@ -2062,14 +2076,24 @@ export function AttendancePage() {
                                 {record.type === 'keldi' ? (
                                   record.is_late === null || record.is_late === undefined ? (
                                     <Badge variant="info" title="Xodimning biriktirilgan jadvali bu kunni dam olish kuni deb belgilagan">
-                                      Dam olish kuni
+                                      <CalendarOff size={12} strokeWidth={2.25} /> Dam olish kuni
                                     </Badge>
                                   ) : (
                                     <Badge variant={record.is_late ? 'warning' : 'success'}>
-                                      {record.is_late ? 'Kech' : 'Vaqtida'}
+                                      <LogIn size={12} strokeWidth={2.25} /> {record.is_late ? 'Kech keldi' : 'Vaqtida keldi'}
                                     </Badge>
                                   )
-                                ) : '-'}
+                                ) : (
+                                  record.is_early_leave === null || record.is_early_leave === undefined ? (
+                                    <Badge variant="info" title="Xodimning biriktirilgan jadvali bu kunni dam olish kuni deb belgilagan">
+                                      <CalendarOff size={12} strokeWidth={2.25} /> Dam olish kuni
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant={record.is_early_leave ? 'warning' : 'success'}>
+                                      <LogOut size={12} strokeWidth={2.25} /> {record.is_early_leave ? 'Erta ketdi' : 'Vaqtida ketdi'}
+                                    </Badge>
+                                  )
+                                )}
                               </td>
                               <td>
                                 {record.notes ? (
