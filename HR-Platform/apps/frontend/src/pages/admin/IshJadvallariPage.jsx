@@ -91,18 +91,19 @@ function defaultDayConfig(dayNumber) {
 }
 
 function emptyScheduleForm() {
+  const cycle = 7;
   return {
     type: 'moslashuvchan',
     name: '',
     startDate: new Date(),
-    cycle: 7,
+    cycle,
     countOvertime: false,
     deductBreak: false,
     extendedHours: 4,
     limitType: 'kunlik',
     limitHours: 0,
     shiftLimitHours: 1,
-    days: [defaultDayConfig(1)],
+    days: Array.from({ length: cycle }, (_, idx) => defaultDayConfig(idx + 1)),
     employeeIds: [],
   };
 }
@@ -121,7 +122,7 @@ function resizeDays(days, cycleLength) {
 
 /** Converts a backend schedule (camelCase, from workScheduleService) into the form/table shape above. */
 function apiScheduleToItem(s) {
-  const days = (s.days && s.days.length > 0 ? s.days : [defaultDayConfig(1)]).map((d) => ({
+  const loadedDays = (s.days && s.days.length > 0 ? s.days : [defaultDayConfig(1)]).map((d) => ({
     dayNumber: d.dayNumber,
     isWorkDay: d.isWorkDay,
     startTime: (d.startTime || '09:00').slice(0, 5),
@@ -129,6 +130,9 @@ function apiScheduleToItem(s) {
     breakStart: (d.breakStart || '13:00').slice(0, 5),
     breakEnd: (d.breakEnd || '14:00').slice(0, 5),
   }));
+  // Self-heals if a schedule's saved day count ever drifts from its cycle
+  // length (e.g. cycle was edited elsewhere) instead of silently hiding days.
+  const days = resizeDays(loadedDays, s.cycleDays);
 
   return {
     id: s.id,
