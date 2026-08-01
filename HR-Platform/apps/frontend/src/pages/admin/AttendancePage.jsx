@@ -653,15 +653,12 @@ function SearchableSelect({
 
 /**
  * FineTypeCreateButton
- * Toolbar'dagi ixcham "Jazo yaratish" tugmasi — bosilganda nomi va amal qilish
- * muddatini (boshlanish — tugash sanasi) so'raydigan professional popover-card
- * ochadi (jazo turlari katalogini kengaytirish uchun).
+ * Toolbar'dagi ixcham "Jazo yaratish" tugmasi — bosilganda nomini so'raydigan
+ * professional popover-card ochadi (jazo turlari katalogini kengaytirish uchun).
  */
 function FineTypeCreateButton({ onCreate }) {
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState('');
-  const [startDate, setStartDate] = useState(new Date());
-  const [endDate, setEndDate] = useState(new Date());
   const [popupPos, setPopupPos] = useState({ top: 0, left: 0 });
   const wrapperRef = useRef(null);
   const popupRef = useRef(null);
@@ -696,10 +693,8 @@ function FineTypeCreateButton({ onCreate }) {
   const handleSubmit = () => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    onCreate(trimmed, { startDate, endDate });
+    onCreate(trimmed);
     setName('');
-    setStartDate(new Date());
-    setEndDate(new Date());
     setIsOpen(false);
   };
 
@@ -746,16 +741,6 @@ function FineTypeCreateButton({ onCreate }) {
               onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
               autoFocus
             />
-          </div>
-
-          <div className="fine-type-create-field">
-            <label>Boshlanish sanasi</label>
-            <DatePicker trigger="field" value={startDate} onChange={setStartDate} />
-          </div>
-
-          <div className="fine-type-create-field">
-            <label>Tugash sanasi</label>
-            <DatePicker trigger="field" value={endDate} onChange={setEndDate} />
           </div>
 
           <button
@@ -1537,7 +1522,7 @@ export function AttendancePage() {
   // Yangi jazo turini katalogga qo'shadi va yaratilgan turning value'sini qaytaradi —
   // chaqiruvchi (toolbar select yoki shablon-kartadagi "Jazo turi" select) buni o'zining
   // joriy tanlovi sifatida belgilash-belgilamasligiga o'zi qaror qiladi.
-  const handleCreateFineType = (name, period = {}) => {
+  const handleCreateFineType = (name) => {
     const trimmed = name.trim();
     if (!trimmed) return null;
     const existing = allFineTypes.find((t) => t.label.toLowerCase() === trimmed.toLowerCase());
@@ -1545,14 +1530,7 @@ export function AttendancePage() {
     const value = `custom_${Date.now()}`;
     setCustomFineTypes((prev) => [
       ...prev,
-      {
-        value,
-        label: trimmed,
-        color: CUSTOM_FINE_TYPE_COLOR,
-        icon: AlertTriangle,
-        startDate: period.startDate || null,
-        endDate: period.endDate || null,
-      },
+      { value, label: trimmed, color: CUSTOM_FINE_TYPE_COLOR, icon: AlertTriangle },
     ]);
     return value;
   };
