@@ -1529,27 +1529,38 @@ export function AttendancePage() {
   const [isAssignedFinesOpen, setIsAssignedFinesOpen] = useState(false);
   const [assignedFinesEmployeeFilter, setAssignedFinesEmployeeFilter] = useState('');
 
-  // Foydalanuvchi "Jazo yaratish" orqali qo'shgan turlar — FINE_TEMPLATE_TYPES'dagi
-  // 4 ta tayyor turga ustama, doskaning umumiy jazo turlari katalogi sifatida saqlanadi.
-  const [customFineTypes, setCustomFineTypes] = useState([]);
-
-  const allFineTypes = useMemo(() => [...FINE_TEMPLATE_TYPES, ...customFineTypes], [customFineTypes]);
-  const allFineTypeOptions = useMemo(
-    () => allFineTypes.map((t) => ({ value: t.value, label: t.label })),
-    [allFineTypes]
+  // "Turi" — jarima sababi (Kech kelish/Erta ketish/Chiqish yo'q/Kelmagan kun).
+  // Doim FINE_TEMPLATE_TYPES'dagi 4 ta belgilangan tur — foydalanuvchi
+  // tomonidan yaratilmaydi.
+  const violationTypeOptions = useMemo(
+    () => FINE_TEMPLATE_TYPES.map((t) => ({ value: t.value, label: t.label })),
+    []
   );
-  const getFineTypeOptionIcon = (opt) => {
-    const type = allFineTypes.find((t) => t.value === opt.value);
+  const getViolationTypeIcon = (opt) => {
+    const type = FINE_TEMPLATE_TYPES.find((t) => t.value === opt.value);
+    return type ? { Icon: type.icon, color: type.color } : null;
+  };
+
+  // "Jazo turi" — sababga nisbatan qo'llanadigan chora (masalan "Ogohlantirish").
+  // Faqat "Jazo yaratish" orqali to'ldiriladigan alohida katalog — "Turi"
+  // bilan aralashmaydi.
+  const [customFineTypes, setCustomFineTypes] = useState([]);
+  const punishmentTypeOptions = useMemo(
+    () => customFineTypes.map((t) => ({ value: t.value, label: t.label })),
+    [customFineTypes]
+  );
+  const getPunishmentTypeIcon = (opt) => {
+    const type = customFineTypes.find((t) => t.value === opt.value);
     return type ? { Icon: type.icon, color: type.color } : null;
   };
 
   // Yangi jazo turini katalogga qo'shadi va yaratilgan turning value'sini qaytaradi —
-  // chaqiruvchi (toolbar select yoki shablon-kartadagi "Jazo turi" select) buni o'zining
-  // joriy tanlovi sifatida belgilash-belgilamasligiga o'zi qaror qiladi.
+  // chaqiruvchi (toolbar tugmasi yoki shablon-kartadagi "Jazo turi" select) buni
+  // o'zining joriy tanlovi sifatida belgilash-belgilamasligiga o'zi qaror qiladi.
   const handleCreateFineType = (name) => {
     const trimmed = name.trim();
     if (!trimmed) return null;
-    const existing = allFineTypes.find((t) => t.label.toLowerCase() === trimmed.toLowerCase());
+    const existing = customFineTypes.find((t) => t.label.toLowerCase() === trimmed.toLowerCase());
     if (existing) return existing.value;
     const value = `custom_${Date.now()}`;
     setCustomFineTypes((prev) => [
@@ -4143,7 +4154,7 @@ export function AttendancePage() {
             <p className="fine-step-subtitle">Sozlamoqchi bo'lgan jarima turlarini tanlang</p>
 
             <div className="fine-template-type-pills">
-              {allFineTypes.map((type) => (
+              {FINE_TEMPLATE_TYPES.map((type) => (
                 <button
                   key={type.value}
                   type="button"
@@ -4174,7 +4185,7 @@ export function AttendancePage() {
 
                 <div className="fine-template-list">
                   {fineForm.templates.map((tpl) => {
-                    const typeMeta = allFineTypes.find((t) => t.value === tpl.type);
+                    const typeMeta = FINE_TEMPLATE_TYPES.find((t) => t.value === tpl.type);
                     return (
                       <div key={tpl.id} className="fine-template-card" style={{ '--fine-pill-color': typeMeta.color }}>
                         <span className="fine-template-card-tag">{typeMeta.label}</span>
@@ -4182,10 +4193,10 @@ export function AttendancePage() {
                         <div className="fine-template-card-field">
                           <label>Turi</label>
                           <SearchableSelect
-                            options={allFineTypeOptions}
+                            options={violationTypeOptions}
                             selected={tpl.type}
                             onChange={(type) => updateFineTemplate(tpl.id, { type })}
-                            getOptionIcon={getFineTypeOptionIcon}
+                            getOptionIcon={getViolationTypeIcon}
                             icon={AlertTriangle}
                             placeholder="Turini tanlang"
                           />
@@ -4219,10 +4230,10 @@ export function AttendancePage() {
                         <div className="fine-template-card-field">
                           <label>Jazo turi</label>
                           <SearchableSelect
-                            options={allFineTypeOptions}
+                            options={punishmentTypeOptions}
                             selected={tpl.jazoType}
                             onChange={(jazoType) => updateFineTemplate(tpl.id, { jazoType })}
-                            getOptionIcon={getFineTypeOptionIcon}
+                            getOptionIcon={getPunishmentTypeIcon}
                             icon={AlertTriangle}
                             placeholder="Jazo turi"
                             searchPlaceholder="Jazo turini qidirish"
