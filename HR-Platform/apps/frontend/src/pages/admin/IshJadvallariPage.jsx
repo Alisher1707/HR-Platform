@@ -36,6 +36,7 @@ import {
   Network,
   Users,
   Trash2,
+  Copy,
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -85,6 +86,10 @@ function formatUzDateAlt(date) {
   return `${UZ_MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
 }
 
+function defaultDayConfig(dayNumber) {
+  return { dayNumber, isWorkDay: true, startTime: '09:00', endTime: '18:00', breakStart: '13:00', breakEnd: '14:00' };
+}
+
 function emptyScheduleForm() {
   return {
     type: 'moslashuvchan',
@@ -97,13 +102,34 @@ function emptyScheduleForm() {
     limitType: 'kunlik',
     limitHours: 0,
     shiftLimitHours: 1,
-    day: { isWorkDay: true, startTime: '09:00', endTime: '18:00', breakStart: '13:00', breakEnd: '14:00' },
+    days: [defaultDayConfig(1)],
     employeeIds: [],
   };
 }
 
+/**
+ * Keeps form.days in sync with the "Sikl" (cycle) length — growing it with
+ * fresh default days or trimming it, never dropping days the user already
+ * configured within the new length.
+ */
+function resizeDays(days, cycleLength) {
+  if (days.length === cycleLength) return days;
+  if (days.length > cycleLength) return days.slice(0, cycleLength);
+  const extra = Array.from({ length: cycleLength - days.length }, (_, idx) => defaultDayConfig(days.length + idx + 1));
+  return [...days, ...extra];
+}
+
 /** Converts a backend schedule (camelCase, from workScheduleService) into the form/table shape above. */
 function apiScheduleToItem(s) {
+  const days = (s.days && s.days.length > 0 ? s.days : [defaultDayConfig(1)]).map((d) => ({
+    dayNumber: d.dayNumber,
+    isWorkDay: d.isWorkDay,
+    startTime: (d.startTime || '09:00').slice(0, 5),
+    endTime: (d.endTime || '18:00').slice(0, 5),
+    breakStart: (d.breakStart || '13:00').slice(0, 5),
+    breakEnd: (d.breakEnd || '14:00').slice(0, 5),
+  }));
+
   return {
     id: s.id,
     type: s.type,
@@ -116,13 +142,7 @@ function apiScheduleToItem(s) {
     limitType: s.limitType || 'kunlik',
     limitHours: s.limitHours ?? 0,
     shiftLimitHours: s.shiftLimitHours ?? 1,
-    day: {
-      isWorkDay: s.day.isWorkDay,
-      startTime: (s.day.startTime || '09:00').slice(0, 5),
-      endTime: (s.day.endTime || '18:00').slice(0, 5),
-      breakStart: (s.day.breakStart || '13:00').slice(0, 5),
-      breakEnd: (s.day.breakEnd || '14:00').slice(0, 5),
-    },
+    days,
     employeeIds: s.employeeIds || [],
     employees: s.employees || [],
   };
@@ -140,7 +160,7 @@ function scheduleToPayload(form) {
     limitType: form.limitType,
     limitHours: form.limitHours,
     shiftLimitHours: form.shiftLimitHours,
-    day: form.day,
+    days: form.days,
     employeeIds: form.employeeIds,
   };
 }
@@ -517,8 +537,15 @@ export function IshJadvallariPage() {
 
   const closePanel = () => setIsPanelOpen(false);
 
-  const updateDay = (field, value) => {
-    setForm((f) => ({ ...f, day: { ...f.day, [field]: value } }));
+  const updateDay = (dayNumber, field, value) => {
+    setForm((f) => ({
+      ...f,
+      days: f.days.map((d) => (d.dayNumber === dayNumber ? { ...d, [field]: value } : d)),
+    }));
+  };
+
+  const updateCycle = (newCycle) => {
+    setForm((f) => ({ ...f, cycle: newCycle, days: resizeDays(f.days, newCycle) }));
   };
 
   const handleSave = async () => {
@@ -982,7 +1009,7 @@ export function IshJadvallariPage() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Sikl</label>
-                  <Stepper value={form.cycle} onChange={(v) => setForm((f) => ({ ...f, cycle: v }))} min={1} max={31} disabled={isReadOnly} />
+                  <Stepper value={form.cycle} onChange={updateCycle} min={1} max={31} disabled={isReadOnly} />
                 </div>
               </div>
 
@@ -1008,69 +1035,94 @@ export function IshJadvallariPage() {
               </div>
 
               <div>
-                <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, marginBottom: '0.875rem', color: 'var(--text-primary)' }}>
-                  {selectedTypeLabel} jadval tafsilotlari
-                </h3>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
+                  <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {selectedTypeLabel} jadval tafsilotlari
+                  </h3>
+                  {!isReadOnly && form.days.length > 1 && (
+                    <button
+                      type="button"
+                      className="schedule-copy-day1-btn"
+                      title="Kun 1 sozlamalarini barcha kunlarga nusxalash"
+                      onClick={() => {
+                        const template = form.days[0];
+                        setForm((f) => ({
+                          ...f,
+                          days: f.days.map((d) => (d.dayNumber === 1 ? d : { ...template, dayNumber: d.dayNumber })),
+                        }));
+                      }}
+                    >
+                      <Copy size={13} strokeWidth={2.25} /> Kun 1 ni hammasiga qo'llash
+                    </button>
+                  )}
+                </div>
 
-                <div
-                  style={{
-                    background: 'var(--bg-secondary)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 'var(--radius-lg)',
-                    padding: '1.125rem',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '1rem',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontWeight: 700 }}>Kun 1</span>
-                    <CheckPill
-                      label="Ish kuni"
-                      checked={form.day.isWorkDay}
-                      onChange={(v) => updateDay('isWorkDay', v)}
-                      disabled={isReadOnly}
-                    />
-                  </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+                  {form.days.map((day) => (
+                    <div
+                      key={day.dayNumber}
+                      style={{
+                        background: 'var(--bg-secondary)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 'var(--radius-lg)',
+                        padding: '1.125rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '1rem',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ fontWeight: 700 }}>Kun {day.dayNumber}</span>
+                        <CheckPill
+                          label="Ish kuni"
+                          checked={day.isWorkDay}
+                          onChange={(v) => updateDay(day.dayNumber, 'isWorkDay', v)}
+                          disabled={isReadOnly}
+                        />
+                      </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                    <Input
-                      label="Boshlanish vaqti"
-                      type="time"
-                      name="dayStartTime"
-                      icon={<Clock size={15} strokeWidth={2} />}
-                      value={form.day.startTime}
-                      onChange={(e) => updateDay('startTime', e.target.value)}
-                      disabled={!form.day.isWorkDay || isReadOnly}
-                    />
-                    <Input
-                      label="Tugash vaqti"
-                      type="time"
-                      name="dayEndTime"
-                      icon={<Clock size={15} strokeWidth={2} />}
-                      value={form.day.endTime}
-                      onChange={(e) => updateDay('endTime', e.target.value)}
-                      disabled={!form.day.isWorkDay || isReadOnly}
-                    />
-                    <Input
-                      label="Tanaffus boshlanishi"
-                      type="time"
-                      name="dayBreakStart"
-                      icon={<Clock size={15} strokeWidth={2} />}
-                      value={form.day.breakStart}
-                      onChange={(e) => updateDay('breakStart', e.target.value)}
-                      disabled={!form.day.isWorkDay || isReadOnly}
-                    />
-                    <Input
-                      label="Tanaffus tugashi"
-                      type="time"
-                      name="dayBreakEnd"
-                      icon={<Clock size={15} strokeWidth={2} />}
-                      value={form.day.breakEnd}
-                      onChange={(e) => updateDay('breakEnd', e.target.value)}
-                      disabled={!form.day.isWorkDay || isReadOnly}
-                    />
-                  </div>
+                      {day.isWorkDay && (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                          <Input
+                            label="Boshlanish vaqti"
+                            type="time"
+                            name={`dayStartTime-${day.dayNumber}`}
+                            icon={<Clock size={15} strokeWidth={2} />}
+                            value={day.startTime}
+                            onChange={(e) => updateDay(day.dayNumber, 'startTime', e.target.value)}
+                            disabled={isReadOnly}
+                          />
+                          <Input
+                            label="Tugash vaqti"
+                            type="time"
+                            name={`dayEndTime-${day.dayNumber}`}
+                            icon={<Clock size={15} strokeWidth={2} />}
+                            value={day.endTime}
+                            onChange={(e) => updateDay(day.dayNumber, 'endTime', e.target.value)}
+                            disabled={isReadOnly}
+                          />
+                          <Input
+                            label="Tanaffus boshlanishi"
+                            type="time"
+                            name={`dayBreakStart-${day.dayNumber}`}
+                            icon={<Clock size={15} strokeWidth={2} />}
+                            value={day.breakStart}
+                            onChange={(e) => updateDay(day.dayNumber, 'breakStart', e.target.value)}
+                            disabled={isReadOnly}
+                          />
+                          <Input
+                            label="Tanaffus tugashi"
+                            type="time"
+                            name={`dayBreakEnd-${day.dayNumber}`}
+                            icon={<Clock size={15} strokeWidth={2} />}
+                            value={day.breakEnd}
+                            onChange={(e) => updateDay(day.dayNumber, 'breakEnd', e.target.value)}
+                            disabled={isReadOnly}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             </>

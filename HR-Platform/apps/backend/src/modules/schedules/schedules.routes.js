@@ -9,7 +9,8 @@ const router = express.Router();
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-const daySchema = Joi.object({
+const dayConfigSchema = Joi.object({
+  dayNumber: Joi.number().integer().min(1).required(),
   isWorkDay: Joi.boolean().required(),
   startTime: Joi.string().pattern(TIME_PATTERN).allow('', null),
   endTime: Joi.string().pattern(TIME_PATTERN).allow('', null),
@@ -28,7 +29,7 @@ const scheduleSchema = Joi.object({
   limitType: Joi.string().valid('kunlik', 'haftalik', 'oylik').allow('', null),
   limitHours: Joi.number().integer().min(0).max(24).allow(null),
   shiftLimitHours: Joi.number().integer().min(0).max(24).allow(null),
-  day: daySchema.required(),
+  days: Joi.array().items(dayConfigSchema).min(1).required(),
   employeeIds: Joi.array().items(commonSchemas.uuid).min(1).required(),
 });
 

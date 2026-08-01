@@ -3,10 +3,12 @@ import { HTTP_STATUS } from '../../config/constants.js';
 
 /**
  * Work Schedules Service
- * A schedule is a named work-time template (start/end/break, cycle, etc.)
- * that gets assigned to one or more employees via work_schedule_employees.
- * Attendance recording reads this assignment to decide whether a "keldi"
- * scan counts as late.
+ * A schedule is a named work-time template that gets assigned to one or
+ * more employees via work_schedule_employees. It repeats over `cycleDays`
+ * days starting from `startDate`, with each day of that cycle configured
+ * independently (work_schedule_days) — e.g. a "2 kun ishlaydi, 2 kun dam
+ * oladi" rotating shift. Attendance recording reads the assignment + the
+ * cycle day that applies "today" to decide whether a scan counts as late.
  */
 
 function mapSchedule(row) {
@@ -22,13 +24,6 @@ function mapSchedule(row) {
     limitType: row.limit_type,
     limitHours: row.limit_hours,
     shiftLimitHours: row.shift_limit_hours,
-    day: {
-      isWorkDay: row.is_work_day,
-      startTime: row.start_time,
-      endTime: row.end_time,
-      breakStart: row.break_start,
-      breakEnd: row.break_end,
-    },
     employeeIds: row.employee_ids || [],
     employees: row.employees || [],
     createdAt: row.created_at,
@@ -52,9 +47,36 @@ const SELECT_WITH_EMPLOYEES = `
   LEFT JOIN employees e ON e.id = wse.employee_id
 `;
 
+/** Attaches each schedule's per-cycle-day config (days[]) in one extra query, not N+1. */
+async function attachDays(schedules) {
+  if (schedules.length === 0) return schedules;
+
+  const result = await query(
+    `SELECT schedule_id, day_number, is_work_day, start_time, end_time, break_start, break_end
+     FROM work_schedule_days
+     WHERE schedule_id = ANY($1)
+     ORDER BY schedule_id, day_number`,
+    [schedules.map((s) => s.id)]
+  );
+
+  const daysBySchedule = {};
+  for (const row of result.rows) {
+    (daysBySchedule[row.schedule_id] ||= []).push({
+      dayNumber: row.day_number,
+      isWorkDay: row.is_work_day,
+      startTime: row.start_time,
+      endTime: row.end_time,
+      breakStart: row.break_start,
+      breakEnd: row.break_end,
+    });
+  }
+
+  return schedules.map((s) => ({ ...s, days: daysBySchedule[s.id] || [] }));
+}
+
 export async function listSchedules() {
   const result = await query(`${SELECT_WITH_EMPLOYEES} GROUP BY ws.id ORDER BY ws.created_at DESC`);
-  return result.rows.map(mapSchedule);
+  return attachDays(result.rows.map(mapSchedule));
 }
 
 export async function getScheduleById(id) {
@@ -64,7 +86,8 @@ export async function getScheduleById(id) {
     error.statusCode = HTTP_STATUS.NOT_FOUND;
     throw error;
   }
-  return mapSchedule(result.rows[0]);
+  const [schedule] = await attachDays([mapSchedule(result.rows[0])]);
+  return schedule;
 }
 
 async function assignEmployees(client, scheduleId, employeeIds) {
@@ -79,6 +102,26 @@ async function assignEmployees(client, scheduleId, employeeIds) {
   );
 }
 
+async function assignDays(client, scheduleId, days) {
+  await client.query('DELETE FROM work_schedule_days WHERE schedule_id = $1', [scheduleId]);
+
+  if (!days || days.length === 0) return;
+
+  const params = [scheduleId];
+  const valueRows = days.map((d) => {
+    const start = params.length + 1;
+    params.push(d.dayNumber, d.isWorkDay, d.startTime || null, d.endTime || null, d.breakStart || null, d.breakEnd || null);
+    const placeholders = [0, 1, 2, 3, 4, 5].map((offset) => `$${start + offset}`);
+    return `($1, ${placeholders.join(', ')})`;
+  });
+
+  await client.query(
+    `INSERT INTO work_schedule_days (schedule_id, day_number, is_work_day, start_time, end_time, break_start, break_end)
+     VALUES ${valueRows.join(', ')}`,
+    params
+  );
+}
+
 export async function createSchedule(data, userId) {
   const client = await getClient();
   try {
@@ -87,20 +130,18 @@ export async function createSchedule(data, userId) {
     const insertResult = await client.query(
       `INSERT INTO work_schedules
          (name, type, start_date, cycle_days, count_overtime, deduct_break, extended_hours,
-          limit_type, limit_hours, shift_limit_hours, is_work_day, start_time, end_time,
-          break_start, break_end, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+          limit_type, limit_hours, shift_limit_hours, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        RETURNING id`,
       [
         data.name, data.type, data.startDate, data.cycleDays, data.countOvertime, data.deductBreak,
-        data.extendedHours, data.limitType || null, data.limitHours ?? null, data.shiftLimitHours ?? null,
-        data.day.isWorkDay, data.day.startTime || null, data.day.endTime || null,
-        data.day.breakStart || null, data.day.breakEnd || null, userId,
+        data.extendedHours, data.limitType || null, data.limitHours ?? null, data.shiftLimitHours ?? null, userId,
       ]
     );
 
     const scheduleId = insertResult.rows[0].id;
     await assignEmployees(client, scheduleId, data.employeeIds);
+    await assignDays(client, scheduleId, data.days);
 
     await client.query('COMMIT');
     return getScheduleById(scheduleId);
@@ -123,18 +164,16 @@ export async function updateSchedule(id, data) {
       `UPDATE work_schedules SET
          name = $1, type = $2, start_date = $3, cycle_days = $4, count_overtime = $5,
          deduct_break = $6, extended_hours = $7, limit_type = $8, limit_hours = $9,
-         shift_limit_hours = $10, is_work_day = $11, start_time = $12, end_time = $13,
-         break_start = $14, break_end = $15, updated_at = NOW()
-       WHERE id = $16`,
+         shift_limit_hours = $10, updated_at = NOW()
+       WHERE id = $11`,
       [
         data.name, data.type, data.startDate, data.cycleDays, data.countOvertime, data.deductBreak,
-        data.extendedHours, data.limitType || null, data.limitHours ?? null, data.shiftLimitHours ?? null,
-        data.day.isWorkDay, data.day.startTime || null, data.day.endTime || null,
-        data.day.breakStart || null, data.day.breakEnd || null, id,
+        data.extendedHours, data.limitType || null, data.limitHours ?? null, data.shiftLimitHours ?? null, id,
       ]
     );
 
     await assignEmployees(client, id, data.employeeIds);
+    await assignDays(client, id, data.days);
 
     await client.query('COMMIT');
     return getScheduleById(id);
@@ -224,10 +263,38 @@ export async function getActiveScheduleForEmployee(employeeId) {
   return result.rows[0] || null;
 }
 
-// Used when an employee has no schedule assigned yet (or their schedule
-// doesn't specify a time) so Davomat/Analitika stay meaningful before HR
+/**
+ * Which day-in-cycle (1-based, matching "Kun N") a given date falls on for
+ * a schedule — counts whole days elapsed since start_date, wraps around
+ * every cycle_days. Dates before start_date wrap "backwards" (still a
+ * well-defined day-in-cycle) rather than going negative.
+ */
+function getDayNumberForDate(schedule, date) {
+  const start = new Date(schedule.start_date);
+  start.setHours(0, 0, 0, 0);
+  const target = new Date(date);
+  target.setHours(0, 0, 0, 0);
+
+  const cycle = schedule.cycle_days || 1;
+  const diffDays = Math.round((target - start) / (1000 * 60 * 60 * 24));
+  const offset = ((diffDays % cycle) + cycle) % cycle;
+  return offset + 1;
+}
+
+async function getScheduleDay(scheduleId, dayNumber) {
+  const result = await query(
+    `SELECT is_work_day, start_time, end_time
+     FROM work_schedule_days
+     WHERE schedule_id = $1 AND day_number = $2`,
+    [scheduleId, dayNumber]
+  );
+  return result.rows[0] || null;
+}
+
+// Used when an employee has no schedule assigned yet, or their schedule's
+// cycle day has no config, so Davomat/Analitika stay meaningful before HR
 // gets around to setting up "Ish jadvallari" for everyone. A real assigned
-// schedule's own time always wins over this once one exists.
+// day's own time always wins over this once one exists.
 const DEFAULT_START_TIME = '09:00';
 const DEFAULT_END_TIME = '18:00';
 
@@ -241,40 +308,43 @@ function timeStringToMinutes(timeStr) {
 }
 
 /**
- * Compares a "keldi" scan's time-of-day against the employee's assigned
- * schedule's start_time, falling back to DEFAULT_START_TIME when no
- * schedule is assigned. Returns { isLate: boolean, scheduleId }|{ isLate: null, scheduleId }.
- * isLate is only null when an assigned schedule explicitly marks the day
- * as a non-work day — there's genuinely nothing to compare against.
+ * Compares a "keldi" scan's time-of-day against the cycle day (Kun N) that
+ * applies on the scan's date, falling back to DEFAULT_START_TIME when no
+ * schedule/day config is assigned. Returns { isLate, scheduleId }. isLate
+ * is only null when that cycle day is explicitly marked a non-work day —
+ * there's genuinely nothing to compare against.
  */
 export async function computeLateness(employeeId, recordedAt) {
   const schedule = await getActiveScheduleForEmployee(employeeId);
+  const scanDate = new Date(recordedAt);
+  const day = schedule ? await getScheduleDay(schedule.id, getDayNumberForDate(schedule, scanDate)) : null;
 
-  if (schedule && !schedule.is_work_day) {
+  if (day && !day.is_work_day) {
     return { isLate: null, scheduleId: schedule.id };
   }
 
-  const scanMinutes = minutesSinceMidnight(new Date(recordedAt));
-  const scheduleMinutes = timeStringToMinutes(schedule?.start_time || DEFAULT_START_TIME);
+  const scanMinutes = minutesSinceMidnight(scanDate);
+  const scheduleMinutes = timeStringToMinutes(day?.start_time || DEFAULT_START_TIME);
 
   return { isLate: scanMinutes > scheduleMinutes, scheduleId: schedule ? schedule.id : null };
 }
 
 /**
  * Mirror of computeLateness for the "ketdi" (left) side of the day —
- * compares the scan time against the schedule's end_time, falling back to
- * DEFAULT_END_TIME when no schedule is assigned. Returns
- * { isEarly: boolean, scheduleId }|{ isEarly: null, scheduleId }.
+ * compares the scan time against that cycle day's end_time. Returns
+ * { isEarly, scheduleId }.
  */
 export async function computeEarlyLeave(employeeId, recordedAt) {
   const schedule = await getActiveScheduleForEmployee(employeeId);
+  const scanDate = new Date(recordedAt);
+  const day = schedule ? await getScheduleDay(schedule.id, getDayNumberForDate(schedule, scanDate)) : null;
 
-  if (schedule && !schedule.is_work_day) {
+  if (day && !day.is_work_day) {
     return { isEarly: null, scheduleId: schedule.id };
   }
 
-  const scanMinutes = minutesSinceMidnight(new Date(recordedAt));
-  const scheduleMinutes = timeStringToMinutes(schedule?.end_time || DEFAULT_END_TIME);
+  const scanMinutes = minutesSinceMidnight(scanDate);
+  const scheduleMinutes = timeStringToMinutes(day?.end_time || DEFAULT_END_TIME);
 
   return { isEarly: scanMinutes < scheduleMinutes, scheduleId: schedule ? schedule.id : null };
 }
