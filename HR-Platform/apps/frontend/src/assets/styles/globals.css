@@ -3370,7 +3370,10 @@ button.attendance-pill {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg), 0 0 0 1px rgba(0, 0, 0, 0.02);
   overflow: hidden;
-  z-index: 60;
+  /* .modal-overlay (1000) dan yuqoriroq — SearchableSelect Modal ichida
+     ham ishlatilgani uchun (masalan "Jarima yaratish" > Jazo turi), aks
+     holda panel modal foni ortida chizilib, "bo'sh" ko'rinib qolar edi. */
+  z-index: 1100;
   animation: fadeInDown 0.16s ease;
 }
 
