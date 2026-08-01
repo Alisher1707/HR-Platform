@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { query } from '../../config/database.js';
 import { computeLateness, computeEarlyLeave } from '../schedules/schedules.service.js';
+import { generateRandomString } from '../../shared/utils/crypto.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const eventsDir = path.join(__dirname, '../../../uploads/device-events');
@@ -257,29 +258,57 @@ export async function receiveDeviceEvent(req, res) {
 const TERMINAL_OFFLINE_AFTER_MS = 5 * 60 * 1000;
 
 /**
- * GET /api/v1/devices/terminals — real device activity, derived from every
- * request a camera has ever made (device_events), not a manually configured
- * list. Powers Monitoring > Terminallar.
+ * GET /api/v1/devices/terminals — every registered device (created via
+ * "Qurilma yaratish", so it shows up with its token even before the camera
+ * has ever pushed anything) merged with any device_token seen in real
+ * traffic that was never registered (legacy/auto-discovered — kept so
+ * nothing silently disappears from monitoring). Powers Monitoring > Terminallar.
  */
 export async function getTerminals(req, res) {
   try {
     const result = await query(
-      `SELECT
-         device_token,
-         MAX(received_at) AS last_seen,
-         COUNT(*) FILTER (WHERE received_at >= NOW() - INTERVAL '30 days') AS events_30d,
-         COUNT(*) FILTER (WHERE event_type = 'access' AND received_at >= NOW() - INTERVAL '30 days') AS access_events_30d,
-         COUNT(DISTINCT employee_id) FILTER (WHERE employee_id IS NOT NULL) AS matched_employees
-       FROM device_events
-       GROUP BY device_token
-       ORDER BY last_seen DESC`
+      `WITH registered AS (
+         SELECT
+           d.id,
+           d.name,
+           d.token AS device_token,
+           d.created_at,
+           MAX(de.received_at) AS last_seen,
+           COUNT(de.*) FILTER (WHERE de.received_at >= NOW() - INTERVAL '30 days') AS events_30d,
+           COUNT(de.*) FILTER (WHERE de.event_type = 'access' AND de.received_at >= NOW() - INTERVAL '30 days') AS access_events_30d,
+           COUNT(DISTINCT de.employee_id) FILTER (WHERE de.employee_id IS NOT NULL) AS matched_employees
+         FROM devices d
+         LEFT JOIN device_events de ON de.device_token = d.token
+         GROUP BY d.id
+       ),
+       unregistered AS (
+         SELECT
+           NULL::uuid AS id,
+           NULL::text AS name,
+           de.device_token,
+           MIN(de.received_at) AS created_at,
+           MAX(de.received_at) AS last_seen,
+           COUNT(*) FILTER (WHERE de.received_at >= NOW() - INTERVAL '30 days') AS events_30d,
+           COUNT(*) FILTER (WHERE de.event_type = 'access' AND de.received_at >= NOW() - INTERVAL '30 days') AS access_events_30d,
+           COUNT(DISTINCT de.employee_id) FILTER (WHERE de.employee_id IS NOT NULL) AS matched_employees
+         FROM device_events de
+         WHERE NOT EXISTS (SELECT 1 FROM devices d WHERE d.token = de.device_token)
+         GROUP BY de.device_token
+       )
+       SELECT * FROM registered
+       UNION ALL
+       SELECT * FROM unregistered
+       ORDER BY last_seen DESC NULLS LAST`
     );
 
     const now = Date.now();
     const terminals = result.rows.map((row) => ({
+      id: row.id,
+      name: row.name,
       deviceToken: row.device_token,
+      createdAt: row.created_at,
       lastSeen: row.last_seen,
-      isOnline: now - new Date(row.last_seen).getTime() < TERMINAL_OFFLINE_AFTER_MS,
+      isOnline: row.last_seen ? now - new Date(row.last_seen).getTime() < TERMINAL_OFFLINE_AFTER_MS : false,
       events30d: Number(row.events_30d),
       accessEvents30d: Number(row.access_events_30d),
       matchedEmployees: Number(row.matched_employees),
@@ -289,5 +318,56 @@ export async function getTerminals(req, res) {
   } catch (err) {
     console.error('Get terminals error:', err.message);
     res.status(500).json({ success: false, message: 'Terminallarni olishda xatolik', timestamp: new Date().toISOString() });
+  }
+}
+
+/**
+ * POST /api/v1/devices — registers a new device with an auto-generated
+ * token; the token is what gets configured on the physical camera to push
+ * events to /api/v1/devices/:token/events.
+ */
+export async function createDevice(req, res) {
+  try {
+    const { name } = req.body;
+    const token = generateRandomString(20);
+
+    const result = await query(
+      `INSERT INTO devices (name, token, created_by) VALUES ($1, $2, $3)
+       RETURNING id, name, token, created_at`,
+      [name, token, req.user.id]
+    );
+
+    const device = result.rows[0];
+    res.status(201).json({
+      success: true,
+      message: "Qurilma yaratildi",
+      data: { id: device.id, name: device.name, token: device.token, createdAt: device.created_at },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('Create device error:', err.message);
+    res.status(500).json({ success: false, message: "Qurilma yaratishda xatolik", timestamp: new Date().toISOString() });
+  }
+}
+
+/**
+ * DELETE /api/v1/devices/:id — removes a registered device. The device's
+ * past device_events rows are kept (device_token is a plain string, not a
+ * foreign key) so historical activity/reports stay intact; the row just
+ * reverts to showing up as "unregistered" if the camera keeps pushing.
+ */
+export async function deleteDevice(req, res) {
+  try {
+    const { id } = req.params;
+    const result = await query('DELETE FROM devices WHERE id = $1 RETURNING id', [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Qurilma topilmadi', timestamp: new Date().toISOString() });
+    }
+
+    res.status(200).json({ success: true, message: "Qurilma o'chirildi", data: { id }, timestamp: new Date().toISOString() });
+  } catch (err) {
+    console.error('Delete device error:', err.message);
+    res.status(500).json({ success: false, message: "Qurilmani o'chirishda xatolik", timestamp: new Date().toISOString() });
   }
 }

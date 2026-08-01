@@ -1,10 +1,18 @@
 import express from 'express';
 import multer from 'multer';
-import { receiveDeviceEvent, getTerminals } from './devices.controller.js';
+import Joi from 'joi';
+import { receiveDeviceEvent, getTerminals, createDevice, deleteDevice } from './devices.controller.js';
 import { authenticate, authorize } from '../auth/auth.middleware.js';
+import { validate, validateParams, commonSchemas } from '../../shared/middleware/validate.js';
 import { USER_ROLES } from '../../config/constants.js';
 
 const router = express.Router();
+
+const createDeviceSchema = Joi.object({
+  name: Joi.string().trim().min(1).max(150).required(),
+});
+const uuidParamSchema = Joi.object({ id: commonSchemas.uuid });
+const canManage = authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.HR);
 
 // Memory storage — files are only inspected/saved manually in the controller,
 // no need to persist through multer's disk storage for this diagnostic route.
@@ -57,11 +65,18 @@ router.all('/:token/events', captureDeviceEvent, receiveDeviceEvent);
 
 // GET /api/v1/devices/terminals - real device activity for Monitoring > Terminallar
 // (dashboard-facing, so it needs auth — unlike the camera-facing route above).
-router.get(
-  '/terminals',
+router.get('/terminals', authenticate, canManage, getTerminals);
+
+// POST /api/v1/devices - register a new device, auto-generates its token
+router.post('/', authenticate, canManage, validate(createDeviceSchema), createDevice);
+
+// DELETE /api/v1/devices/:id - remove a registered device
+router.delete(
+  '/:id',
   authenticate,
-  authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.HR),
-  getTerminals
+  authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  validateParams(uuidParamSchema),
+  deleteDevice
 );
 
 // Catches anything under /api/v1/devices/* that doesn't match the route above —

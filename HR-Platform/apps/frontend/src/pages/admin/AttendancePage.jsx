@@ -59,6 +59,9 @@ import {
   DoorClosed,
   CalendarOff,
   Paperclip,
+  Copy,
+  Check,
+  KeyRound,
 } from 'lucide-react';
 import employeeService from '../../services/employeeService';
 import attendanceService from '../../services/attendanceService';
@@ -1874,6 +1877,62 @@ export function AttendancePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSection, monitoringTab]);
 
+  // "Qurilma yaratish" paneli — nomi kiritilib yaratiladi, backend token
+  // generatsiya qilib qaytaradi, keyin shu token nusxalab olish uchun
+  // ko'rsatiladi (kameraga kiritish uchun kerak bo'ladi).
+  const [isCreateDeviceOpen, setIsCreateDeviceOpen] = useState(false);
+  const [newDeviceName, setNewDeviceName] = useState('');
+  const [isCreatingDevice, setIsCreatingDevice] = useState(false);
+  const [createdDevice, setCreatedDevice] = useState(null);
+  const [isTokenCopied, setIsTokenCopied] = useState(false);
+
+  const openCreateDevicePanel = () => {
+    setNewDeviceName('');
+    setCreatedDevice(null);
+    setIsTokenCopied(false);
+    setIsCreateDeviceOpen(true);
+  };
+
+  const closeCreateDevicePanel = () => setIsCreateDeviceOpen(false);
+
+  const handleCreateDevice = async () => {
+    if (!newDeviceName.trim()) {
+      toast.error('Qurilma nomini kiriting');
+      return;
+    }
+    setIsCreatingDevice(true);
+    try {
+      const device = await devicesService.createDevice(newDeviceName.trim());
+      setCreatedDevice(device);
+      refreshTerminals();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Qurilma yaratishda xatolik');
+    } finally {
+      setIsCreatingDevice(false);
+    }
+  };
+
+  const handleCopyToken = async (token) => {
+    try {
+      await navigator.clipboard.writeText(token);
+      setIsTokenCopied(true);
+      setTimeout(() => setIsTokenCopied(false), 2000);
+    } catch (err) {
+      toast.error('Nusxalashda xatolik — tokenni qo\'lda belgilab oling');
+    }
+  };
+
+  const handleDeleteDevice = async (device) => {
+    if (!window.confirm(`"${device.name}" qurilmasini o'chirmoqchimisiz? Kamera bu tokendan foydalanishni to'xtatadi.`)) return;
+    try {
+      await devicesService.deleteDevice(device.id);
+      toast.success("Qurilma o'chirildi");
+      refreshTerminals();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Qurilmani o'chirishda xatolik");
+    }
+  };
+
   return (
     <div className="animate-fade-in">
       {/* Sub toolbar */}
@@ -2296,6 +2355,14 @@ export function AttendancePage() {
                   <button type="button" className="attendance-pill" onClick={refreshTerminals} disabled={isTerminalsLoading}>
                     <RefreshCw size={15} strokeWidth={2.25} /> Ro'yxatni yangilash
                   </button>
+                  <Button
+                    variant="primary"
+                    className="attendance-primary-btn"
+                    icon={<Plus size={16} strokeWidth={2.5} />}
+                    onClick={openCreateDevicePanel}
+                  >
+                    Qurilma yaratish
+                  </Button>
                 </div>
               )}
             </div>
@@ -2748,34 +2815,73 @@ export function AttendancePage() {
                 <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Yuklanmoqda...</div>
               ) : terminals.length === 0 ? (
                 <EmptyState
-                  icon="📦"
-                  title="Hali qurilma faolligi qayd etilmagan"
-                  text="Kamera birinchi marta so'rov yuborganda bu yerda avtomatik paydo bo'ladi."
+                  icon={<Smartphone size={44} strokeWidth={1.5} />}
+                  title="Hali qurilma yo'q"
+                  text={'"Qurilma yaratish" tugmasi orqali yangi terminal qo\'shing — token avtomatik generatsiya qilinadi.'}
                 />
               ) : (
                 <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
                   <table className="table">
                     <thead>
                       <tr>
+                        <th>Nomi</th>
                         <th>Qurilma tokeni</th>
                         <th>Holati</th>
                         <th>Oxirgi faollik</th>
                         <th>Hodisalar (30 kun)</th>
                         <th>Tanilgan xodimlar</th>
+                        <th style={{ textAlign: 'right' }}>Amallar</th>
                       </tr>
                     </thead>
                     <tbody>
                       {terminals.map((t) => (
                         <tr key={t.deviceToken}>
-                          <td><span className="font-semibold">{t.deviceToken}</span></td>
                           <td>
-                            <Badge variant={t.isOnline ? 'success' : 'error'}>
-                              {t.isOnline ? 'Faol' : 'Nofaol'}
-                            </Badge>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                              <div className="attendance-device-icon">
+                                <Smartphone size={16} strokeWidth={2} />
+                              </div>
+                              {t.name ? (
+                                <span className="font-semibold">{t.name}</span>
+                              ) : (
+                                <Badge variant="info" title="Bu token 'Qurilma yaratish' orqali ro'yxatdan o'tmagan, kameradan avtomatik aniqlangan">
+                                  Ro'yxatdan o'tmagan
+                                </Badge>
+                              )}
+                            </div>
                           </td>
-                          <td>{format(new Date(t.lastSeen), 'yyyy-MM-dd HH:mm:ss')}</td>
+                          <td>
+                            <button
+                              type="button"
+                              className="attendance-token-chip"
+                              onClick={() => handleCopyToken(t.deviceToken)}
+                              title="Nusxalash"
+                            >
+                              <code>{t.deviceToken}</code>
+                              <Copy size={13} strokeWidth={2.25} />
+                            </button>
+                          </td>
+                          <td>
+                            {!t.lastSeen ? (
+                              <Badge variant="warning">Kutilmoqda</Badge>
+                            ) : (
+                              <Badge variant={t.isOnline ? 'success' : 'error'}>
+                                {t.isOnline ? 'Faol' : 'Nofaol'}
+                              </Badge>
+                            )}
+                          </td>
+                          <td>{t.lastSeen ? format(new Date(t.lastSeen), 'yyyy-MM-dd HH:mm:ss') : '-'}</td>
                           <td>{t.events30d} ({t.accessEvents30d} tanilgan)</td>
                           <td>{t.matchedEmployees}</td>
+                          <td>
+                            <div className="table-actions" style={{ justifyContent: 'flex-end' }}>
+                              {t.id ? (
+                                <Button variant="ghost" size="sm" className="btn-icon" onClick={() => handleDeleteDevice(t)} title="O'chirish">
+                                  <Trash2 size={16} strokeWidth={2} />
+                                </Button>
+                              ) : '-'}
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -4124,6 +4230,76 @@ export function AttendancePage() {
           </div>
         </div>
       </Modal>
+
+      <SidePanel
+        isOpen={isCreateDeviceOpen}
+        onClose={closeCreateDevicePanel}
+        title="Qurilma yaratish"
+        footer={
+          createdDevice ? (
+            <Button variant="primary" className="attendance-primary-btn" onClick={closeCreateDevicePanel} style={{ width: '100%' }}>
+              Yopish
+            </Button>
+          ) : (
+            <div style={{ display: 'flex', width: '100%', gap: '0.75rem' }}>
+              <Button variant="outline" onClick={closeCreateDevicePanel} style={{ flex: 1 }}>
+                Bekor qilish
+              </Button>
+              <Button
+                variant="primary"
+                className="attendance-primary-btn"
+                onClick={handleCreateDevice}
+                disabled={isCreatingDevice}
+                style={{ flex: 1 }}
+              >
+                {isCreatingDevice ? 'Yaratilmoqda...' : 'Yaratish'}
+              </Button>
+            </div>
+          )
+        }
+      >
+        {createdDevice ? (
+          <div className="attendance-device-created">
+            <div className="attendance-device-created-icon">
+              <Check size={22} strokeWidth={2.5} />
+            </div>
+            <h3>"{createdDevice.name}" yaratildi</h3>
+            <p>
+              Quyidagi tokenni nusxalab, kameraning HTTP Listening (ISAPI) sozlamalariga kiriting.
+              Bu tokenni faqat shu yerda ko'rasiz — keyinroq kerak bo'lsa, ro'yxatdagi qatordan ham nusxalab olishingiz mumkin.
+            </p>
+            <div className="attendance-device-token-box">
+              <KeyRound size={16} strokeWidth={2} />
+              <code>{createdDevice.token}</code>
+              <button
+                type="button"
+                className="attendance-device-token-copy"
+                onClick={() => handleCopyToken(createdDevice.token)}
+                title="Nusxalash"
+              >
+                {isTokenCopied ? <Check size={15} strokeWidth={2.5} /> : <Copy size={15} strokeWidth={2} />}
+              </button>
+            </div>
+            <p className="attendance-device-endpoint">
+              Hodisa yuborish manzili: <code>/api/v1/devices/{createdDevice.token}/events</code>
+            </p>
+          </div>
+        ) : (
+          <div className="form-group">
+            <Input
+              label="Qurilma nomi"
+              name="deviceName"
+              placeholder="Masalan: Bosh kirish kamerasi"
+              value={newDeviceName}
+              onChange={(e) => setNewDeviceName(e.target.value)}
+              icon={<Smartphone size={15} strokeWidth={2} />}
+            />
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+              Nomi shu qurilmani Terminallar ro'yxatida tanib olish uchun — token avtomatik generatsiya qilinadi, qo'lda kiritilmaydi.
+            </p>
+          </div>
+        )}
+      </SidePanel>
     </div>
   );
 }
