@@ -4111,8 +4111,8 @@ button.attendance-pill {
 }
 
 .fine-template-type-pills {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 0.625rem;
   margin-bottom: 1.125rem;
 }
@@ -4120,9 +4120,10 @@ button.attendance-pill {
 .fine-template-type-pill {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.375rem;
   padding: 0.625rem 1rem;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-md);
   border: 1.5px solid color-mix(in srgb, var(--fine-pill-color) 35%, var(--border));
   background: color-mix(in srgb, var(--fine-pill-color) 14%, transparent);
   color: var(--fine-pill-color);
