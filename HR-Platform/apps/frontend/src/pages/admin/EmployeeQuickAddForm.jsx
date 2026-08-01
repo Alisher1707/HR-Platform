@@ -11,7 +11,6 @@ import {
   Briefcase,
   Building2,
   Camera,
-  CalendarDays,
   LayoutGrid,
   Network,
   Search,
@@ -23,15 +22,12 @@ import Input from '../../components/ui/Input';
 import SidePanel from '../../components/ui/SidePanel';
 import useToast from '../../hooks/useToast';
 import employeeService from '../../services/employeeService';
-import workScheduleService from '../../services/workScheduleService';
-import ScheduleFormPanel from './ScheduleFormPanel';
 import { BranchLocationPicker } from './OrganizationPage';
 import { CheckCircle2, Circle } from 'lucide-react';
 
 // Sarlavha + tagliq (X) + footer bilan har bir qo'shimcha jonli-qo'shish
-// paneli (Filial/Bo'lim/Lavozim) uchun bir xil "docked card" qobig'i —
-// ScheduleFormPanel'ning o'zi ishlatadigan .qa-schedule-panel-* klasslari
-// bilan bir xil ko'rinish, shunda barchasi bir-biriga mos qatorda ochiladi.
+// paneli (Filial/Bo'lim/Lavozim) uchun bir xil "docked card" qobig'i,
+// shunda barchasi bir-biriga mos qatorda ochiladi.
 function DockedFormCard({ title, onClose, onSave, saveLabel = 'Saqlash', children }) {
   return (
     <div className="qa-schedule-panel" onClick={(e) => e.stopPropagation()}>
@@ -54,9 +50,9 @@ function DockedFormCard({ title, onClose, onSave, saveLabel = 'Saqlash', childre
   );
 }
 
-// Filiallar/Bo'lim/Lavozim/Jadval uchun bitta umumiy qidiruv+belgilash
-// popover — har biri o'z sarlavhasi, ikonasi va ro'yxati bilan shu orqali
-// chiziladi, shunda barcha to'rttasi bir xil ko'rinishda ishlaydi.
+// Filiallar/Bo'lim/Lavozim uchun bitta umumiy qidiruv+belgilash popover —
+// har biri o'z sarlavhasi, ikonasi va ro'yxati bilan shu orqali chiziladi,
+// shunda barcha uchtasi bir xil ko'rinishda ishlaydi.
 function FieldPicker({ title, icon, options, search, onSearchChange, isSelected, onToggle, onClose, emptyText }) {
   return (
     <div className="qa-filial-picker" onClick={(e) => e.stopPropagation()}>
@@ -102,9 +98,9 @@ function FieldPicker({ title, icon, options, search, onSearchChange, isSelected,
  * Shared Modal/SidePanel'dan mustaqil (o'lchami boshqacha bo'lgani uchun),
  * shuning uchun o'zining portal/overlay'ini o'zi boshqaradi.
  * Ism/familiya/filial/bo'lim/lavozim/telefon/username real backend'ga
- * saqlanadi; Jadval maydoni ham work_schedules API orqali real biriktiriladi
- * (Otasining ismi va bir nechta Filial hali employees jadvalida joyi yo'q,
- * shu ikkitasi hozircha yuborilmaydi).
+ * saqlanadi (Otasining ismi va bir nechta Filial hali employees jadvalida
+ * joyi yo'q, shu ikkitasi hozircha yuborilmaydi). Jadval biriktirish bu
+ * yerdan olib tashlangan — endi faqat "Ish jadvallari" bo'limida boshqariladi.
  */
 export function EmployeeQuickAddPanel({
   isOpen,
@@ -189,13 +185,8 @@ export function EmployeeQuickAddPanel({
   const [department, setDepartment] = useState('');
   const [position, setPosition] = useState('');
 
-  const [schedules, setSchedules] = useState([]);
-  const [scheduleId, setScheduleId] = useState('');
-  const [initialScheduleId, setInitialScheduleId] = useState('');
-  const [isScheduleAddOpen, setIsScheduleAddOpen] = useState(false);
-
-  // 'filial' | 'bolim' | 'lavozim' | 'jadval' | null — bir vaqtda faqat
-  // bitta qidiruv+belgilash popover ochiladi.
+  // 'filial' | 'bolim' | 'lavozim' | null — bir vaqtda faqat bitta
+  // qidiruv+belgilash popover ochiladi.
   const [openPicker, setOpenPicker] = useState(null);
   const [pickerSearch, setPickerSearch] = useState('');
   const openPickerFor = (key) => {
@@ -235,23 +226,11 @@ export function EmployeeQuickAddPanel({
     setSelectedBranches([]);
     setDepartment('');
     setPosition('');
-    setScheduleId('');
-    setInitialScheduleId('');
     setOpenPicker(null);
     setPickerSearch('');
-    setIsScheduleAddOpen(false);
     setIsBranchCreateOpen(false);
     setIsDepartmentCreateOpen(false);
     setIsPositionCreateOpen(false);
-  }, [isOpen]);
-
-  // Panel ochilganda real jadvallar ro'yxatini backend'dan oladi.
-  useEffect(() => {
-    if (!isOpen) return;
-    workScheduleService.getSchedules()
-      .then(setSchedules)
-      .catch(() => toast.error("Jadvallar ro'yxatini yuklashda xatolik"));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   // Tahrirlash rejimida ochilganda mavjud xodim ma'lumotlari bilan
@@ -267,15 +246,6 @@ export function EmployeeQuickAddPanel({
     setDepartment(employee.department || '');
     setPosition(employee.position || '');
   }, [isOpen, employee]);
-
-  // Xodim biriktirilgan jadvalni topib tanlangan qilib belgilaydi — jadvallar
-  // ro'yxati kelgach ham qayta ishga tushishi uchun alohida effekt.
-  useEffect(() => {
-    if (!isOpen || !employee || schedules.length === 0) return;
-    const current = schedules.find((s) => s.employeeIds.includes(employee.id));
-    setScheduleId(current ? current.id : '');
-    setInitialScheduleId(current ? current.id : '');
-  }, [isOpen, employee, schedules]);
 
   if (!isOpen) return null;
 
@@ -315,48 +285,6 @@ export function EmployeeQuickAddPanel({
   const branchOptions = branches.filter((b) => matchesSearch(b.name)).map((b) => ({ id: b.id, name: b.name, extra: b.radius }));
   const departmentOptions = departments.filter((d) => matchesSearch(d.name)).map((d) => ({ id: d.id, name: d.name }));
   const positionOptions = positions.filter((p) => matchesSearch(p.name)).map((p) => ({ id: p.id, name: p.name }));
-  const scheduleOptions = schedules.filter((s) => matchesSearch(s.name)).map((s) => ({ id: s.id, name: s.name }));
-  const selectedScheduleName = schedules.find((s) => s.id === scheduleId)?.name || '';
-
-  const handleScheduleModalClose = () => {
-    setIsScheduleAddOpen(false);
-  };
-
-  const openScheduleAdd = () => {
-    if (!isEditing) {
-      toast.info("Yangi jadval yaratish uchun avval xodimni saqlang");
-      return;
-    }
-    setIsScheduleAddOpen(true);
-  };
-
-  const handleScheduleSave = async (scheduleForm) => {
-    const name = scheduleForm.name.trim();
-    if (!name) return;
-    try {
-      const created = await workScheduleService.createSchedule({
-        name,
-        type: scheduleForm.type,
-        startDate: scheduleForm.startDate,
-        cycleDays: scheduleForm.cycle,
-        countOvertime: scheduleForm.countOvertime,
-        deductBreak: scheduleForm.deductBreak,
-        extendedHours: scheduleForm.extendedHours,
-        limitType: scheduleForm.limitType,
-        limitHours: scheduleForm.limitHours,
-        shiftLimitHours: scheduleForm.shiftLimitHours,
-        day: scheduleForm.day,
-        employeeIds: [employee.id],
-      });
-      setSchedules((prev) => [created, ...prev]);
-      setScheduleId(created.id);
-      setInitialScheduleId(created.id);
-      toast.success("Yangi jadval yaratildi va xodimga biriktirildi");
-      handleScheduleModalClose();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Jadval yaratishda xatolik');
-    }
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -369,8 +297,7 @@ export function EmployeeQuickAddPanel({
     setSubmitting(true);
     try {
       // Otasining ismi va bir nechta filial hozircha employees jadvalida
-      // joyi yo'q — shu ikkitasi yuborilmaydi. Jadval alohida, employee
-      // saqlangach setEmployeeSchedule orqali biriktiriladi (pastda).
+      // joyi yo'q — shu ikkitasi yuborilmaydi.
       const payload = {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
@@ -381,8 +308,6 @@ export function EmployeeQuickAddPanel({
         telegramUsername: username || null,
       };
 
-      let targetEmployeeId = employee?.id;
-
       if (isEditing) {
         await employeeService.updateEmployee(employee.id, payload);
         if (photoFile) {
@@ -391,15 +316,11 @@ export function EmployeeQuickAddPanel({
         toast.success('Xodim ma\'lumotlari muvaffaqiyatli yangilandi!');
       } else {
         const created = await employeeService.createEmployee(payload);
-        targetEmployeeId = created?.employee?.id;
-        if (photoFile && targetEmployeeId) {
-          await employeeService.uploadPhoto(targetEmployeeId, photoFile);
+        const newEmployeeId = created?.employee?.id;
+        if (photoFile && newEmployeeId) {
+          await employeeService.uploadPhoto(newEmployeeId, photoFile);
         }
         toast.success('Yangi xodim muvaffaqiyatli qo\'shildi!');
-      }
-
-      if (targetEmployeeId && scheduleId !== initialScheduleId) {
-        await workScheduleService.setEmployeeSchedule(targetEmployeeId, scheduleId || null);
       }
 
       onSubmitSuccess?.();
@@ -596,24 +517,6 @@ export function EmployeeQuickAddPanel({
                 </button>
               </div>
             </div>
-
-            <div className="qa-field">
-              <label className="qa-label">Jadval</label>
-              <div className="qa-select-row">
-                <button type="button" className="qa-input qa-select-trigger" onClick={() => openPickerFor('jadval')}>
-                  <span>{selectedScheduleName || 'Jadval tanlang'}</span>
-                  <ChevronRight size={15} strokeWidth={2.25} />
-                </button>
-                <button
-                  type="button"
-                  className="qa-add-btn"
-                  onClick={openScheduleAdd}
-                  aria-label="Yangi jadval qo'shish"
-                >
-                  <Plus size={16} strokeWidth={2.5} />
-                </button>
-              </div>
-            </div>
           </div>
 
           <Button
@@ -671,27 +574,6 @@ export function EmployeeQuickAddPanel({
           emptyText="Lavozim topilmadi"
         />
       )}
-
-      {openPicker === 'jadval' && (
-        <FieldPicker
-          title="Jadval tanlang"
-          icon={<CalendarDays size={15} strokeWidth={2} />}
-          options={scheduleOptions}
-          search={pickerSearch}
-          onSearchChange={setPickerSearch}
-          isSelected={(opt) => scheduleId === opt.id}
-          onToggle={(opt) => setScheduleId(opt.id)}
-          onClose={closePicker}
-          emptyText="Jadval topilmadi"
-        />
-      )}
-
-      <ScheduleFormPanel
-        isOpen={isScheduleAddOpen}
-        onClose={handleScheduleModalClose}
-        onSave={handleScheduleSave}
-        title="Yangi jadval qo'shish"
-      />
 
       {isBranchCreateOpen && (
         <DockedFormCard
