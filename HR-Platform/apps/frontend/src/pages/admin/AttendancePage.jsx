@@ -488,11 +488,19 @@ function SearchableSelect({
   const [search, setSearch] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [newName, setNewName] = useState('');
+  const [popupPos, setPopupPos] = useState({ top: 0, left: 0, width: 240 });
   const wrapperRef = useRef(null);
+  const popupRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+      // DatePicker'lar kabi o'z ichidagi elementlar ham document.body'ga
+      // alohida portal qilib ochilishi mumkin (masalan "Yangi qo'shish"
+      // shakli ichida) — shu sabab wrapper VA panel ikkalasi ham tekshiriladi.
+      if (
+        wrapperRef.current && !wrapperRef.current.contains(e.target) &&
+        popupRef.current && !popupRef.current.contains(e.target)
+      ) {
         setIsOpen(false);
         setIsCreating(false);
       }
@@ -500,6 +508,17 @@ function SearchableSelect({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Panel endi document.body'ga portal qilinadi (Card'lar orasidagi z-index/
+  // stacking-context ziddiyati sabab pastdagi kartaning orqasida ko'rinib
+  // qolmasligi uchun) — shu sabab ochilishdan oldin ekrandagi joyi hisoblanadi.
+  const toggleOpen = () => {
+    if (!isOpen && wrapperRef.current) {
+      const rect = wrapperRef.current.getBoundingClientRect();
+      setPopupPos({ top: rect.bottom + 8, left: rect.left, width: rect.width });
+    }
+    setIsOpen((prev) => !prev);
+  };
 
   const selectedValues = multiple ? selected : (selected ? [selected] : []);
 
@@ -546,7 +565,7 @@ function SearchableSelect({
             ? `attendance-pill ${isOpen ? 'active' : ''}`
             : `attendance-schedule-trigger ${isOpen ? 'open' : ''}`
         }
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={toggleOpen}
       >
         {TriggerIcon && (
           <TriggerIcon size={variant === 'pill' ? 15 : 16} style={triggerIconMeta ? { color: triggerIconMeta.color } : undefined} />
@@ -557,8 +576,12 @@ function SearchableSelect({
         <ChevronDown size={variant === 'pill' ? 14 : 16} />
       </button>
 
-      {isOpen && (
-        <div className="attendance-schedule-panel">
+      {isOpen && ReactDOM.createPortal(
+        <div
+          ref={popupRef}
+          className="attendance-schedule-panel"
+          style={{ position: 'fixed', top: popupPos.top, left: popupPos.left, right: 'auto', width: popupPos.width }}
+        >
           {isCreating ? (
             <div className="fine-type-select-create">
               <input
@@ -645,7 +668,8 @@ function SearchableSelect({
               )}
             </>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
