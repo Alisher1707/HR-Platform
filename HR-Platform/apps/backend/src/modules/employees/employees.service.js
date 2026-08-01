@@ -209,6 +209,7 @@ export async function getAllEmployees(filters = {}, pagination = {}) {
       contract_start_date: row.contract_start_date,
       contract_end_date: row.contract_end_date,
       person_id: row.person_id,
+      current_presence: row.current_presence,
       created_at: row.created_at,
       updated_at: row.updated_at,
       created_by: row.created_by ? {
@@ -279,6 +280,7 @@ export async function getEmployeeById(id) {
     contract_start_date: row.contract_start_date,
     contract_end_date: row.contract_end_date,
     person_id: row.person_id,
+    current_presence: row.current_presence,
     created_at: row.created_at,
     updated_at: row.updated_at,
     created_by: row.created_by ? {

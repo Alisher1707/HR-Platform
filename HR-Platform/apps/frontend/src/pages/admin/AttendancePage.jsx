@@ -2034,18 +2034,14 @@ export function AttendancePage() {
                   <div>
                     <div className="attendance-detail-title">
                       {detailEmployee.first_name} {detailEmployee.last_name}
-                      {(() => {
-                        const dayRecords = recordsByEmployee[detailEmployee.id] || [];
-                        if (dayRecords.length === 0) return null;
-                        const lastRecord = dayRecords[dayRecords.length - 1];
-                        const isInside = lastRecord.type === 'keldi';
-                        return (
-                          <span className={`attendance-presence-badge ${isInside ? 'inside' : 'outside'}`}>
-                            {isInside ? <DoorOpen size={13} strokeWidth={2.25} /> : <DoorClosed size={13} strokeWidth={2.25} />}
-                            {isInside ? 'Ichkarida' : 'Tashqarida'}
-                          </span>
-                        );
-                      })()}
+                      {detailEmployee.current_presence && (
+                        <span className={`attendance-presence-badge ${detailEmployee.current_presence === 'ichkarida' ? 'inside' : 'outside'}`}>
+                          {detailEmployee.current_presence === 'ichkarida'
+                            ? <DoorOpen size={13} strokeWidth={2.25} />
+                            : <DoorClosed size={13} strokeWidth={2.25} />}
+                          {detailEmployee.current_presence === 'ichkarida' ? 'Ichkarida' : 'Tashqarida'}
+                        </span>
+                      )}
                     </div>
                     <div className="attendance-detail-subtitle">
                       {format(selectedDate, 'yyyy-MM-dd')} ga tegishli belgilar

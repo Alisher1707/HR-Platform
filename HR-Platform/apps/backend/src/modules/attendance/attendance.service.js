@@ -139,6 +139,23 @@ export async function getAttendanceReport({ startDate, endDate, branches, depart
 }
 
 /**
+ * Recomputes an employee's "ichkarida/tashqarida" snapshot from their truly
+ * most recent attendance record (by recorded_at — a manual entry can be
+ * backdated, so trusting "whatever type was just inserted/deleted" would be
+ * wrong). Called after every insert/delete (device or manual) so it never
+ * goes stale; null when the employee has no attendance records at all.
+ */
+export async function recomputeEmployeePresence(employeeId) {
+  const { rows } = await query(
+    `SELECT type FROM attendance_records WHERE employee_id = $1 ORDER BY recorded_at DESC LIMIT 1`,
+    [employeeId]
+  );
+  const presence = rows.length > 0 ? (rows[0].type === 'keldi' ? 'ichkarida' : 'tashqarida') : null;
+  await query('UPDATE employees SET current_presence = $1 WHERE id = $2', [presence, employeeId]);
+  return presence;
+}
+
+/**
  * Create a manual attendance record (source='manual').
  */
 export async function createManualAttendance({ employeeId, type, recordedAt, notes, createdBy }) {
@@ -161,6 +178,8 @@ export async function createManualAttendance({ employeeId, type, recordedAt, not
     [employeeId, type, recordedAt, notes || null, createdBy, isLate, isEarly, scheduleId]
   );
 
+  await recomputeEmployeePresence(employeeId);
+
   return result.rows[0];
 }
 
@@ -169,7 +188,7 @@ export async function createManualAttendance({ employeeId, type, recordedAt, not
  * they reflect what the camera actually saw and shouldn't be editable here.
  */
 export async function deleteAttendance(id) {
-  const existing = await query('SELECT source FROM attendance_records WHERE id = $1', [id]);
+  const existing = await query('SELECT source, employee_id FROM attendance_records WHERE id = $1', [id]);
 
   if (existing.rows.length === 0) {
     const error = new Error('Davomat yozuvi topilmadi');
@@ -184,6 +203,7 @@ export async function deleteAttendance(id) {
   }
 
   await query('DELETE FROM attendance_records WHERE id = $1', [id]);
+  await recomputeEmployeePresence(existing.rows[0].employee_id);
 
   return { success: true, id };
 }

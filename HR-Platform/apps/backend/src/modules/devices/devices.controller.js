@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { query } from '../../config/database.js';
 import { computeLateness, computeEarlyLeave } from '../schedules/schedules.service.js';
+import { recomputeEmployeePresence } from '../attendance/attendance.service.js';
 import { generateRandomString } from '../../shared/utils/crypto.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -216,6 +217,8 @@ async function recordAttendance(employeeId, deviceToken, rawPersonId, explicitTy
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
     [employeeId, type, deviceToken, rawPersonId, recordedAt, isLate, isEarly, scheduleId]
   );
+
+  await recomputeEmployeePresence(employeeId);
 
   return { skipped: false, type, isLate, isEarly };
 }
