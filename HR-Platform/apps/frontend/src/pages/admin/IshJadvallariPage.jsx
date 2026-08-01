@@ -555,6 +555,9 @@ export function IshJadvallariPage() {
   const handleSave = async () => {
     if (!form.name.trim()) {
       toast.error('Jadval nomini kiriting');
+      const nameField = document.getElementById('scheduleName');
+      nameField?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      nameField?.focus();
       return;
     }
     if (form.employeeIds.length === 0) {
@@ -932,7 +935,8 @@ export function IshJadvallariPage() {
           <Input
             label="Nomi"
             name="scheduleName"
-            placeholder="Jadval nomini kiriting"
+            placeholder="Masalan: Ertalabki smena"
+            required
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             disabled={isReadOnly}
