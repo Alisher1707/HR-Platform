@@ -58,6 +58,43 @@ function findPersonIdInJson(value) {
   return null;
 }
 
+/**
+ * Same recursive walk as findPersonIdInJson, but for the camera's own
+ * check-in/check-out signal (Hikvision sends "attendanceStatus": "checkIn"
+ * or "checkOut" on newer firmware) — when present, this is authoritative
+ * and overrides the "first scan of the day = keldi" fallback heuristic.
+ */
+function findAttendanceStatusInJson(value) {
+  if (value === null || value === undefined) return null;
+
+  if (typeof value === 'string') {
+    try {
+      return findAttendanceStatusInJson(JSON.parse(value));
+    } catch {
+      return null;
+    }
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findAttendanceStatusInJson(item);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  if (typeof value === 'object') {
+    if (value.attendanceStatus) return String(value.attendanceStatus);
+
+    for (const nested of Object.values(value)) {
+      const found = findAttendanceStatusInJson(nested);
+      if (found) return found;
+    }
+  }
+
+  return null;
+}
+
 /** Gathers every text blob (multipart fields, raw body, text/xml/json file parts) worth scanning. */
 function getCandidateTexts(req) {
   const candidates = [];
@@ -97,6 +134,23 @@ function isHeartbeat(candidates) {
   return candidates.some((text) => /heartbeat/i.test(text));
 }
 
+/**
+ * Pulls the camera's own attendanceStatus and maps it to keldi/ketdi.
+ * Returns null when the field is absent (older firmware/other device
+ * types) — recordAttendance then falls back to its own heuristic.
+ */
+function extractAttendanceType(candidates) {
+  for (const text of candidates) {
+    const status = findAttendanceStatusInJson(text);
+    if (status) {
+      const normalized = status.toLowerCase();
+      if (normalized.includes('out')) return 'ketdi';
+      if (normalized.includes('in')) return 'keldi';
+    }
+  }
+  return null;
+}
+
 async function findEmployeeByPersonId(personId) {
   const result = await query(
     'SELECT id, first_name, last_name FROM employees WHERE person_id = $1 LIMIT 1',
@@ -124,12 +178,13 @@ async function logDeviceEvent(deviceToken, eventType, personId, employeeId) {
 }
 
 /**
- * First scan of the day = keldi, next = ketdi, anything after that keeps
- * refreshing ketdi (treated as "left again"). Scans within 60s of the
- * previous one for the same employee are ignored as duplicates — Hikvision
- * terminals fire repeatedly while a face stays in frame.
+ * When the camera reports its own attendanceStatus (checkIn/checkOut),
+ * that's used directly. Otherwise falls back to: first scan of the day =
+ * keldi, next = ketdi, anything after that keeps refreshing ketdi. Scans
+ * within 60s of the previous one for the same employee are ignored as
+ * duplicates — Hikvision terminals fire repeatedly while a face stays in frame.
  */
-async function recordAttendance(employeeId, deviceToken, rawPersonId) {
+async function recordAttendance(employeeId, deviceToken, rawPersonId, explicitType) {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
@@ -148,7 +203,7 @@ async function recordAttendance(employeeId, deviceToken, rawPersonId) {
   }
 
   const hasKeldi = rows.some((r) => r.type === 'keldi');
-  const type = !hasKeldi ? 'keldi' : 'ketdi';
+  const type = explicitType || (!hasKeldi ? 'keldi' : 'ketdi');
 
   const recordedAt = new Date();
   const { isLate, isEarly, scheduleId } = type === 'keldi'
@@ -223,6 +278,9 @@ export async function receiveDeviceEvent(req, res) {
 
   console.log('Aniqlangan person_id:', personId);
 
+  const explicitType = extractAttendanceType(candidates);
+  console.log('Kameraning o\'z belgisi (attendanceStatus):', explicitType || "(yo'q — standart mantiq ishlatiladi)");
+
   try {
     const employee = await findEmployeeByPersonId(personId);
 
@@ -233,7 +291,7 @@ export async function receiveDeviceEvent(req, res) {
       return res.status(200).json({ success: true });
     }
 
-    const result = await recordAttendance(employee.id, deviceToken, personId);
+    const result = await recordAttendance(employee.id, deviceToken, personId, explicitType);
 
     if (result.skipped) {
       console.log(`Xodim: ${employee.first_name} ${employee.last_name} — yozilmadi (${result.reason})`);
