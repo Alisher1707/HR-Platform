@@ -488,7 +488,7 @@ function SearchableSelect({
   const [search, setSearch] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [newName, setNewName] = useState('');
-  const [popupPos, setPopupPos] = useState({ top: 0, left: 0, width: 240 });
+  const [popupPos, setPopupPos] = useState({ top: 0, left: 0, width: 240, maxHeight: 320 });
   const wrapperRef = useRef(null);
   const popupRef = useRef(null);
 
@@ -512,10 +512,23 @@ function SearchableSelect({
   // Panel endi document.body'ga portal qilinadi (Card'lar orasidagi z-index/
   // stacking-context ziddiyati sabab pastdagi kartaning orqasida ko'rinib
   // qolmasligi uchun) — shu sabab ochilishdan oldin ekrandagi joyi hisoblanadi.
+  // Trigger oyna (modal) pastiga yaqin bo'lsa, pastda joy yetarli bo'lmasligi
+  // mumkin — shu holatda panel yuqoriga ochiladi (aks holda ko'rinmas joyga
+  // chiqib, tanlov ro'yxati "bo'sh" ko'rinib qolar edi).
   const toggleOpen = () => {
     if (!isOpen && wrapperRef.current) {
       const rect = wrapperRef.current.getBoundingClientRect();
-      setPopupPos({ top: rect.bottom + 8, left: rect.left, width: rect.width });
+      const margin = 8;
+      const minNeeded = 220;
+      const spaceBelow = window.innerHeight - rect.bottom - margin;
+      const spaceAbove = rect.top - margin;
+      const openAbove = spaceBelow < minNeeded && spaceAbove > spaceBelow;
+
+      setPopupPos(
+        openAbove
+          ? { bottom: window.innerHeight - rect.top + margin, top: undefined, left: rect.left, width: rect.width, maxHeight: spaceAbove }
+          : { top: rect.bottom + margin, bottom: undefined, left: rect.left, width: rect.width, maxHeight: spaceBelow }
+      );
     }
     setIsOpen((prev) => !prev);
   };
@@ -580,7 +593,16 @@ function SearchableSelect({
         <div
           ref={popupRef}
           className="attendance-schedule-panel"
-          style={{ position: 'fixed', top: popupPos.top, left: popupPos.left, right: 'auto', width: popupPos.width }}
+          style={{
+            position: 'fixed',
+            top: popupPos.top,
+            bottom: popupPos.bottom,
+            left: popupPos.left,
+            right: 'auto',
+            width: popupPos.width,
+            maxHeight: popupPos.maxHeight,
+            overflowY: 'auto',
+          }}
         >
           {isCreating ? (
             <div className="fine-type-select-create">
