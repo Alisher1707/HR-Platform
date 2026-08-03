@@ -37,7 +37,7 @@ export async function listAttendance({ date, startDate, endDate, employeeId } = 
   const result = await query(
     `SELECT
        ar.id, ar.employee_id, ar.type, ar.recorded_at, ar.source, ar.notes,
-       ar.device_token, ar.created_at, ar.is_late, ar.is_early_leave, ar.schedule_id,
+       ar.device_token, ar.created_at, ar.is_late, ar.is_after_hours, ar.is_early_leave, ar.schedule_id,
        e.first_name, e.last_name, e.position, e.branch, e.photo_url
      FROM attendance_records ar
      JOIN employees e ON e.id = ar.employee_id
@@ -166,16 +166,16 @@ export async function createManualAttendance({ employeeId, type, recordedAt, not
     throw error;
   }
 
-  const { isLate, isEarly, scheduleId } = type === 'keldi'
+  const { isLate, isAfterHours, isEarly, scheduleId } = type === 'keldi'
     ? { ...(await computeLateness(employeeId, recordedAt)), isEarly: null }
-    : { isLate: null, ...(await computeEarlyLeave(employeeId, recordedAt)) };
+    : { isLate: null, isAfterHours: null, ...(await computeEarlyLeave(employeeId, recordedAt)) };
 
   const result = await query(
     `INSERT INTO attendance_records
-       (employee_id, type, recorded_at, source, notes, created_by, is_late, is_early_leave, schedule_id)
-     VALUES ($1, $2, $3, 'manual', $4, $5, $6, $7, $8)
-     RETURNING id, employee_id, type, recorded_at, source, notes, created_at, is_late, is_early_leave`,
-    [employeeId, type, recordedAt, notes || null, createdBy, isLate, isEarly, scheduleId]
+       (employee_id, type, recorded_at, source, notes, created_by, is_late, is_after_hours, is_early_leave, schedule_id)
+     VALUES ($1, $2, $3, 'manual', $4, $5, $6, $7, $8, $9)
+     RETURNING id, employee_id, type, recorded_at, source, notes, created_at, is_late, is_after_hours, is_early_leave`,
+    [employeeId, type, recordedAt, notes || null, createdBy, isLate, isAfterHours, isEarly, scheduleId]
   );
 
   await recomputeEmployeePresence(employeeId);

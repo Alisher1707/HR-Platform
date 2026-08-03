@@ -310,9 +310,15 @@ function timeStringToMinutes(timeStr) {
 /**
  * Compares a "keldi" scan's time-of-day against the cycle day (Kun N) that
  * applies on the scan's date, falling back to DEFAULT_START_TIME when no
- * schedule/day config is assigned. Returns { isLate, scheduleId }. isLate
- * is only null when that cycle day is explicitly marked a non-work day —
- * there's genuinely nothing to compare against.
+ * schedule/day config is assigned. Returns { isLate, isAfterHours, scheduleId }.
+ * isLate is only null when that cycle day is explicitly marked a non-work
+ * day — there's genuinely nothing to compare against. isAfterHours is a
+ * separate flag (only meaningful when isLate is true): it's set when the
+ * scan happened after that day's own END time too, i.e. the whole work
+ * day was already over — Davomat shows plain "Keldi" instead of "Kech
+ * keldi" for those, since "late" stops being the right word once the
+ * shift itself has ended. is_late itself keeps its old meaning for
+ * reports/statistika.
  */
 export async function computeLateness(employeeId, recordedAt) {
   const schedule = await getActiveScheduleForEmployee(employeeId);
@@ -320,13 +326,18 @@ export async function computeLateness(employeeId, recordedAt) {
   const day = schedule ? await getScheduleDay(schedule.id, getDayNumberForDate(schedule, scanDate)) : null;
 
   if (day && !day.is_work_day) {
-    return { isLate: null, scheduleId: schedule.id };
+    return { isLate: null, isAfterHours: null, scheduleId: schedule.id };
   }
 
   const scanMinutes = minutesSinceMidnight(scanDate);
-  const scheduleMinutes = timeStringToMinutes(day?.start_time || DEFAULT_START_TIME);
+  const startMinutes = timeStringToMinutes(day?.start_time || DEFAULT_START_TIME);
+  const endMinutes = timeStringToMinutes(day?.end_time || DEFAULT_END_TIME);
 
-  return { isLate: scanMinutes > scheduleMinutes, scheduleId: schedule ? schedule.id : null };
+  return {
+    isLate: scanMinutes > startMinutes,
+    isAfterHours: scanMinutes > endMinutes,
+    scheduleId: schedule ? schedule.id : null,
+  };
 }
 
 /**

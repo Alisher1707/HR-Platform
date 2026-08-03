@@ -207,15 +207,15 @@ async function recordAttendance(employeeId, deviceToken, rawPersonId, explicitTy
   const type = explicitType || (!hasKeldi ? 'keldi' : 'ketdi');
 
   const recordedAt = new Date();
-  const { isLate, isEarly, scheduleId } = type === 'keldi'
+  const { isLate, isAfterHours, isEarly, scheduleId } = type === 'keldi'
     ? { ...(await computeLateness(employeeId, recordedAt)), isEarly: null }
-    : { isLate: null, ...(await computeEarlyLeave(employeeId, recordedAt)) };
+    : { isLate: null, isAfterHours: null, ...(await computeEarlyLeave(employeeId, recordedAt)) };
 
   await query(
     `INSERT INTO attendance_records
-       (employee_id, type, device_token, raw_person_id, recorded_at, is_late, is_early_leave, schedule_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-    [employeeId, type, deviceToken, rawPersonId, recordedAt, isLate, isEarly, scheduleId]
+       (employee_id, type, device_token, raw_person_id, recorded_at, is_late, is_after_hours, is_early_leave, schedule_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [employeeId, type, deviceToken, rawPersonId, recordedAt, isLate, isAfterHours, isEarly, scheduleId]
   );
 
   await recomputeEmployeePresence(employeeId);
