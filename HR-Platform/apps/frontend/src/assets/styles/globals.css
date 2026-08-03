@@ -3374,7 +3374,12 @@ button.attendance-pill {
      ham ishlatilgani uchun (masalan "Jarima yaratish" > Jazo turi), aks
      holda panel modal foni ortida chizilib, "bo'sh" ko'rinib qolar edi. */
   z-index: 1100;
-  animation: fadeInDown 0.16s ease;
+  /* ESLATMA: bu yerda animation ATAYLAB yo'q. transform ishlatuvchi kirish
+     animatsiyasi (masalan fadeInDown) position:fixed + document.body'ga
+     portal qilingan elementda Chrome'da "birinchi frame'da chizilmaydi"
+     degan taniqli bug'ga sabab bo'ladi — DevTools ochilganda (viewport
+     o'lchami o'zgarib, majburiy repaint bo'lgani uchun) ko'rinib, oddiy
+     holatda esa umuman ko'rinmay qolgan edi. */
 }
 
 .attendance-schedule-search {

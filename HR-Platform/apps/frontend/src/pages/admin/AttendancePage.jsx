@@ -189,6 +189,15 @@ const FINE_TEMPLATE_TYPES = [
 
 const CUSTOM_FINE_TYPE_COLOR = '#6366f1';
 
+// Har bir "Jazo turi" (fine_types) elementiga barqaror, alohida rang beradi —
+// yaratilish tartibi bo'yicha shu palitradan aylanma tanlanadi (id o'zgarmas
+// bo'lgani uchun rang ham doim bir xil qoladi).
+const FINE_TYPE_COLOR_PALETTE = ['#6366f1', '#f43f5e', '#f97316', '#0ea5e9', '#10b981', '#a855f7', '#ec4899', '#eab308'];
+function getFineTypeColor(id, fineTypes) {
+  const idx = fineTypes.findIndex((t) => t.id === id);
+  return idx >= 0 ? FINE_TYPE_COLOR_PALETTE[idx % FINE_TYPE_COLOR_PALETTE.length] : CUSTOM_FINE_TYPE_COLOR;
+}
+
 const FINE_TIME_LIMIT_OPTIONS = ['00:05', '00:10', '00:15', '00:20', '00:30', '00:45', '01:00']
   .map((v) => ({ value: v, label: v }));
 
@@ -1581,7 +1590,7 @@ export function AttendancePage() {
     () => fineTypes.map((t) => ({ value: t.id, label: t.name })),
     [fineTypes]
   );
-  const getPunishmentTypeIcon = () => ({ Icon: AlertTriangle, color: CUSTOM_FINE_TYPE_COLOR });
+  const getPunishmentTypeIcon = (opt) => ({ Icon: AlertTriangle, color: getFineTypeColor(opt.value, fineTypes) });
 
   const [finePolicies, setFinePolicies] = useState([]);
   const [isLoadingFinePolicies, setIsLoadingFinePolicies] = useState(false);
@@ -1624,6 +1633,7 @@ export function AttendancePage() {
     try {
       const created = await fineService.createFineType(trimmed);
       setFineTypes((prev) => (prev.some((t) => t.id === created.id) ? prev : [...prev, created]));
+      toast.success(`"${created.name}" jazo turi qo'shildi`);
       return created.id;
     } catch (err) {
       toast.error(err.response?.data?.message || 'Jazo turi yaratishda xatolik');
@@ -3419,6 +3429,35 @@ export function AttendancePage() {
                   <Settings size={15} />
                 </button>
               </div>
+            </Card>
+          )}
+
+          {moliyaTab === 'jarimalar' && !isAssignedFinesOpen && (
+            <Card className="mb-6">
+              <div className="attendance-section-header-title" style={{ marginBottom: '0.75rem' }}>
+                <h3>Jazo turlari</h3>
+              </div>
+              {fineTypes.length > 0 ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  {fineTypes.map((t) => {
+                    const color = getFineTypeColor(t.id, fineTypes);
+                    return (
+                      <span
+                        key={t.id}
+                        className="fine-template-type-pill"
+                        style={{ '--fine-pill-color': color, cursor: 'default' }}
+                      >
+                        <AlertTriangle size={13} strokeWidth={2.25} />
+                        {t.name}
+                      </span>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', margin: 0 }}>
+                  Hali jazo turi yaratilmagan — yuqoridagi "Jazo yaratish" tugmasi orqali qo'shing.
+                </p>
+              )}
             </Card>
           )}
 
