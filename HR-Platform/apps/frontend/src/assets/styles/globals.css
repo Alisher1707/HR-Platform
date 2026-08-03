@@ -5121,7 +5121,7 @@ button.attendance-pill {
 
 .attendance-analytics-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 1.25rem;
 }
 
@@ -5145,6 +5145,7 @@ button.attendance-pill {
 .attendance-ranking-icon.warning { background: var(--warning-bg); color: var(--warning); }
 .attendance-ranking-icon.error { background: var(--error-bg); color: var(--error); }
 .attendance-ranking-icon.success { background: var(--success-bg); color: var(--success); }
+.attendance-ranking-icon.info { background: var(--info-bg); color: var(--info); }
 
 .attendance-ranking-title {
   font-size: 0.9375rem;

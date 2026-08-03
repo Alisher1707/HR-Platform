@@ -1028,6 +1028,7 @@ const TREND_SERIES = [
 const ANALYTICS_RANKINGS = [
   { key: 'late', title: 'Kech qolish', subtitle: 'Ishga kech qolgan xodimlar reytingi', tone: 'warning' },
   { key: 'absence', title: 'Ishga kelmaslik', subtitle: "Sabab ko'rsatmaganlar reytingi", tone: 'error' },
+  { key: 'earlyLeave', title: 'Erta ketish', subtitle: 'Ishdan erta ketgan xodimlar reytingi', tone: 'info' },
   { key: 'onTime', title: "O'z vaqtida kelish", subtitle: 'Intizomli xodimlar reytingi', tone: 'success' },
 ];
 
@@ -1412,19 +1413,23 @@ export function AttendancePage() {
 
     const late = {};
     const onTime = {};
+    const earlyLeave = {};
     const daysPresent = {};
 
     analyticsRecords.forEach((r) => {
-      if (r.type !== 'keldi') return;
       const key = r.employee_id;
       const info = employeeById[key] || {
         employeeId: key, name: `${r.first_name} ${r.last_name}`, position: r.position || '', photoUrl: r.photo_url || null,
       };
-      const day = format(new Date(r.recorded_at), 'yyyy-MM-dd');
 
-      (daysPresent[key] ||= { ...info, days: new Set() }).days.add(day);
-      if (r.is_late === true) (late[key] ||= { ...info, count: 0 }).count += 1;
-      if (r.is_late === false) (onTime[key] ||= { ...info, count: 0 }).count += 1;
+      if (r.type === 'keldi') {
+        const day = format(new Date(r.recorded_at), 'yyyy-MM-dd');
+        (daysPresent[key] ||= { ...info, days: new Set() }).days.add(day);
+        if (r.is_late === true) (late[key] ||= { ...info, count: 0 }).count += 1;
+        if (r.is_late === false) (onTime[key] ||= { ...info, count: 0 }).count += 1;
+      } else if (r.type === 'ketdi' && r.is_early_leave === true) {
+        (earlyLeave[key] ||= { ...info, count: 0 }).count += 1;
+      }
     });
 
     const totalDays = eachDayOfInterval({ start: subDays(new Date(), 29), end: new Date() }).length;
@@ -1439,11 +1444,12 @@ export function AttendancePage() {
     return {
       late: toRanked(late),
       absence: toRanked(absence),
+      earlyLeave: toRanked(earlyLeave),
       onTime: toRanked(onTime),
     };
   }, [analyticsRecords, employees]);
 
-  const [expandedRankings, setExpandedRankings] = useState({ late: false, absence: false, onTime: false });
+  const [expandedRankings, setExpandedRankings] = useState({ late: false, absence: false, earlyLeave: false, onTime: false });
 
   const getFinanceKey = (employeeId) => `${employeeId}:${format(moliyaMonth, 'yyyy-MM')}`;
 
@@ -2960,7 +2966,7 @@ export function AttendancePage() {
                                   <div className="attendance-ranking-row-name">{item.name}</div>
                                   {item.position && <div className="attendance-ranking-row-position">{item.position}</div>}
                                 </div>
-                                <Badge variant={ranking.tone === 'success' ? 'success' : ranking.tone === 'warning' ? 'warning' : 'error'}>
+                                <Badge variant={ranking.tone === 'success' ? 'success' : ranking.tone === 'warning' ? 'warning' : ranking.tone === 'info' ? 'info' : 'error'}>
                                   {item.count} marta
                                 </Badge>
                               </div>
