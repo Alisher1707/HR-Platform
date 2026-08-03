@@ -19,6 +19,7 @@ import ejmRoutes from './modules/ejm/ejm.routes.js';
 import devicesRoutes from './modules/devices/devices.routes.js';
 import attendanceRoutes from './modules/attendance/attendance.routes.js';
 import schedulesRoutes from './modules/schedules/schedules.routes.js';
+import finesRoutes from './modules/fines/fines.routes.js';
 
 /**
  * Initialize Express Application
@@ -134,6 +135,7 @@ app.use(`${API_PREFIX}/ejm`, ejmRoutes);
 app.use(`${API_PREFIX}/devices`, devicesRoutes);
 app.use(`${API_PREFIX}/attendance`, attendanceRoutes);
 app.use(`${API_PREFIX}/schedules`, schedulesRoutes);
+app.use(`${API_PREFIX}/fines`, finesRoutes);
 
 /**
  * API Documentation Root

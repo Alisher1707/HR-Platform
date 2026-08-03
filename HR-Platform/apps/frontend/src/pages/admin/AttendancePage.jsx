@@ -64,10 +64,12 @@ import {
   Check,
   KeyRound,
   LogIn,
+  Pencil,
 } from 'lucide-react';
 import employeeService from '../../services/employeeService';
 import attendanceService from '../../services/attendanceService';
 import devicesService from '../../services/devicesService';
+import fineService from '../../services/fineService';
 import { exportAttendanceReportToExcel } from '../../utils/exportExcel';
 import useToast from '../../hooks/useToast';
 import { useAuthStore } from '../../store/authStore';
@@ -705,6 +707,7 @@ function SearchableSelect({
 function FineTypeCreateButton({ onCreate }) {
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const [popupPos, setPopupPos] = useState({ top: 0, left: 0 });
   const wrapperRef = useRef(null);
   const popupRef = useRef(null);
@@ -736,12 +739,17 @@ function FineTypeCreateButton({ onCreate }) {
     setIsOpen((prev) => !prev);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const trimmed = name.trim();
-    if (!trimmed) return;
-    onCreate(trimmed);
-    setName('');
-    setIsOpen(false);
+    if (!trimmed || isSaving) return;
+    setIsSaving(true);
+    try {
+      await onCreate(trimmed);
+      setName('');
+      setIsOpen(false);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -792,10 +800,10 @@ function FineTypeCreateButton({ onCreate }) {
           <button
             type="button"
             className="fine-type-select-create-save fine-type-create-popover-submit"
-            disabled={!name.trim()}
+            disabled={!name.trim() || isSaving}
             onClick={handleSubmit}
           >
-            <Plus size={14} strokeWidth={2.25} /> Qo'shish
+            <Plus size={14} strokeWidth={2.25} /> {isSaving ? 'Saqlanmoqda...' : "Qo'shish"}
           </button>
         </div>,
         document.body
@@ -1548,6 +1556,8 @@ export function AttendancePage() {
   const [isAddFineOpen, setIsAddFineOpen] = useState(false);
   const getDefaultFineForm = () => ({ name: '', enabled: true, templates: [] });
   const [fineForm, setFineForm] = useState(getDefaultFineForm());
+  const [editingFinePolicyId, setEditingFinePolicyId] = useState(null);
+  const [isSavingFinePolicy, setIsSavingFinePolicy] = useState(false);
   const [isAssignedFinesOpen, setIsAssignedFinesOpen] = useState(false);
   const [assignedFinesEmployeeFilter, setAssignedFinesEmployeeFilter] = useState('');
 
@@ -1564,32 +1574,61 @@ export function AttendancePage() {
   };
 
   // "Jazo turi" — sababga nisbatan qo'llanadigan chora (masalan "Ogohlantirish").
-  // Faqat "Jazo yaratish" orqali to'ldiriladigan alohida katalog — "Turi"
-  // bilan aralashmaydi.
-  const [customFineTypes, setCustomFineTypes] = useState([]);
+  // Backenddagi fine_types jadvalidan yuklanadi va "Jazo yaratish" orqali
+  // to'ldiriladi — sahifa yangilansa ham saqlanib qoladi.
+  const [fineTypes, setFineTypes] = useState([]);
   const punishmentTypeOptions = useMemo(
-    () => customFineTypes.map((t) => ({ value: t.value, label: t.label })),
-    [customFineTypes]
+    () => fineTypes.map((t) => ({ value: t.id, label: t.name })),
+    [fineTypes]
   );
-  const getPunishmentTypeIcon = (opt) => {
-    const type = customFineTypes.find((t) => t.value === opt.value);
-    return type ? { Icon: type.icon, color: type.color } : null;
+  const getPunishmentTypeIcon = () => ({ Icon: AlertTriangle, color: CUSTOM_FINE_TYPE_COLOR });
+
+  const [finePolicies, setFinePolicies] = useState([]);
+  const [isLoadingFinePolicies, setIsLoadingFinePolicies] = useState(false);
+
+  const refreshFineTypes = async () => {
+    try {
+      const data = await fineService.getFineTypes();
+      setFineTypes(data);
+    } catch (err) {
+      toast.error('Jazo turlarini yuklashda xatolik');
+    }
   };
 
-  // Yangi jazo turini katalogga qo'shadi va yaratilgan turning value'sini qaytaradi —
-  // chaqiruvchi (toolbar tugmasi yoki shablon-kartadagi "Jazo turi" select) buni
-  // o'zining joriy tanlovi sifatida belgilash-belgilamasligiga o'zi qaror qiladi.
-  const handleCreateFineType = (name) => {
+  const refreshFinePolicies = async () => {
+    setIsLoadingFinePolicies(true);
+    try {
+      const data = await fineService.getFinePolicies();
+      setFinePolicies(data);
+    } catch (err) {
+      toast.error('Jarima siyosatlarini yuklashda xatolik');
+    } finally {
+      setIsLoadingFinePolicies(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSection !== 'moliya' || moliyaTab !== 'jarimalar') return;
+    refreshFineTypes();
+    refreshFinePolicies();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSection, moliyaTab]);
+
+  // Yangi jazo turini backendga saqlaydi va yaratilgan (yoki nomi mos keluvchi
+  // mavjud) turning id'sini qaytaradi — chaqiruvchi (toolbar tugmasi yoki
+  // shablon-kartadagi "Jazo turi" select) buni o'zining joriy tanlovi
+  // sifatida belgilash-belgilamasligiga o'zi qaror qiladi.
+  const handleCreateFineType = async (name) => {
     const trimmed = name.trim();
     if (!trimmed) return null;
-    const existing = customFineTypes.find((t) => t.label.toLowerCase() === trimmed.toLowerCase());
-    if (existing) return existing.value;
-    const value = `custom_${Date.now()}`;
-    setCustomFineTypes((prev) => [
-      ...prev,
-      { value, label: trimmed, color: CUSTOM_FINE_TYPE_COLOR, icon: AlertTriangle },
-    ]);
-    return value;
+    try {
+      const created = await fineService.createFineType(trimmed);
+      setFineTypes((prev) => (prev.some((t) => t.id === created.id) ? prev : [...prev, created]));
+      return created.id;
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Jazo turi yaratishda xatolik');
+      return null;
+    }
   };
 
   const assignedFinesFiltered = useMemo(
@@ -1599,7 +1638,35 @@ export function AttendancePage() {
 
   const handleOpenAddFine = () => {
     setFineForm(getDefaultFineForm());
+    setEditingFinePolicyId(null);
     setIsAddFineOpen(true);
+  };
+
+  const handleEditFinePolicy = (policy) => {
+    setFineForm({
+      name: policy.name,
+      enabled: policy.enabled,
+      templates: policy.templates.map((t) => ({
+        id: t.id,
+        type: t.violationType,
+        timeLimit: t.timeLimit || '00:15',
+        amount: t.amount != null ? String(t.amount) : '',
+        jazoType: t.fineTypeId || '',
+      })),
+    });
+    setEditingFinePolicyId(policy.id);
+    setIsAddFineOpen(true);
+  };
+
+  const handleDeleteFinePolicy = async (policy) => {
+    if (!window.confirm(`"${policy.name}" jarima siyosatini o'chirmoqchimisiz?`)) return;
+    try {
+      await fineService.deleteFinePolicy(policy.id);
+      toast.success('Jarima siyosati o\'chirildi');
+      refreshFinePolicies();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Jarima siyosatini o'chirishda xatolik");
+    }
   };
 
   const addFineTemplate = (type) => {
@@ -1623,10 +1690,34 @@ export function AttendancePage() {
     setFineForm((prev) => ({ ...prev, templates: prev.templates.filter((t) => t.id !== id) }));
   };
 
-  const handleFineNextStep = () => {
-    // Step 2 (shablon detallari) hali loyihalashtirilmagan — hozircha
-    // "Keyingisi" step 1'ni yakunlab panelni yopadi.
-    setIsAddFineOpen(false);
+  const handleFineNextStep = async () => {
+    if (!fineForm.name.trim() || isSavingFinePolicy) return;
+    setIsSavingFinePolicy(true);
+    const payload = {
+      name: fineForm.name.trim(),
+      enabled: fineForm.enabled,
+      templates: fineForm.templates.map((t) => ({
+        violationType: t.type,
+        timeLimit: t.timeLimit || null,
+        amount: Number(t.amount) || 0,
+        fineTypeId: t.jazoType || null,
+      })),
+    };
+    try {
+      if (editingFinePolicyId) {
+        await fineService.updateFinePolicy(editingFinePolicyId, payload);
+        toast.success('Jarima siyosati yangilandi');
+      } else {
+        await fineService.createFinePolicy(payload);
+        toast.success('Jarima siyosati yaratildi');
+      }
+      setIsAddFineOpen(false);
+      refreshFinePolicies();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Jarima siyosatini saqlashda xatolik');
+    } finally {
+      setIsSavingFinePolicy(false);
+    }
   };
 
   const toggleReportField = (value) => {
@@ -3335,73 +3426,91 @@ export function AttendancePage() {
             <Card style={{ padding: 0 }}>
               <div className="attendance-section-header">
                 <div className="attendance-section-header-title">
-                  <h3>Jarimalar</h3>
+                  <h3>Jarima siyosatlari</h3>
                 </div>
               </div>
-              <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Jarima nomi</th>
-                      <th>Holat</th>
-                      <th>Kompaniya</th>
-                      <th>Jarima turlari</th>
-                      <th>Yangilangan</th>
-                    </tr>
-                  </thead>
-                  {allFines.length > 0 && (
-                    <tbody>
-                      {allFines.map((f) => (
-                        <tr key={f.id}>
-                          <td>
-                            <div className="attendance-employee-cell">
-                              {f.emp.photo_url ? (
-                                <img
-                                  className="attendance-avatar"
-                                  src={employeeService.getPhotoUrl(f.emp.photo_url)}
-                                  alt={f.empName}
-                                />
-                              ) : (
-                                <div className="attendance-avatar-fallback">
-                                  {(f.emp.first_name?.[0] || '') + (f.emp.last_name?.[0] || '')}
-                                </div>
-                              )}
-                              <div>
-                                <div className="attendance-employee-name">{f.note || f.empName}</div>
-                                <div className="attendance-employee-role">{f.empName}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td>
-                            <Badge variant="warning">Faol</Badge>
-                          </td>
-                          <td>{f.emp.branch || '-'}</td>
-                          <td>
-                            <Badge variant="error">{formatUZS(f.amount)}</Badge>
-                          </td>
-                          <td>
-                            <span className="finance-payment-time">
-                              <Clock size={13} strokeWidth={2.25} /> {format(f.date, 'dd.MM.yyyy HH:mm')}
-                            </span>
-                          </td>
+              {isLoadingFinePolicies ? (
+                <div style={{ padding: '2rem' }}><LoadingSpinner /></div>
+              ) : (
+                <>
+                  <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Jarima nomi</th>
+                          <th>Holat</th>
+                          <th>Shablonlar</th>
+                          <th>Jarima turlari</th>
+                          <th>Yangilangan</th>
+                          <th></th>
                         </tr>
-                      ))}
-                    </tbody>
+                      </thead>
+                      {finePolicies.length > 0 && (
+                        <tbody>
+                          {finePolicies.map((policy) => {
+                            const uniqueViolationLabels = [...new Set(policy.templates.map((t) => t.violationType))]
+                              .map((v) => FINE_TEMPLATE_TYPES.find((ft) => ft.value === v)?.label || v);
+                            return (
+                              <tr key={policy.id}>
+                                <td>
+                                  <div className="attendance-employee-name">{policy.name}</div>
+                                </td>
+                                <td>
+                                  <Badge variant={policy.enabled ? 'success' : 'info'}>
+                                    {policy.enabled ? 'Faol' : "O'chirilgan"}
+                                  </Badge>
+                                </td>
+                                <td>{policy.templates.length}</td>
+                                <td>
+                                  {uniqueViolationLabels.length > 0 ? (
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                                      {uniqueViolationLabels.map((label) => (
+                                        <Badge key={label} variant="error">{label}</Badge>
+                                      ))}
+                                    </div>
+                                  ) : '-'}
+                                </td>
+                                <td>
+                                  <span className="finance-payment-time">
+                                    <Clock size={13} strokeWidth={2.25} /> {format(new Date(policy.updatedAt), 'dd.MM.yyyy HH:mm')}
+                                  </span>
+                                </td>
+                                <td>
+                                  <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'flex-end' }}>
+                                    <button
+                                      type="button"
+                                      className="attendance-toggle-btn"
+                                      title="Tahrirlash"
+                                      onClick={() => handleEditFinePolicy(policy)}
+                                    >
+                                      <Pencil size={15} strokeWidth={2.25} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="attendance-toggle-btn"
+                                      title="O'chirish"
+                                      onClick={() => handleDeleteFinePolicy(policy)}
+                                    >
+                                      <Trash2 size={15} strokeWidth={2.25} />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      )}
+                    </table>
+                  </div>
+                  {finePolicies.length === 0 && (
+                    <EmptyState
+                      icon={<PackageX size={56} strokeWidth={1.25} />}
+                      title="Jarima siyosatlari topilmadi"
+                      text=""
+                    />
                   )}
-                </table>
-              </div>
-              {allFines.length === 0 && (
-                <EmptyState
-                  icon={<PackageX size={56} strokeWidth={1.25} />}
-                  title="Jarimalar topilmadi"
-                  text=""
-                />
+                </>
               )}
-              <div className="attendance-table-footer">
-                <button type="button" className="attendance-toggle-btn" title="Ustunlar sozlamasi">
-                  <Settings size={15} />
-                </button>
-              </div>
             </Card>
           )}
 
@@ -4124,7 +4233,7 @@ export function AttendancePage() {
       <Modal
         isOpen={isAddFineOpen}
         onClose={() => setIsAddFineOpen(false)}
-        title={<>Jarima yaratish <span className="fine-modal-step-label">Qadam 1/2</span></>}
+        title={<>{editingFinePolicyId ? 'Jarima siyosatini tahrirlash' : 'Jarima yaratish'} <span className="fine-modal-step-label">Qadam 1/2</span></>}
         size="lg"
         footer={
           <>
@@ -4133,10 +4242,10 @@ export function AttendancePage() {
             </Button>
             <Button
               variant="primary"
-              disabled={!fineForm.name.trim()}
+              disabled={!fineForm.name.trim() || isSavingFinePolicy}
               onClick={handleFineNextStep}
             >
-              Keyingisi
+              {isSavingFinePolicy ? 'Saqlanmoqda...' : editingFinePolicyId ? 'Saqlash' : 'Yaratish'}
             </Button>
           </>
         }
@@ -4259,8 +4368,8 @@ export function AttendancePage() {
                             icon={AlertTriangle}
                             placeholder="Jazo turi"
                             searchPlaceholder="Jazo turini qidirish"
-                            onCreateNew={(name) => {
-                              const value = handleCreateFineType(name);
+                            onCreateNew={async (name) => {
+                              const value = await handleCreateFineType(name);
                               if (value) updateFineTemplate(tpl.id, { jazoType: value });
                             }}
                             createLabel="Jazo yaratish"

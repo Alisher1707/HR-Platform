@@ -21,11 +21,23 @@ CREATE TABLE IF NOT EXISTS work_schedule_days (
 
 COMMENT ON TABLE work_schedule_days IS 'Har bir jadvalning sikl ichidagi har bir kuni (Kun 1, Kun 2, ...) uchun ish vaqti sozlamalari';
 
--- Mavjud jadvallarni "Kun 1" sifatida ko'chirish (avvalgi yagona kun sozlamasi)
-INSERT INTO work_schedule_days (schedule_id, day_number, is_work_day, start_time, end_time, break_start, break_end)
-SELECT id, 1, is_work_day, start_time, end_time, break_start, break_end
-FROM work_schedules
-ON CONFLICT (schedule_id, day_number) DO NOTHING;
+-- Mavjud jadvallarni "Kun 1" sifatida ko'chirish (avvalgi yagona kun sozlamasi).
+-- Faqat work_schedules.is_work_day hali mavjud bo'lsa kerak (ya'ni bu blok
+-- birinchi marta ishga tushganda) — migratsiya runner har chaqirilganda
+-- BARCHA faylni qayta bajaradi, keyingi qayta ishga tushirishlarda esa
+-- pastdagi DROP COLUMN allaqachon bu ustunlarni olib tashlagan bo'ladi.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'work_schedules' AND column_name = 'is_work_day'
+  ) THEN
+    INSERT INTO work_schedule_days (schedule_id, day_number, is_work_day, start_time, end_time, break_start, break_end)
+    SELECT id, 1, is_work_day, start_time, end_time, break_start, break_end
+    FROM work_schedules
+    ON CONFLICT (schedule_id, day_number) DO NOTHING;
+  END IF;
+END $$;
 
 ALTER TABLE work_schedules
   DROP COLUMN IF EXISTS is_work_day,
