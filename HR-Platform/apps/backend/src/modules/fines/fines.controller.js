@@ -16,6 +16,16 @@ export async function getFineTypes(req, res) {
   }
 }
 
+export async function deleteFineType(req, res) {
+  try {
+    const result = await finesService.deleteFineType(req.params.id);
+    return successResponse(res, result, 'Jazo turi o\'chirildi');
+  } catch (error) {
+    console.error('Delete fine type error:', error);
+    return errorResponse(res, error.message || 'Jazo turini o\'chirishda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+  }
+}
+
 export async function createFineType(req, res) {
   try {
     const type = await finesService.createFineType(req.body.name, req.user.id);

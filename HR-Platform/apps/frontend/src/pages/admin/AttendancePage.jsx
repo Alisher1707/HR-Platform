@@ -1641,6 +1641,17 @@ export function AttendancePage() {
     }
   };
 
+  const handleDeleteFineType = async (type) => {
+    if (!window.confirm(`"${type.name}" jazo turini o'chirmoqchimisiz?`)) return;
+    try {
+      await fineService.deleteFineType(type.id);
+      setFineTypes((prev) => prev.filter((t) => t.id !== type.id));
+      toast.success(`"${type.name}" jazo turi o'chirildi`);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Jazo turini o'chirishda xatolik");
+    }
+  };
+
   const assignedFinesFiltered = useMemo(
     () => (assignedFinesEmployeeFilter ? allFines.filter((f) => f.emp.id === assignedFinesEmployeeFilter) : allFines),
     [allFines, assignedFinesEmployeeFilter]
@@ -3446,13 +3457,23 @@ export function AttendancePage() {
                   {fineTypes.map((t) => {
                     const color = getFineTypeColor(t.id, fineTypes);
                     return (
-                      <span
-                        key={t.id}
-                        className="fine-template-type-pill"
-                        style={{ '--fine-pill-color': color, cursor: 'default' }}
-                      >
-                        <AlertTriangle size={13} strokeWidth={2.25} />
-                        {t.name}
+                      <span key={t.id} className="fine-type-pill-wrap">
+                        <span
+                          className="fine-template-type-pill"
+                          style={{ '--fine-pill-color': color, cursor: 'default' }}
+                        >
+                          <AlertTriangle size={13} strokeWidth={2.25} />
+                          {t.name}
+                        </span>
+                        <button
+                          type="button"
+                          className="fine-type-pill-delete"
+                          title="O'chirish"
+                          aria-label={`"${t.name}" ni o'chirish`}
+                          onClick={() => handleDeleteFineType(t)}
+                        >
+                          <X size={12} strokeWidth={2.5} />
+                        </button>
                       </span>
                     );
                   })}

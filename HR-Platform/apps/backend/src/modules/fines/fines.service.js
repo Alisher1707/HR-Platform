@@ -40,6 +40,16 @@ export async function createFineType(name, userId) {
   return mapFineType(result.rows[0]);
 }
 
+export async function deleteFineType(id) {
+  const result = await query('DELETE FROM fine_types WHERE id = $1 RETURNING id', [id]);
+  if (result.rows.length === 0) {
+    const error = new Error('Jazo turi topilmadi');
+    error.statusCode = HTTP_STATUS.NOT_FOUND;
+    throw error;
+  }
+  return { success: true, id };
+}
+
 function mapPolicy(row) {
   return {
     id: row.id,

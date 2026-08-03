@@ -19,6 +19,11 @@ export const fineService = {
     return response.data.data;
   },
 
+  async deleteFineType(id) {
+    const response = await api.delete(`/fines/types/${id}`);
+    return response.data;
+  },
+
   async getFinePolicies() {
     const response = await api.get('/fines/policies');
     return response.data.data;

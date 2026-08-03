@@ -30,6 +30,13 @@ const canManage = authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES
 // "Jazo turi" katalogi
 router.get('/types', authenticate, canManage, finesController.getFineTypes);
 router.post('/types', authenticate, canManage, validate(createFineTypeSchema), finesController.createFineType);
+router.delete(
+  '/types/:id',
+  authenticate,
+  authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  validateParams(uuidParamSchema),
+  finesController.deleteFineType
+);
 
 // "Jarima" siyosatlari
 router.get('/policies', authenticate, canManage, finesController.getFinePolicies);

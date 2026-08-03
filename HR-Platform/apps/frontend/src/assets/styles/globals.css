@@ -4148,6 +4148,43 @@ button.attendance-pill {
   transform: translateY(-1px);
 }
 
+/* "Jazo turlari" katalogidagi pill'lar — hover qilinganda burchakda
+   o'chirish (x) tugmasi chiqadi. */
+.fine-type-pill-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.fine-type-pill-delete {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: var(--bg-card-solid);
+  color: var(--text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.75);
+  transition: var(--transition-fast);
+}
+
+.fine-type-pill-wrap:hover .fine-type-pill-delete {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.fine-type-pill-delete:hover {
+  background: var(--error-bg);
+  border-color: var(--error);
+  color: var(--error);
+}
+
 .fine-type-select-add {
   display: flex;
   align-items: center;
