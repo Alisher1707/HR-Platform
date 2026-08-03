@@ -3104,6 +3104,10 @@ button.attendance-pill {
   box-shadow: var(--shadow-lg);
   padding: 1rem;
   z-index: 1100;
+  /* .attendance-schedule-panel'dagi kabi — modal ichida ham ishlatilgani
+     uchun backdrop-filter/zoom kompozitsiya xatosidan himoyalanadi. */
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 .attendance-cal-header {
@@ -3389,6 +3393,15 @@ button.attendance-pill {
      degan taniqli bug'ga sabab bo'ladi — DevTools ochilganda (viewport
      o'lchami o'zgarib, majburiy repaint bo'lgani uchun) ko'rinib, oddiy
      holatda esa umuman ko'rinmay qolgan edi. */
+  /* Panelni o'zining alohida GPU compositing qatlamiga majburlaydi.
+     .modal-overlay'dagi backdrop-filter:blur bilan birga, ba'zi zoom
+     darajalarida (masalan 100%) brauzer bu ikkalasini xato tartibda
+     rasterizatsiya qilib, panelni butunlay ko'rsatmay qo'yadi (faqat
+     boshqa zoom darajasida yoki DevTools majburiy repaint qilganda
+     ko'rinadi) — bu Chrome'ning tanilgan backdrop-filter/z-index
+     kompozitsiya xatosi. Alohida qatlamga chiqarish buni bartaraf etadi. */
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 .attendance-schedule-search {
