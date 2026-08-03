@@ -2243,8 +2243,8 @@ export function AttendancePage() {
                                       <CalendarOff size={12} strokeWidth={2.25} /> Dam olish kuni
                                     </Badge>
                                   ) : record.is_late && record.is_after_hours ? (
-                                    <Badge variant="info" title="Ish kuni allaqachon tugagandan keyin kelgan">
-                                      <LogIn size={12} strokeWidth={2.25} /> Keldi
+                                    <Badge variant="afterhours" title="Ish kuni allaqachon tugagandan keyin kelgan">
+                                      <LogIn size={12} strokeWidth={2.25} /> Ishdan keyin keldi
                                     </Badge>
                                   ) : (
                                     <Badge variant={record.is_late ? 'warning' : 'success'}>

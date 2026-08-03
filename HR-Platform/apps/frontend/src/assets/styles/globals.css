@@ -666,6 +666,15 @@ a:hover {
   border: 1px solid transparent;
 }
 
+/* "Ishdan keyin keldi" — ish kuni allaqachon tugagandan keyin kelish,
+   "Vaqtida keldi" (yashil), "Kech keldi" (sariq) va "Dam olish kuni"
+   (ko'k) dan aniq ajralib turishi uchun alohida binafsha rang. */
+.badge-afterhours {
+  background: var(--notes-bg);
+  color: var(--notes);
+  border: 1px solid transparent;
+}
+
 .badge-dot {
   width: 6px;
   height: 6px;
