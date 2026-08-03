@@ -84,6 +84,8 @@ import Textarea from '../../components/ui/Textarea';
 import Input from '../../components/ui/Input';
 import SidePanel from '../../components/ui/SidePanel';
 import Modal from '../../components/ui/Modal';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import useConfirm from '../../hooks/useConfirm';
 
 const UZ_MONTHS = [
   'Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'Iyun',
@@ -1299,6 +1301,7 @@ export function AttendancePage() {
   const taskFileInputRef = useRef(null);
   const [isTaskDropzoneActive, setIsTaskDropzoneActive] = useState(false);
   const { toast } = useToast();
+  const { confirm, confirmProps } = useConfirm();
   const { user } = useAuthStore();
   const canDeleteAttendance = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
 
@@ -1642,7 +1645,11 @@ export function AttendancePage() {
   };
 
   const handleDeleteFineType = async (type) => {
-    if (!window.confirm(`"${type.name}" jazo turini o'chirmoqchimisiz?`)) return;
+    const ok = await confirm({
+      title: 'Jazo turini o\'chirish',
+      message: `"${type.name}" jazo turini o'chirmoqchimisiz?`,
+    });
+    if (!ok) return;
     try {
       await fineService.deleteFineType(type.id);
       setFineTypes((prev) => prev.filter((t) => t.id !== type.id));
@@ -1680,7 +1687,11 @@ export function AttendancePage() {
   };
 
   const handleDeleteFinePolicy = async (policy) => {
-    if (!window.confirm(`"${policy.name}" jarima siyosatini o'chirmoqchimisiz?`)) return;
+    const ok = await confirm({
+      title: 'Jarima siyosatini o\'chirish',
+      message: `"${policy.name}" jarima siyosatini o'chirmoqchimisiz?`,
+    });
+    if (!ok) return;
     try {
       await fineService.deleteFinePolicy(policy.id);
       toast.success('Jarima siyosati o\'chirildi');
@@ -2072,7 +2083,11 @@ export function AttendancePage() {
   };
 
   const handleDeleteDevice = async (device) => {
-    if (!window.confirm(`"${device.name}" qurilmasini o'chirmoqchimisiz? Kamera bu tokendan foydalanishni to'xtatadi.`)) return;
+    const ok = await confirm({
+      title: 'Qurilmani o\'chirish',
+      message: `"${device.name}" qurilmasini o'chirmoqchimisiz? Kamera bu tokendan foydalanishni to'xtatadi.`,
+    });
+    if (!ok) return;
     try {
       await devicesService.deleteDevice(device.id);
       toast.success("Qurilma o'chirildi");
@@ -4527,6 +4542,8 @@ export function AttendancePage() {
           </div>
         )}
       </SidePanel>
+
+      <ConfirmDialog {...confirmProps} />
     </div>
   );
 }
