@@ -554,10 +554,20 @@ function SearchableSelect({
       const spaceAbove = rect.top - bounds.top - margin;
       const openAbove = spaceBelow < minNeeded && spaceAbove > spaceBelow;
 
+      // MUHIM: top/bottom "auto" deb ANIQ belgilanadi, undefined emas —
+      // React undefined qiymatli style xususiyatini butunlay tashlab
+      // yuboradi (inline'da qo'ymaydi), shu sabab .attendance-schedule-panel
+      // klassidagi fallback "top: calc(100% + 0.5rem)" o'chmay, inline
+      // "bottom" bilan bir vaqtda ishlab ketardi — natijada fixed element
+      // ham top'dan, ham bottom'dan cheklanib, balandligi deyarli 0'ga
+      // tushib, panel butunlay ko'rinmay qolar edi (aynan "yuqoriga ochilish"
+      // kerak bo'lgan holatlarda, masalan konteynerning oxirgi maydoni
+      // bo'lgan "Jazo turi"da). "auto" esa CSS klassidagi qiymatni haqiqatan
+      // ham inline ravishda bekor qiladi.
       setPopupPos(
         openAbove
-          ? { bottom: window.innerHeight - rect.top + margin, top: undefined, left: rect.left, width: rect.width, maxHeight: spaceAbove }
-          : { top: rect.bottom + margin, bottom: undefined, left: rect.left, width: rect.width, maxHeight: spaceBelow }
+          ? { bottom: window.innerHeight - rect.top + margin, top: 'auto', left: rect.left, width: rect.width, maxHeight: spaceAbove }
+          : { top: rect.bottom + margin, bottom: 'auto', left: rect.left, width: rect.width, maxHeight: spaceBelow }
       );
     }
     setIsOpen((prev) => !prev);
