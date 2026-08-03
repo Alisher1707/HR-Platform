@@ -688,8 +688,17 @@ a:hover {
   position: fixed;
   inset: 0;
   background: var(--bg-overlay);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  /* ESLATMA: backdrop-filter ATAYLAB yo'q. Chrome'da backdrop-filter'li
+     overlay + unga document.body ichida "opa-singil" sifatida portal
+     qilingan position:fixed elementlar (masalan SearchableSelect paneli)
+     birga ishlatilganda, GPU kompozitsiya bosqichida noto'g'ri
+     rasterizatsiya bo'lib, panel zoom darajasiga/DevTools holatiga qarab
+     tasodifiy ko'rinmay qolar edi — bir necha marta turlicha "tuzatish"
+     (z-index, animatsiyasiz qilish, alohida compositing qatlamiga
+     chiqarish) sinab ko'rilgan, hech biri barqaror natija bermagan.
+     backdrop-filter'ni butunlay olib tashlash bu butun bug klassini
+     ildizidan yo'q qiladi — orqa fon shunchaki qorong'ilashadi (blur
+     yo'q), lekin bu ancha xavfsiz kelishuv. */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3104,10 +3113,6 @@ button.attendance-pill {
   box-shadow: var(--shadow-lg);
   padding: 1rem;
   z-index: 1100;
-  /* .attendance-schedule-panel'dagi kabi — modal ichida ham ishlatilgani
-     uchun backdrop-filter/zoom kompozitsiya xatosidan himoyalanadi. */
-  transform: translateZ(0);
-  will-change: transform;
 }
 
 .attendance-cal-header {
@@ -3393,15 +3398,6 @@ button.attendance-pill {
      degan taniqli bug'ga sabab bo'ladi — DevTools ochilganda (viewport
      o'lchami o'zgarib, majburiy repaint bo'lgani uchun) ko'rinib, oddiy
      holatda esa umuman ko'rinmay qolgan edi. */
-  /* Panelni o'zining alohida GPU compositing qatlamiga majburlaydi.
-     .modal-overlay'dagi backdrop-filter:blur bilan birga, ba'zi zoom
-     darajalarida (masalan 100%) brauzer bu ikkalasini xato tartibda
-     rasterizatsiya qilib, panelni butunlay ko'rsatmay qo'yadi (faqat
-     boshqa zoom darajasida yoki DevTools majburiy repaint qilganda
-     ko'rinadi) — bu Chrome'ning tanilgan backdrop-filter/z-index
-     kompozitsiya xatosi. Alohida qatlamga chiqarish buni bartaraf etadi. */
-  transform: translateZ(0);
-  will-change: transform;
 }
 
 .attendance-schedule-search {
