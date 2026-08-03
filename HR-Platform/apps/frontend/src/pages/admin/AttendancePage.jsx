@@ -533,8 +533,25 @@ function SearchableSelect({
       const rect = wrapperRef.current.getBoundingClientRect();
       const margin = 8;
       const minNeeded = 220;
-      const spaceBelow = window.innerHeight - rect.bottom - margin;
-      const spaceAbove = rect.top - margin;
+
+      // Pastda qancha bo'sh joy borligi butun oyna balandligi emas, balki
+      // eng yaqin scroll qiluvchi ajdod (masalan Modal'ning .modal-content'i)
+      // chegarasi bo'yicha hisoblanadi — aks holda trigger shu ajdodning
+      // pastki qismiga yaqin bo'lganda, panel uning chegarasidan tashqariga
+      // (qorong'i fon ustiga) chiqib "yo'qolib" qolar edi. Shu holatda panel
+      // kartaning ustiga — yuqoriga ochiladi.
+      let scrollAncestor = wrapperRef.current.parentElement;
+      while (scrollAncestor && scrollAncestor !== document.body) {
+        const overflowY = window.getComputedStyle(scrollAncestor).overflowY;
+        if (overflowY === 'auto' || overflowY === 'scroll') break;
+        scrollAncestor = scrollAncestor.parentElement;
+      }
+      const bounds = scrollAncestor && scrollAncestor !== document.body
+        ? scrollAncestor.getBoundingClientRect()
+        : { top: 0, bottom: window.innerHeight };
+
+      const spaceBelow = bounds.bottom - rect.bottom - margin;
+      const spaceAbove = rect.top - bounds.top - margin;
       const openAbove = spaceBelow < minNeeded && spaceAbove > spaceBelow;
 
       setPopupPos(
