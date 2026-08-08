@@ -253,7 +253,7 @@ export function OnboardingPage() {
           <p className="page-subtitle">Yangi xodimlar uchun moslashuv rejalarini yarating va kuzating</p>
         </div>
         <div className="page-header-right">
-          <Button variant="primary" icon={<Plus size={16} strokeWidth={2.5} />} onClick={openCreatePlan}>
+          <Button variant="primary" className="onboarding-btn-wide" icon={<Plus size={16} strokeWidth={2.5} />} onClick={openCreatePlan}>
             Yangi reja
           </Button>
         </div>
@@ -282,7 +282,7 @@ export function OnboardingPage() {
             title="Rejalar mavjud emas"
             text="Yangi xodimlar uchun birinchi onboarding rejangizni yarating"
             action={
-              <Button variant="primary" onClick={openCreatePlan} icon={<Plus size={16} strokeWidth={2.5} />}>
+              <Button variant="primary" className="onboarding-btn-wide" onClick={openCreatePlan} icon={<Plus size={16} strokeWidth={2.5} />}>
                 Qo'shish
               </Button>
             }
@@ -476,8 +476,8 @@ export function OnboardingPage() {
             </Button>
           ) : (
             <>
-              <Button variant="ghost" onClick={() => setIsAssignOpen(false)}>Bekor qilish</Button>
-              <Button variant="primary" onClick={handleAssign} disabled={isAssigning}>
+              <Button variant="ghost" className="onboarding-btn-wide" onClick={() => setIsAssignOpen(false)}>Bekor qilish</Button>
+              <Button variant="primary" className="onboarding-btn-wide" onClick={handleAssign} disabled={isAssigning}>
                 {isAssigning ? 'Biriktirilmoqda...' : 'Biriktirish'}
               </Button>
             </>

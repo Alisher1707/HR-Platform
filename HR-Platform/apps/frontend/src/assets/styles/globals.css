@@ -2070,7 +2070,7 @@ button.header-pill {
   width: 34px;
   height: 34px;
   border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+  background: var(--accent-gradient);
   color: #ffffff;
   flex-shrink: 0;
 }
@@ -2101,8 +2101,8 @@ button.header-pill {
   height: 38px;
   flex-shrink: 0;
   border-radius: var(--radius-lg);
-  background: var(--notes-bg);
-  color: var(--notes);
+  background: var(--accent-light);
+  color: var(--accent);
 }
 
 .onboarding-plan-card-header h3 {
@@ -2135,7 +2135,7 @@ button.header-pill {
 }
 
 .onboarding-plan-stats svg {
-  color: var(--notes);
+  color: var(--accent);
 }
 
 .onboarding-plan-actions {
@@ -2146,6 +2146,11 @@ button.header-pill {
 
 .onboarding-plan-actions > .btn {
   flex: 1;
+}
+
+.onboarding-btn-wide {
+  padding-left: 1.75rem;
+  padding-right: 1.75rem;
 }
 
 /* Progress tab */
@@ -2167,7 +2172,7 @@ button.header-pill {
 .onboarding-progress-fill {
   height: 100%;
   border-radius: var(--radius-full);
-  background: linear-gradient(90deg, #8b5cf6 0%, #6d28d9 100%);
+  background: var(--accent-gradient);
   transition: width 0.3s ease;
 }
 
@@ -2208,8 +2213,8 @@ button.header-pill {
   height: 26px;
   flex-shrink: 0;
   border-radius: 50%;
-  background: var(--notes-bg);
-  color: var(--notes);
+  background: var(--accent-light);
+  color: var(--accent);
   font-size: 0.75rem;
   font-weight: 700;
 }
@@ -2252,7 +2257,7 @@ button.header-pill {
   border: 1.5px dashed var(--border);
   border-radius: var(--radius-lg);
   background: transparent;
-  color: var(--notes);
+  color: var(--accent);
   font-family: inherit;
   font-size: 0.8125rem;
   font-weight: 600;
@@ -2261,8 +2266,8 @@ button.header-pill {
 }
 
 .onboarding-step-add:hover {
-  background: var(--notes-bg);
-  border-color: var(--notes);
+  background: var(--accent-light);
+  border-color: var(--accent);
 }
 
 /* ========== ONBOARDING — PUBLIC (LOGIN TALAB QILINMAYDI) ========== */
@@ -2322,7 +2327,7 @@ button.header-pill {
   height: 52px;
   flex-shrink: 0;
   border-radius: var(--radius-xl);
-  background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+  background: var(--accent-gradient);
   color: #ffffff;
 }
 
@@ -2353,7 +2358,7 @@ button.header-pill {
 .onboarding-public-progress-fill {
   height: 100%;
   border-radius: var(--radius-full);
-  background: linear-gradient(90deg, #8b5cf6 0%, #6d28d9 100%);
+  background: var(--accent-gradient);
   transition: width 0.4s ease;
 }
 
@@ -2403,7 +2408,7 @@ button.header-pill {
 }
 
 .onboarding-public-step:hover {
-  border-color: var(--notes);
+  border-color: var(--accent);
 }
 
 .onboarding-public-step:disabled {
