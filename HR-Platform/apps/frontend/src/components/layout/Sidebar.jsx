@@ -10,6 +10,7 @@ import {
   TrendingUp,
   LogOut,
   Briefcase,
+  Rocket,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 
@@ -112,6 +113,14 @@ export function Sidebar({ isOpen, toggleSidebar }) {
               <span className="sidebar-link-icon"><CalendarCheck2 size={18} strokeWidth={2} /></span>
               <span>Davomat</span>
             </NavLink>
+
+            <NavLink
+              to="/admin/onboarding"
+              className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+            >
+              <span className="sidebar-link-icon"><Rocket size={18} strokeWidth={2} /></span>
+              <span>Onboarding</span>
+            </NavLink>
           </div>
         )}
 
@@ -166,6 +175,14 @@ export function Sidebar({ isOpen, toggleSidebar }) {
             >
               <span className="sidebar-link-icon"><CalendarCheck2 size={18} strokeWidth={2} /></span>
               <span>Davomat</span>
+            </NavLink>
+
+            <NavLink
+              to="/hr/onboarding"
+              className={({ isActive }) => `sidebar-link sidebar-link-onboarding ${isActive ? 'active' : ''}`}
+            >
+              <span className="sidebar-link-icon sidebar-link-icon-onboarding"><Rocket size={18} strokeWidth={2} /></span>
+              <span>Onboarding</span>
             </NavLink>
           </div>
         )}

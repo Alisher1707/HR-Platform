@@ -18,6 +18,8 @@ import IshJadvallariPage from '../pages/admin/IshJadvallariPage';
 import EmployeeEJMPage from '../pages/admin/EmployeeEJMPage';
 import HRDashboard from '../pages/hr/HRDashboard';
 import KanbanPage from '../pages/hr/KanbanPage';
+import OnboardingPage from '../pages/admin/OnboardingPage';
+import OnboardingPublicPage from '../pages/public/OnboardingPublicPage';
 
 /**
  * ProtectedRoute Component
@@ -96,6 +98,7 @@ export function AppRouter() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/apply" element={<RegisterPage />} />
+        <Route path="/onboarding/public/:token" element={<OnboardingPublicPage />} />
 
         {/* Authenticated Layout Routes */}
         <Route
@@ -186,6 +189,14 @@ export function AppRouter() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/admin/onboarding"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
+                <OnboardingPage />
+              </ProtectedRoute>
+            }
+          />
 
           {/* HR Routes */}
           <Route
@@ -249,6 +260,14 @@ export function AppRouter() {
             element={
               <ProtectedRoute allowedRoles={['HR']}>
                 <IshJadvallariPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/onboarding"
+            element={
+              <ProtectedRoute allowedRoles={['HR']}>
+                <OnboardingPage />
               </ProtectedRoute>
             }
           />

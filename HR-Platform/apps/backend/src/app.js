@@ -20,6 +20,7 @@ import devicesRoutes from './modules/devices/devices.routes.js';
 import attendanceRoutes from './modules/attendance/attendance.routes.js';
 import schedulesRoutes from './modules/schedules/schedules.routes.js';
 import finesRoutes from './modules/fines/fines.routes.js';
+import onboardingRoutes from './modules/onboarding/onboarding.routes.js';
 
 /**
  * Initialize Express Application
@@ -136,6 +137,7 @@ app.use(`${API_PREFIX}/devices`, devicesRoutes);
 app.use(`${API_PREFIX}/attendance`, attendanceRoutes);
 app.use(`${API_PREFIX}/schedules`, schedulesRoutes);
 app.use(`${API_PREFIX}/fines`, finesRoutes);
+app.use(`${API_PREFIX}/onboarding`, onboardingRoutes);
 
 /**
  * API Documentation Root
