@@ -42,7 +42,7 @@ function emptyStep() {
 }
 
 function emptyPlanForm() {
-  return { name: '', description: '', steps: [emptyStep()] };
+  return { name: '', description: '', steps: [emptyStep()], employeeIds: [] };
 }
 
 function getPublicLink(token) {
@@ -103,27 +103,45 @@ export function OnboardingPage() {
     [employees]
   );
 
+  // Bo'lim nomi bo'yicha guruhlangan xodimlar — "Bo'limlar (Kimlar uchun?)"
+  // checkboxi shu bo'limdagi hamma xodimni bir zumda tanlaydi/bekor qiladi.
+  const departmentGroups = useMemo(() => {
+    const groups = {};
+    employees.forEach((e) => {
+      const dept = e.department || "Bo'limsiz";
+      (groups[dept] ||= []).push(e.id);
+    });
+    return Object.entries(groups).map(([name, employeeIds]) => ({ name, employeeIds }));
+  }, [employees]);
+
   // --- Plan create/edit ---
   const [isPlanPanelOpen, setIsPlanPanelOpen] = useState(false);
   const [planForm, setPlanForm] = useState(emptyPlanForm());
   const [editingPlanId, setEditingPlanId] = useState(null);
   const [isSavingPlan, setIsSavingPlan] = useState(false);
+  const [employeeSearch, setEmployeeSearch] = useState('');
 
   const openCreatePlan = () => {
     setPlanForm(emptyPlanForm());
     setEditingPlanId(null);
+    setEmployeeSearch('');
     setIsPlanPanelOpen(true);
   };
 
   const openEditPlan = (plan) => {
+    const alreadyAssignedIds = assignments
+      .filter((a) => a.planId === plan.id)
+      .map((a) => a.employeeId);
     setPlanForm({
       name: plan.name,
       description: plan.description || '',
       steps: plan.steps.length > 0
         ? plan.steps.map((s) => ({ id: s.id, title: s.title, description: s.description || '' }))
         : [emptyStep()],
+      employeeIds: alreadyAssignedIds,
     });
     setEditingPlanId(plan.id);
+    setEmployeeSearch('');
     setIsPlanPanelOpen(true);
   };
 
@@ -133,6 +151,30 @@ export function OnboardingPage() {
     steps: f.steps.map((s) => (s.id === id ? { ...s, [field]: value } : s)),
   }));
   const removeStep = (id) => setPlanForm((f) => ({ ...f, steps: f.steps.filter((s) => s.id !== id) }));
+
+  const toggleEmployeeSelection = (employeeId) => setPlanForm((f) => ({
+    ...f,
+    employeeIds: f.employeeIds.includes(employeeId)
+      ? f.employeeIds.filter((id) => id !== employeeId)
+      : [...f.employeeIds, employeeId],
+  }));
+
+  const isDepartmentFullySelected = (dept) => dept.employeeIds.every((id) => planForm.employeeIds.includes(id));
+  const toggleDepartment = (dept) => setPlanForm((f) => {
+    const fullySelected = dept.employeeIds.every((id) => f.employeeIds.includes(id));
+    return {
+      ...f,
+      employeeIds: fullySelected
+        ? f.employeeIds.filter((id) => !dept.employeeIds.includes(id))
+        : [...new Set([...f.employeeIds, ...dept.employeeIds])],
+    };
+  });
+
+  const filteredEmployeesForPicker = useMemo(() => {
+    const q = employeeSearch.trim().toLowerCase();
+    if (!q) return employees;
+    return employees.filter((e) => `${e.first_name} ${e.last_name}`.toLowerCase().includes(q));
+  }, [employees, employeeSearch]);
 
   const handleSavePlan = async () => {
     if (!planForm.name.trim()) {
@@ -151,15 +193,35 @@ export function OnboardingPage() {
         description: planForm.description.trim(),
         steps: validSteps.map((s) => ({ title: s.title.trim(), description: s.description.trim() })),
       };
+      let planId = editingPlanId;
       if (editingPlanId) {
         await onboardingService.updatePlan(editingPlanId, payload);
-        toast.success('Reja yangilandi');
       } else {
-        await onboardingService.createPlan(payload);
-        toast.success('Reja yaratildi');
+        const created = await onboardingService.createPlan(payload);
+        planId = created.id;
       }
+
+      // Tanlangan xodimlardan hali ushbu rejaga biriktirilmaganlariga
+      // shaxsiy havola yaratiladi — allaqachon biriktirilganlar qayta
+      // yaratilmaydi (o'z havolasini yo'qotmasligi uchun).
+      const alreadyAssignedIds = new Set(
+        assignments.filter((a) => a.planId === planId).map((a) => a.employeeId)
+      );
+      const toAssign = planForm.employeeIds.filter((id) => !alreadyAssignedIds.has(id));
+      if (toAssign.length > 0) {
+        await Promise.allSettled(toAssign.map((employeeId) => onboardingService.createAssignment(planId, employeeId)));
+      }
+
+      toast.success(
+        editingPlanId
+          ? 'Reja yangilandi'
+          : toAssign.length > 0
+            ? `Reja yaratildi, ${toAssign.length} ta xodimga havola yuborildi`
+            : 'Reja yaratildi'
+      );
       setIsPlanPanelOpen(false);
       refreshPlans();
+      refreshAssignments();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Rejani saqlashda xatolik');
     } finally {
@@ -290,8 +352,54 @@ export function OnboardingPage() {
               value={planForm.description}
               onChange={(e) => setPlanForm((f) => ({ ...f, description: e.target.value }))}
               placeholder="Reja haqida qisqacha ma'lumot"
-              rows={5}
+              rows={3}
             />
+
+            <div className="onboarding-picker-section">
+              <label className="form-label">Bo'limlar (Kimlar uchun?)</label>
+              <div className="onboarding-department-list">
+                {departmentGroups.map((dept) => (
+                  <label key={dept.name} className="onboarding-checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={isDepartmentFullySelected(dept)}
+                      onChange={() => toggleDepartment(dept)}
+                    />
+                    <span>{dept.name}</span>
+                    <span className="onboarding-checkbox-count">{dept.employeeIds.length}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="onboarding-picker-section">
+              <label className="form-label">Maxsus xodimlar</label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Xodim ismini yozing..."
+                value={employeeSearch}
+                onChange={(e) => setEmployeeSearch(e.target.value)}
+              />
+              <div className="onboarding-employee-list">
+                {filteredEmployeesForPicker.map((e) => (
+                  <label key={e.id} className="onboarding-checkbox-row onboarding-employee-row">
+                    <input
+                      type="checkbox"
+                      checked={planForm.employeeIds.includes(e.id)}
+                      onChange={() => toggleEmployeeSelection(e.id)}
+                    />
+                    <span className="onboarding-employee-row-info">
+                      <span className="onboarding-employee-row-name">{e.first_name} {e.last_name}</span>
+                      {e.department && <span className="onboarding-employee-row-dept">{e.department}</span>}
+                    </span>
+                  </label>
+                ))}
+                {filteredEmployeesForPicker.length === 0 && (
+                  <p className="onboarding-employee-list-empty">Xodim topilmadi</p>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="onboarding-form-right">
