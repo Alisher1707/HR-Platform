@@ -140,6 +140,8 @@ function mapAssignment(row) {
     totalSteps,
     completedSteps,
     progress: totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0,
+    currentStepTitle: row.current_step_title || null,
+    status: row.completed_at ? 'completed' : 'in_progress',
   };
 }
 
@@ -149,7 +151,16 @@ const SELECT_ASSIGNMENTS = `
     p.name AS plan_name,
     e.first_name, e.last_name, e.photo_url,
     (SELECT COUNT(*) FROM onboarding_plan_steps WHERE plan_id = a.plan_id) AS total_steps,
-    (SELECT COUNT(*) FROM onboarding_step_completions WHERE assignment_id = a.id) AS completed_steps
+    (SELECT COUNT(*) FROM onboarding_step_completions WHERE assignment_id = a.id) AS completed_steps,
+    (
+      SELECT s.title FROM onboarding_plan_steps s
+      WHERE s.plan_id = a.plan_id
+        AND s.id NOT IN (
+          SELECT step_id FROM onboarding_step_completions WHERE assignment_id = a.id
+        )
+      ORDER BY s.order_index
+      LIMIT 1
+    ) AS current_step_title
   FROM onboarding_assignments a
   JOIN onboarding_plans p ON p.id = a.plan_id
   JOIN employees e ON e.id = a.employee_id

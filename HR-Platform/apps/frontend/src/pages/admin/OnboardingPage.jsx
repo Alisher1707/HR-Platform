@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { format } from 'date-fns';
 import {
   Rocket,
   BookOpen,
@@ -12,7 +11,7 @@ import {
   Users,
   Copy,
   Check,
-  ClipboardList,
+  CheckCircle2,
 } from 'lucide-react';
 import onboardingService from '../../services/onboardingService';
 import employeeService from '../../services/employeeService';
@@ -21,6 +20,7 @@ import useConfirm from '../../hooks/useConfirm';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
+import Badge from '../../components/ui/Badge';
 import EmptyState from '../../components/ui/EmptyState';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import Input from '../../components/ui/Input';
@@ -320,28 +320,21 @@ export function OnboardingPage() {
       )}
 
       {activeTab === 'progress' && (
-        isLoadingAssignments ? (
-          <div style={{ padding: '2rem' }}><LoadingSpinner /></div>
-        ) : assignments.length === 0 ? (
-          <EmptyState
-            icon={<ClipboardList size={44} strokeWidth={1.5} />}
-            title="Hali hech kim biriktirilmagan"
-            text="Reja yarating va uni xodimga biriktiring — shaxsiy havola avtomatik yaratiladi"
-          />
-        ) : (
-          <Card style={{ padding: 0 }}>
-            <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Xodim</th>
-                    <th>Reja</th>
-                    <th>Progress</th>
-                    <th>Havola</th>
-                    <th>Sana</th>
-                    <th></th>
-                  </tr>
-                </thead>
+        <Card style={{ padding: 0 }}>
+          <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Xodim</th>
+                  <th>Reja</th>
+                  <th>Joriy bosqich</th>
+                  <th>Progress</th>
+                  <th>Holati</th>
+                  <th>Havola</th>
+                  <th></th>
+                </tr>
+              </thead>
+              {isLoadingAssignments ? null : assignments.length > 0 && (
                 <tbody>
                   {assignments.map((a) => (
                     <tr key={a.id}>
@@ -359,6 +352,15 @@ export function OnboardingPage() {
                       </td>
                       <td>{a.planName}</td>
                       <td>
+                        {a.currentStepTitle ? (
+                          <span className="onboarding-current-step">{a.currentStepTitle}</span>
+                        ) : (
+                          <span className="onboarding-current-step complete">
+                            <CheckCircle2 size={14} strokeWidth={2.25} /> Yakunlandi
+                          </span>
+                        )}
+                      </td>
+                      <td>
                         <div className="onboarding-progress-cell">
                           <div className="onboarding-progress-track">
                             <div
@@ -366,16 +368,18 @@ export function OnboardingPage() {
                               style={{ width: `${a.progress}%` }}
                             />
                           </div>
-                          <span className="onboarding-progress-label">{a.completedSteps}/{a.totalSteps}</span>
+                          <span className="onboarding-progress-label">{a.progress}%</span>
                         </div>
+                      </td>
+                      <td>
+                        <Badge variant={a.status === 'completed' ? 'success' : 'warning'}>
+                          {a.status === 'completed' ? 'Yakunlandi' : 'Jarayonda'}
+                        </Badge>
                       </td>
                       <td>
                         <button type="button" className="attendance-token-chip" onClick={() => handleCopyLink(a.publicToken)}>
                           <Copy size={13} strokeWidth={2.25} /> <code>{a.publicToken.slice(0, 10)}...</code>
                         </button>
-                      </td>
-                      <td>
-                        <span className="finance-payment-time">{format(new Date(a.createdAt), 'dd.MM.yyyy')}</span>
                       </td>
                       <td>
                         <button type="button" className="attendance-toggle-btn" title="Bekor qilish" onClick={() => handleDeleteAssignment(a)}>
@@ -385,10 +389,15 @@ export function OnboardingPage() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
-            </div>
-          </Card>
-        )
+              )}
+            </table>
+          </div>
+          {isLoadingAssignments ? (
+            <div style={{ padding: '2rem' }}><LoadingSpinner /></div>
+          ) : assignments.length === 0 && (
+            <p className="onboarding-progress-empty">Progress ma'lumotlari mavjud emas</p>
+          )}
+        </Card>
       )}
 
       {/* Plan create/edit panel */}
