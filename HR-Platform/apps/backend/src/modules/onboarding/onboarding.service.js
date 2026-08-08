@@ -18,6 +18,8 @@ function mapTask(row) {
     type: row.type,
     title: row.title,
     videoUrl: row.video_url,
+    documentUrl: row.document_url,
+    documentName: row.document_name,
     description: row.description,
     orderIndex: row.order_index,
   };
@@ -124,12 +126,12 @@ async function replaceSteps(client, planId, steps) {
     const params = [stepId];
     const valueRows = tasks.map((t, taskIdx) => {
       const start = params.length + 1;
-      params.push(t.type, t.title, t.videoUrl || null, t.description || null, taskIdx);
-      return `($1, $${start}, $${start + 1}, $${start + 2}, $${start + 3}, $${start + 4})`;
+      params.push(t.type, t.title, t.videoUrl || null, t.documentUrl || null, t.documentName || null, t.description || null, taskIdx);
+      return `($1, $${start}, $${start + 1}, $${start + 2}, $${start + 3}, $${start + 4}, $${start + 5}, $${start + 6})`;
     });
 
     await client.query(
-      `INSERT INTO onboarding_step_tasks (step_id, type, title, video_url, description, order_index) VALUES ${valueRows.join(', ')}`,
+      `INSERT INTO onboarding_step_tasks (step_id, type, title, video_url, document_url, document_name, description, order_index) VALUES ${valueRows.join(', ')}`,
       params
     );
   }
@@ -263,6 +265,33 @@ export async function deleteAssignment(id) {
     throw error;
   }
   return { success: true, id };
+}
+
+export async function getStats() {
+  const result = await query(`
+    SELECT
+      (SELECT COUNT(*) FROM onboarding_plans) AS total_plans,
+      COUNT(*) AS total_assignments,
+      COUNT(*) FILTER (WHERE completed_at IS NOT NULL) AS completed_count,
+      COUNT(*) FILTER (WHERE completed_at IS NULL) AS in_progress_count,
+      COUNT(*) FILTER (WHERE completed_at IS NOT NULL AND completed_at - created_at <= INTERVAL '7 days') AS within_7_days_count
+    FROM onboarding_assignments
+  `);
+
+  const row = result.rows[0];
+  const totalAssignments = Number(row.total_assignments) || 0;
+  const completedCount = Number(row.completed_count) || 0;
+  const within7DaysCount = Number(row.within_7_days_count) || 0;
+
+  return {
+    totalPlans: Number(row.total_plans) || 0,
+    totalAssignments,
+    completedCount,
+    inProgressCount: Number(row.in_progress_count) || 0,
+    completionRate: totalAssignments > 0 ? Math.round((completedCount / totalAssignments) * 100) : 0,
+    within7DaysCount,
+    within7DaysRate: totalAssignments > 0 ? Math.round((within7DaysCount / totalAssignments) * 100) : 0,
+  };
 }
 
 /**

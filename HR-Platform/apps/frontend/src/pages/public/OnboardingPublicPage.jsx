@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Rocket, CheckCircle2, Circle, PartyPopper, Briefcase } from 'lucide-react';
+import { Rocket, CheckCircle2, Circle, PartyPopper, Briefcase, FileText, Download } from 'lucide-react';
 import onboardingService from '../../services/onboardingService';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import { extractYouTubeId } from '../../utils/youtube';
@@ -120,6 +120,18 @@ export function OnboardingPublicPage() {
                           allowFullScreen
                         />
                       </div>
+                    )}
+                    {task.type === 'hujjat' && task.documentUrl && (
+                      <a
+                        className="onboarding-public-doc"
+                        href={onboardingService.getDocumentUrl(task.documentUrl)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <FileText size={16} strokeWidth={2.25} />
+                        <span>{task.documentName || 'Hujjatni ko\'rish'}</span>
+                        <Download size={14} strokeWidth={2.25} />
+                      </a>
                     )}
                     <button
                       type="button"

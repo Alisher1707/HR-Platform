@@ -3,6 +3,7 @@ import Joi from 'joi';
 import * as onboardingController from './onboarding.controller.js';
 import { authenticate, authorize } from '../auth/auth.middleware.js';
 import { validate, validateParams, commonSchemas } from '../../shared/middleware/validate.js';
+import { uploadOnboardingDocument, handleMulterError } from '../../shared/middleware/upload.js';
 import { USER_ROLES } from '../../config/constants.js';
 
 const router = express.Router();
@@ -17,6 +18,8 @@ const taskSchema = Joi.object({
   videoUrl: Joi.string().trim().max(500).allow('', null).pattern(YOUTUBE_URL_PATTERN).messages({
     'string.pattern.base': 'Faqat YouTube havolasi yoki video ID qabul qilinadi',
   }),
+  documentUrl: Joi.string().trim().max(500).allow('', null),
+  documentName: Joi.string().trim().max(255).allow('', null),
   description: Joi.string().trim().max(2000).allow('', null),
 });
 
@@ -41,6 +44,19 @@ const toggleSchema = Joi.object({
 
 const uuidParamSchema = Joi.object({ id: commonSchemas.uuid });
 const canManage = authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.HR);
+
+// Hujjat yuklash (admin/HR) - "Hujjat" turidagi vazifalar uchun
+router.post(
+  '/documents',
+  authenticate,
+  canManage,
+  uploadOnboardingDocument,
+  handleMulterError,
+  onboardingController.uploadDocument
+);
+
+// Statistika (admin/HR)
+router.get('/stats', authenticate, canManage, onboardingController.getStats);
 
 // Rejalar (admin/HR)
 router.get('/plans', authenticate, canManage, onboardingController.getPlans);

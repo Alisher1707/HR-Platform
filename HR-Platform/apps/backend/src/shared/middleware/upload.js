@@ -128,6 +128,49 @@ export const uploadResume = multer({
   }
 }).single('resume'); // Field name: 'resume'
 
+// =============================================
+// Onboarding task document upload ("Hujjat" turi)
+// =============================================
+
+const onboardingDocsDir = path.join(__dirname, '../../../uploads/onboarding');
+if (!fs.existsSync(onboardingDocsDir)) {
+  fs.mkdirSync(onboardingDocsDir, { recursive: true });
+}
+
+const onboardingDocStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, onboardingDocsDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `${uniqueSuffix}${ext}`);
+  }
+});
+
+// Only document files are allowed for onboarding "Hujjat" tasks
+const ONBOARDING_DOC_MIME_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+];
+
+const onboardingDocFileFilter = (req, file, cb) => {
+  if (ONBOARDING_DOC_MIME_TYPES.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Hujjat faqat PDF, DOC yoki DOCX formatida bo\'lishi kerak'));
+  }
+};
+
+export const uploadOnboardingDocument = multer({
+  storage: onboardingDocStorage,
+  fileFilter: onboardingDocFileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB max
+  }
+}).single('document'); // Field name: 'document'
+
 // Error handler middleware
 export function handleMulterError(err, req, res, next) {
   if (err instanceof multer.MulterError) {

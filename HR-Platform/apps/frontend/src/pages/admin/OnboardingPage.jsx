@@ -21,6 +21,10 @@ import {
   FileText,
   Zap,
   AlertCircle,
+  Upload,
+  Paperclip,
+  Percent,
+  CalendarCheck,
 } from 'lucide-react';
 import onboardingService from '../../services/onboardingService';
 import employeeService from '../../services/employeeService';
@@ -41,6 +45,7 @@ import Modal from '../../components/ui/Modal';
 const TABS = [
   { value: 'rejalar', label: 'Rejalar', icon: BookOpen },
   { value: 'progress', label: 'Progress', icon: TrendingUp },
+  { value: 'statistika', label: 'Statistika', icon: Percent },
 ];
 
 let stepSeq = 0;
@@ -55,8 +60,14 @@ function emptyStep() {
 let taskSeq = 0;
 function emptyTask() {
   taskSeq += 1;
-  return { id: `newtask-${taskSeq}`, type: 'video', title: '', videoUrl: '', description: '' };
+  return { id: `newtask-${taskSeq}`, type: 'video', title: '', videoUrl: '', documentUrl: '', documentName: '', description: '' };
 }
+
+const DOCUMENT_MIME_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+];
 
 function emptyPlanForm() {
   return { name: '', description: '', steps: [emptyStep()], employeeIds: [] };
@@ -153,6 +164,8 @@ export function OnboardingPage() {
   const [employees, setEmployees] = useState([]);
   const [isLoadingPlans, setIsLoadingPlans] = useState(false);
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
+  const [stats, setStats] = useState(null);
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
 
   const refreshPlans = async () => {
     setIsLoadingPlans(true);
@@ -178,9 +191,22 @@ export function OnboardingPage() {
     }
   };
 
+  const refreshStats = async () => {
+    setIsLoadingStats(true);
+    try {
+      const data = await onboardingService.getStats();
+      setStats(data);
+    } catch (err) {
+      toast.error('Statistikani yuklashda xatolik');
+    } finally {
+      setIsLoadingStats(false);
+    }
+  };
+
   useEffect(() => {
     refreshPlans();
     refreshAssignments();
+    refreshStats();
     (async () => {
       try {
         const response = await employeeService.getEmployees({ limit: 100 });
@@ -214,6 +240,28 @@ export function OnboardingPage() {
   const [editingPlanId, setEditingPlanId] = useState(null);
   const [isSavingPlan, setIsSavingPlan] = useState(false);
   const [employeeSearch, setEmployeeSearch] = useState('');
+  const [uploadingTaskId, setUploadingTaskId] = useState(null);
+
+  const handleUploadDocument = async (stepId, taskId, file) => {
+    if (!file) return;
+    if (!DOCUMENT_MIME_TYPES.includes(file.type)) {
+      toast.error("Hujjat faqat PDF, DOC yoki DOCX formatida bo'lishi kerak");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Hujjat hajmi 10MB dan oshmasligi kerak");
+      return;
+    }
+    setUploadingTaskId(taskId);
+    try {
+      const result = await onboardingService.uploadDocument(file);
+      updateTaskFields(stepId, taskId, { documentUrl: result.documentUrl, documentName: result.documentName });
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Hujjat yuklashda xatolik');
+    } finally {
+      setUploadingTaskId(null);
+    }
+  };
 
   const openCreatePlan = () => {
     setPlanForm(emptyPlanForm());
@@ -233,7 +281,13 @@ export function OnboardingPage() {
         ? plan.steps.map((s) => ({
             id: s.id,
             tasks: s.tasks.map((t) => ({
-              id: t.id, type: t.type, title: t.title, videoUrl: t.videoUrl || '', description: t.description || '',
+              id: t.id,
+              type: t.type,
+              title: t.title,
+              videoUrl: t.videoUrl || '',
+              documentUrl: t.documentUrl || '',
+              documentName: t.documentName || '',
+              description: t.description || '',
             })),
           }))
         : [emptyStep()],
@@ -256,6 +310,14 @@ export function OnboardingPage() {
     steps: f.steps.map((s) => (
       s.id === stepId
         ? { ...s, tasks: s.tasks.map((t) => (t.id === taskId ? { ...t, [field]: value } : t)) }
+        : s
+    )),
+  }));
+  const updateTaskFields = (stepId, taskId, fields) => setPlanForm((f) => ({
+    ...f,
+    steps: f.steps.map((s) => (
+      s.id === stepId
+        ? { ...s, tasks: s.tasks.map((t) => (t.id === taskId ? { ...t, ...fields } : t)) }
         : s
     )),
   }));
@@ -309,6 +371,8 @@ export function OnboardingPage() {
             type: t.type,
             title: t.title.trim(),
             videoUrl: t.videoUrl?.trim() || '',
+            documentUrl: t.documentUrl?.trim() || '',
+            documentName: t.documentName?.trim() || '',
             description: t.description?.trim() || '',
           })),
       }))
@@ -353,6 +417,7 @@ export function OnboardingPage() {
       setIsPlanPanelOpen(false);
       refreshPlans();
       refreshAssignments();
+      refreshStats();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Rejani saqlashda xatolik');
     } finally {
@@ -371,6 +436,7 @@ export function OnboardingPage() {
       toast.success("Reja o'chirildi");
       refreshPlans();
       refreshAssignments();
+      refreshStats();
     } catch (err) {
       toast.error(err.response?.data?.message || "Rejani o'chirishda xatolik");
     }
@@ -403,6 +469,7 @@ export function OnboardingPage() {
       setCreatedAssignment(result);
       refreshPlans();
       refreshAssignments();
+      refreshStats();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Biriktirishda xatolik');
     } finally {
@@ -431,6 +498,7 @@ export function OnboardingPage() {
       toast.success("Biriktirish bekor qilindi");
       refreshAssignments();
       refreshPlans();
+      refreshStats();
     } catch (err) {
       toast.error(err.response?.data?.message || "Bekor qilishda xatolik");
     }
@@ -596,6 +664,47 @@ export function OnboardingPage() {
                             <span className="onboarding-task-field-error">
                               <AlertCircle size={12} strokeWidth={2.25} /> Faqat YouTube havolasi yoki video ID qabul qilinadi
                             </span>
+                          )}
+                        </div>
+                      )}
+
+                      {task.type === 'hujjat' && (
+                        <div className="onboarding-task-field">
+                          <label><FileText size={13} strokeWidth={2.25} /> Hujjat (PDF, DOC, DOCX)</label>
+                          {task.documentUrl ? (
+                            <div className="onboarding-doc-attached">
+                              <a
+                                href={onboardingService.getDocumentUrl(task.documentUrl)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="onboarding-doc-attached-name"
+                              >
+                                <Paperclip size={13} strokeWidth={2.25} /> {task.documentName || 'Hujjat'}
+                              </a>
+                              <button
+                                type="button"
+                                className="onboarding-doc-remove"
+                                aria-label="Hujjatni olib tashlash"
+                                onClick={() => updateTaskFields(step.id, task.id, { documentUrl: '', documentName: '' })}
+                              >
+                                <X size={13} strokeWidth={2.25} />
+                              </button>
+                            </div>
+                          ) : (
+                            <label className={`onboarding-doc-upload-btn ${uploadingTaskId === task.id ? 'uploading' : ''}`}>
+                              <Upload size={14} strokeWidth={2.25} />
+                              {uploadingTaskId === task.id ? 'Yuklanmoqda...' : 'Fayl tanlash'}
+                              <input
+                                type="file"
+                                accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                disabled={uploadingTaskId === task.id}
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  handleUploadDocument(step.id, task.id, file);
+                                  e.target.value = '';
+                                }}
+                              />
+                            </label>
                           )}
                         </div>
                       )}
@@ -789,6 +898,49 @@ export function OnboardingPage() {
             <p className="onboarding-progress-empty">Progress ma'lumotlari mavjud emas</p>
           )}
         </Card>
+      )}
+
+      {activeTab === 'statistika' && (
+        isLoadingStats ? (
+          <div style={{ padding: '2rem' }}><LoadingSpinner /></div>
+        ) : !stats || stats.totalAssignments === 0 ? (
+          <EmptyState
+            icon={<Percent size={44} strokeWidth={1.5} />}
+            title="Statistika mavjud emas"
+            text="Xodimlarga reja biriktirilgach, umumiy statistika shu yerda ko'rinadi"
+          />
+        ) : (
+          <div className="onboarding-stats-grid">
+            <div className="onboarding-stat-card">
+              <span className="onboarding-stat-icon"><BookOpen size={20} strokeWidth={2.25} /></span>
+              <div>
+                <span className="onboarding-stat-value">{stats.totalPlans}</span>
+                <span className="onboarding-stat-label">Jami rejalar</span>
+              </div>
+            </div>
+            <div className="onboarding-stat-card">
+              <span className="onboarding-stat-icon"><Users size={20} strokeWidth={2.25} /></span>
+              <div>
+                <span className="onboarding-stat-value">{stats.totalAssignments}</span>
+                <span className="onboarding-stat-label">Biriktirilgan xodimlar</span>
+              </div>
+            </div>
+            <div className="onboarding-stat-card">
+              <span className="onboarding-stat-icon"><CheckCircle2 size={20} strokeWidth={2.25} /></span>
+              <div>
+                <span className="onboarding-stat-value">{stats.completionRate}%</span>
+                <span className="onboarding-stat-label">{stats.completedCount} / {stats.totalAssignments} yakunlagan</span>
+              </div>
+            </div>
+            <div className="onboarding-stat-card">
+              <span className="onboarding-stat-icon"><CalendarCheck size={20} strokeWidth={2.25} /></span>
+              <div>
+                <span className="onboarding-stat-value">{stats.within7DaysRate}%</span>
+                <span className="onboarding-stat-label">7 kun ichida yakunlagan ({stats.within7DaysCount} xodim)</span>
+              </div>
+            </div>
+          </div>
+        )
       )}
 
       {/* Assign to employee modal */}

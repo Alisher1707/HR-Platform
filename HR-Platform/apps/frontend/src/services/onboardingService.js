@@ -1,5 +1,8 @@
 import api from './api';
 
+// Backend origin (without /api/v1) — used for building document URLs.
+const API_ORIGIN = (import.meta.env.VITE_API_URL || '/api/v1').replace(/\/api\/v1\/?$/, '');
+
 /**
  * Onboarding Service
  * A plan is a named checklist of steps. Assigning it to an employee mints
@@ -55,6 +58,25 @@ export const onboardingService = {
   async toggleStep(token, taskId, completed) {
     const response = await api.post(`/onboarding/public/${token}/tasks/${taskId}`, { completed });
     return response.data.data;
+  },
+
+  async uploadDocument(file) {
+    const formData = new FormData();
+    formData.append('document', file);
+    const response = await api.post('/onboarding/documents', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data.data;
+  },
+
+  async getStats() {
+    const response = await api.get('/onboarding/stats');
+    return response.data.data;
+  },
+
+  getDocumentUrl(documentUrl) {
+    if (!documentUrl) return null;
+    return documentUrl.startsWith('http') ? documentUrl : `${API_ORIGIN}${documentUrl}`;
   },
 };
 

@@ -56,6 +56,35 @@ export async function deletePlan(req, res) {
   }
 }
 
+export async function uploadDocument(req, res) {
+  try {
+    if (!req.file) {
+      return errorResponse(res, 'Fayl tanlanmadi', HTTP_STATUS.BAD_REQUEST);
+    }
+    return successResponse(
+      res,
+      {
+        documentUrl: `/uploads/onboarding/${req.file.filename}`,
+        documentName: req.file.originalname,
+      },
+      'Hujjat yuklandi'
+    );
+  } catch (error) {
+    console.error('Upload onboarding document error:', error);
+    return errorResponse(res, error.message || 'Hujjat yuklashda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+  }
+}
+
+export async function getStats(req, res) {
+  try {
+    const stats = await onboardingService.getStats();
+    return successResponse(res, stats, 'Statistika olindi');
+  } catch (error) {
+    console.error('Get onboarding stats error:', error);
+    return errorResponse(res, error.message || 'Statistikani olishda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+  }
+}
+
 export async function getAssignments(req, res) {
   try {
     const assignments = await onboardingService.listAssignments();

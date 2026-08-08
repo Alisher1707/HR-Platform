@@ -107,6 +107,18 @@ app.use(
 );
 
 /**
+ * Static Files - Onboarding task documents
+ */
+app.use(
+  '/uploads/onboarding',
+  express.static(path.join(__dirname, '../uploads/onboarding'), {
+    setHeaders: (res) => {
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    },
+  })
+);
+
+/**
  * Rate Limiting
  */
 app.use(generalLimiter);
