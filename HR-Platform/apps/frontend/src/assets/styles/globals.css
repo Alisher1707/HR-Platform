@@ -2207,25 +2207,98 @@ button.header-pill {
   font-size: 0.875rem;
 }
 
-/* Reja create/edit panel — bosqichlar ro'yxati */
-.onboarding-steps-header {
-  margin: 1.25rem 0 0.625rem;
+/* Reja create/edit — to'liq sahifa ko'rinishi (overlay emas) */
+.onboarding-form-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
 }
 
-.onboarding-steps-list {
+.onboarding-form-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+}
+
+.onboarding-back-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card-solid);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.onboarding-back-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.onboarding-form-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.onboarding-form-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.onboarding-form-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 380px) 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .onboarding-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.onboarding-form-left {
   display: flex;
   flex-direction: column;
-  gap: 0.625rem;
-  margin-bottom: 0.75rem;
+  gap: 1.25rem;
+  padding: 1.5rem;
+  background: var(--bg-card-solid);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
 }
 
-.onboarding-step-row {
+.onboarding-form-right {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.onboarding-step-card {
+  background: var(--bg-card-solid);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 1.25rem;
+}
+
+.onboarding-step-card-header {
   display: flex;
   align-items: center;
   gap: 0.625rem;
+  margin-bottom: 1rem;
 }
 
-.onboarding-step-number {
+.onboarding-step-card-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2239,20 +2312,19 @@ button.header-pill {
   font-weight: 700;
 }
 
-.onboarding-step-fields {
+.onboarding-step-card-title {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-  min-width: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
-.onboarding-step-remove {
+.onboarding-step-card-delete {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   flex-shrink: 0;
   border: none;
   border-radius: var(--radius-md);
@@ -2262,30 +2334,36 @@ button.header-pill {
   transition: var(--transition-fast);
 }
 
-.onboarding-step-remove:hover {
+.onboarding-step-card-delete:hover {
   background: var(--error-bg);
   color: var(--error);
 }
 
-.onboarding-step-add {
+.onboarding-step-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.onboarding-step-add-page {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
   width: 100%;
-  padding: 0.625rem;
+  padding: 0.875rem;
   border: 1.5px dashed var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   background: transparent;
   color: var(--accent);
   font-family: inherit;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
   transition: var(--transition-fast);
 }
 
-.onboarding-step-add:hover {
+.onboarding-step-add-page:hover {
   background: var(--accent-light);
   border-color: var(--accent);
 }

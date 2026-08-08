@@ -12,6 +12,8 @@ import {
   Copy,
   Check,
   CheckCircle2,
+  ChevronLeft,
+  Save,
 } from 'lucide-react';
 import onboardingService from '../../services/onboardingService';
 import employeeService from '../../services/employeeService';
@@ -26,7 +28,6 @@ import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import Input from '../../components/ui/Input';
 import Textarea from '../../components/ui/Textarea';
 import Select from '../../components/ui/Select';
-import SidePanel from '../../components/ui/SidePanel';
 import Modal from '../../components/ui/Modal';
 
 const TABS = [
@@ -242,6 +243,100 @@ export function OnboardingPage() {
     }
   };
 
+  if (isPlanPanelOpen) {
+    return (
+      <div className="animate-fade-in onboarding-form-page">
+        <div className="onboarding-form-topbar">
+          <div className="onboarding-form-topbar-left">
+            <button
+              type="button"
+              className="onboarding-back-btn"
+              aria-label="Orqaga"
+              onClick={() => setIsPlanPanelOpen(false)}
+            >
+              <ChevronLeft size={20} strokeWidth={2.25} />
+            </button>
+            <h2 className="onboarding-form-title">{editingPlanId ? 'Tahrirlash' : "Qo'shish"}</h2>
+          </div>
+          <div className="onboarding-form-topbar-actions">
+            <Button variant="ghost" className="onboarding-btn-wide" onClick={() => setIsPlanPanelOpen(false)}>
+              Bekor qilish
+            </Button>
+            <Button
+              variant="primary"
+              className="onboarding-btn-wide"
+              onClick={handleSavePlan}
+              disabled={isSavingPlan}
+              icon={<Save size={16} strokeWidth={2.25} />}
+            >
+              {isSavingPlan ? 'Saqlanmoqda...' : 'Saqlash'}
+            </Button>
+          </div>
+        </div>
+
+        <div className="onboarding-form-grid">
+          <div className="onboarding-form-left">
+            <Input
+              label="Reja nomi"
+              name="planName"
+              value={planForm.name}
+              onChange={(e) => setPlanForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="Masalan: Yangi xodim uchun"
+              required
+            />
+            <Textarea
+              label="Tavsif"
+              name="planDescription"
+              value={planForm.description}
+              onChange={(e) => setPlanForm((f) => ({ ...f, description: e.target.value }))}
+              placeholder="Reja haqida qisqacha ma'lumot"
+              rows={5}
+            />
+          </div>
+
+          <div className="onboarding-form-right">
+            {planForm.steps.map((step, idx) => (
+              <div key={step.id} className="onboarding-step-card">
+                <div className="onboarding-step-card-header">
+                  <span className="onboarding-step-card-badge">{idx + 1}</span>
+                  <span className="onboarding-step-card-title">{idx + 1}-bosqich</span>
+                  <button
+                    type="button"
+                    className="onboarding-step-card-delete"
+                    aria-label="Bosqichni o'chirish"
+                    onClick={() => removeStep(step.id)}
+                  >
+                    <Trash2 size={15} strokeWidth={2.25} />
+                  </button>
+                </div>
+                <div className="onboarding-step-card-body">
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Bosqich nomi"
+                    value={step.title}
+                    onChange={(e) => updateStep(step.id, 'title', e.target.value)}
+                  />
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Izoh (ixtiyoriy)"
+                    value={step.description}
+                    onChange={(e) => updateStep(step.id, 'description', e.target.value)}
+                  />
+                </div>
+              </div>
+            ))}
+
+            <button type="button" className="onboarding-step-add-page" onClick={addStep}>
+              <Plus size={16} strokeWidth={2.5} /> Yangi bosqich qo'shish
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="animate-fade-in">
       <div className="page-header">
@@ -399,78 +494,6 @@ export function OnboardingPage() {
           )}
         </Card>
       )}
-
-      {/* Plan create/edit panel */}
-      <SidePanel
-        isOpen={isPlanPanelOpen}
-        onClose={() => setIsPlanPanelOpen(false)}
-        title={editingPlanId ? 'Rejani tahrirlash' : 'Yangi reja'}
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setIsPlanPanelOpen(false)}>Bekor qilish</Button>
-            <Button variant="primary" onClick={handleSavePlan} disabled={isSavingPlan} style={{ flex: 1 }}>
-              {isSavingPlan ? 'Saqlanmoqda...' : editingPlanId ? 'Saqlash' : 'Yaratish'}
-            </Button>
-          </>
-        }
-      >
-        <Input
-          label="Reja nomi"
-          name="planName"
-          value={planForm.name}
-          onChange={(e) => setPlanForm((f) => ({ ...f, name: e.target.value }))}
-          placeholder="Masalan: Yangi sotuvchi uchun"
-          required
-        />
-        <Textarea
-          label="Tavsif (ixtiyoriy)"
-          name="planDescription"
-          value={planForm.description}
-          onChange={(e) => setPlanForm((f) => ({ ...f, description: e.target.value }))}
-          placeholder="Reja haqida qisqacha ma'lumot"
-          rows={2}
-        />
-
-        <div className="onboarding-steps-header">
-          <label className="form-label">Bosqichlar</label>
-        </div>
-
-        <div className="onboarding-steps-list">
-          {planForm.steps.map((step, idx) => (
-            <div key={step.id} className="onboarding-step-row">
-              <span className="onboarding-step-number">{idx + 1}</span>
-              <div className="onboarding-step-fields">
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Bosqich nomi"
-                  value={step.title}
-                  onChange={(e) => updateStep(step.id, 'title', e.target.value)}
-                />
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Izoh (ixtiyoriy)"
-                  value={step.description}
-                  onChange={(e) => updateStep(step.id, 'description', e.target.value)}
-                />
-              </div>
-              <button
-                type="button"
-                className="onboarding-step-remove"
-                aria-label="Bosqichni o'chirish"
-                onClick={() => removeStep(step.id)}
-              >
-                <Trash2 size={15} strokeWidth={2.25} />
-              </button>
-            </div>
-          ))}
-        </div>
-
-        <button type="button" className="onboarding-step-add" onClick={addStep}>
-          <Plus size={15} strokeWidth={2.5} /> Bosqich qo'shish
-        </button>
-      </SidePanel>
 
       {/* Assign to employee modal */}
       <Modal
