@@ -71,6 +71,7 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
     { value: 'hr', label: 'HR' },
     { value: 'sotuv', label: 'Sotuv' },
     { value: 'kassir', label: 'Kassir' },
+    { value: 'call_operator', label: 'Call-operator' },
     { value: 'mentor', label: 'Mentor' },
     { value: 'boshqaruv', label: 'Boshqaruv' },
     { value: 'texnik', label: 'Texnik bo\'lim' },
