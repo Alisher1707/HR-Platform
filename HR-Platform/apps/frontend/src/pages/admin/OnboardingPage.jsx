@@ -38,7 +38,10 @@ const TABS = [
 let stepSeq = 0;
 function emptyStep() {
   stepSeq += 1;
-  return { id: `new-${stepSeq}`, title: '', description: '' };
+  // taskAdded=false: a freshly added bosqich starts empty, showing just the
+  // "+ Vazifa qo'shish" trigger — the title/description fields only appear
+  // once that's clicked (or immediately, when loaded from an existing plan).
+  return { id: `new-${stepSeq}`, title: '', description: '', taskAdded: false };
 }
 
 function emptyPlanForm() {
@@ -136,7 +139,7 @@ export function OnboardingPage() {
       name: plan.name,
       description: plan.description || '',
       steps: plan.steps.length > 0
-        ? plan.steps.map((s) => ({ id: s.id, title: s.title, description: s.description || '' }))
+        ? plan.steps.map((s) => ({ id: s.id, title: s.title, description: s.description || '', taskAdded: true }))
         : [emptyStep()],
       employeeIds: alreadyAssignedIds,
     });
@@ -151,6 +154,10 @@ export function OnboardingPage() {
     steps: f.steps.map((s) => (s.id === id ? { ...s, [field]: value } : s)),
   }));
   const removeStep = (id) => setPlanForm((f) => ({ ...f, steps: f.steps.filter((s) => s.id !== id) }));
+  const addTaskToStep = (id) => setPlanForm((f) => ({
+    ...f,
+    steps: f.steps.map((s) => (s.id === id ? { ...s, taskAdded: true } : s)),
+  }));
 
   const toggleEmployeeSelection = (employeeId) => setPlanForm((f) => ({
     ...f,
@@ -417,22 +424,33 @@ export function OnboardingPage() {
                     <Trash2 size={15} strokeWidth={2.25} />
                   </button>
                 </div>
-                <div className="onboarding-step-card-body">
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Bosqich nomi"
-                    value={step.title}
-                    onChange={(e) => updateStep(step.id, 'title', e.target.value)}
-                  />
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Izoh (ixtiyoriy)"
-                    value={step.description}
-                    onChange={(e) => updateStep(step.id, 'description', e.target.value)}
-                  />
-                </div>
+                {step.taskAdded ? (
+                  <div className="onboarding-step-card-body">
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Vazifa nomi"
+                      value={step.title}
+                      onChange={(e) => updateStep(step.id, 'title', e.target.value)}
+                      autoFocus
+                    />
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Izoh (ixtiyoriy)"
+                      value={step.description}
+                      onChange={(e) => updateStep(step.id, 'description', e.target.value)}
+                    />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="onboarding-task-add"
+                    onClick={() => addTaskToStep(step.id)}
+                  >
+                    <Plus size={15} strokeWidth={2.5} /> Vazifa qo'shish
+                  </button>
+                )}
               </div>
             ))}
 
