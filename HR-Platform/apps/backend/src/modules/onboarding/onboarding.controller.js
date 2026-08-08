@@ -102,12 +102,12 @@ export async function toggleStep(req, res) {
   try {
     const assignment = await onboardingService.toggleStepCompletion(
       req.params.token,
-      req.params.stepId,
+      req.params.taskId,
       req.body.completed
     );
-    return successResponse(res, assignment, 'Bosqich yangilandi');
+    return successResponse(res, assignment, 'Vazifa yangilandi');
   } catch (error) {
-    console.error('Toggle onboarding step error:', error);
-    return errorResponse(res, error.message || 'Bosqichni yangilashda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    console.error('Toggle onboarding task error:', error);
+    return errorResponse(res, error.message || 'Vazifani yangilashda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }

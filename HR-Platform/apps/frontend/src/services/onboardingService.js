@@ -52,8 +52,8 @@ export const onboardingService = {
     return response.data.data;
   },
 
-  async toggleStep(token, stepId, completed) {
-    const response = await api.post(`/onboarding/public/${token}/steps/${stepId}`, { completed });
+  async toggleStep(token, taskId, completed) {
+    const response = await api.post(`/onboarding/public/${token}/tasks/${taskId}`, { completed });
     return response.data.data;
   },
 };

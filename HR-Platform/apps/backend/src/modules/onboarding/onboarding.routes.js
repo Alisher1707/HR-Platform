@@ -7,9 +7,15 @@ import { USER_ROLES } from '../../config/constants.js';
 
 const router = express.Router();
 
-const stepSchema = Joi.object({
+const taskSchema = Joi.object({
+  type: Joi.string().valid('video', 'matn').default('video'),
   title: Joi.string().trim().min(1).max(200).required(),
+  videoUrl: Joi.string().trim().max(500).allow('', null),
   description: Joi.string().trim().max(2000).allow('', null),
+});
+
+const stepSchema = Joi.object({
+  tasks: Joi.array().items(taskSchema).default([]),
 });
 
 const planSchema = Joi.object({
@@ -63,6 +69,6 @@ router.delete(
 
 // Ommaviy (login talab qilinmaydi - xodim shaxsiy token orqali kiradi)
 router.get('/public/:token', onboardingController.getPublicAssignment);
-router.post('/public/:token/steps/:stepId', validate(toggleSchema), onboardingController.toggleStep);
+router.post('/public/:token/tasks/:taskId', validate(toggleSchema), onboardingController.toggleStep);
 
 export default router;

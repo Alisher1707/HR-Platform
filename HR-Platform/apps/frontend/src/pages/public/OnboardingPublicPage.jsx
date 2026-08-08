@@ -4,17 +4,27 @@ import { Rocket, CheckCircle2, Circle, PartyPopper, Briefcase } from 'lucide-rea
 import onboardingService from '../../services/onboardingService';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 
+/** Accepts a bare video ID or a full youtube.com/youtu.be URL, returns the 11-char ID or null. */
+function extractYouTubeId(input) {
+  if (!input) return null;
+  const trimmed = input.trim();
+  if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) return trimmed;
+  const match = trimmed.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  return match ? match[1] : null;
+}
+
 /**
  * OnboardingPublicPage
  * No login, no sidebar — an employee opens their personal link and ticks
- * off onboarding steps directly. Token-gated on the backend, not user-gated.
+ * off onboarding tasks (grouped into numbered bosqich) directly. Token-gated
+ * on the backend, not user-gated.
  */
 export function OnboardingPublicPage() {
   const { token } = useParams();
   const [assignment, setAssignment] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [togglingStepId, setTogglingStepId] = useState(null);
+  const [togglingTaskId, setTogglingTaskId] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -29,15 +39,15 @@ export function OnboardingPublicPage() {
     })();
   }, [token]);
 
-  const handleToggle = async (stepId, currentlyDone) => {
-    setTogglingStepId(stepId);
+  const handleToggle = async (taskId, currentlyDone) => {
+    setTogglingTaskId(taskId);
     try {
-      const updated = await onboardingService.toggleStep(token, stepId, !currentlyDone);
+      const updated = await onboardingService.toggleStep(token, taskId, !currentlyDone);
       setAssignment(updated);
     } catch (err) {
       // Silently keep the previous state — the checkbox simply won't move.
     } finally {
-      setTogglingStepId(null);
+      setTogglingTaskId(null);
     }
   };
 
@@ -88,38 +98,56 @@ export function OnboardingPublicPage() {
               style={{ width: `${assignment.progress}%` }}
             />
           </div>
-          <span>{assignment.completedSteps} / {assignment.totalSteps} bosqich bajarildi ({assignment.progress}%)</span>
+          <span>{assignment.completedSteps} / {assignment.totalSteps} vazifa bajarildi ({assignment.progress}%)</span>
         </div>
 
         {isComplete && (
           <div className="onboarding-public-complete-banner">
             <PartyPopper size={18} strokeWidth={2.25} />
-            Barcha bosqichlarni muvaffaqiyatli yakunladingiz!
+            Barcha vazifalarni muvaffaqiyatli yakunladingiz!
           </div>
         )}
 
         <div className="onboarding-public-steps">
-          {assignment.steps.map((step) => {
-            const done = assignment.completedStepIds.includes(step.id);
-            const isToggling = togglingStepId === step.id;
-            return (
-              <button
-                key={step.id}
-                type="button"
-                className={`onboarding-public-step ${done ? 'done' : ''}`}
-                onClick={() => handleToggle(step.id, done)}
-                disabled={isToggling}
-              >
-                <span className="onboarding-public-step-check">
-                  {done ? <CheckCircle2 size={22} strokeWidth={2} /> : <Circle size={22} strokeWidth={1.75} />}
-                </span>
-                <span className="onboarding-public-step-text">
-                  <span className="onboarding-public-step-title">{step.title}</span>
-                  {step.description && <span className="onboarding-public-step-desc">{step.description}</span>}
-                </span>
-              </button>
-            );
-          })}
+          {assignment.steps.map((step, stepIdx) => (
+            <div key={step.id} className="onboarding-public-step-group">
+              <div className="onboarding-public-step-group-title">{stepIdx + 1}-bosqich</div>
+
+              {step.tasks.map((task) => {
+                const done = assignment.completedStepIds.includes(task.id);
+                const isToggling = togglingTaskId === task.id;
+                const youtubeId = task.type === 'video' ? extractYouTubeId(task.videoUrl) : null;
+                return (
+                  <div key={task.id} className="onboarding-public-task">
+                    {youtubeId && (
+                      <div className="onboarding-public-video">
+                        <iframe
+                          src={`https://www.youtube.com/embed/${youtubeId}`}
+                          title={task.title}
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        />
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      className={`onboarding-public-step ${done ? 'done' : ''}`}
+                      onClick={() => handleToggle(task.id, done)}
+                      disabled={isToggling}
+                    >
+                      <span className="onboarding-public-step-check">
+                        {done ? <CheckCircle2 size={22} strokeWidth={2} /> : <Circle size={22} strokeWidth={1.75} />}
+                      </span>
+                      <span className="onboarding-public-step-text">
+                        <span className="onboarding-public-step-title">{task.title}</span>
+                        {task.description && <span className="onboarding-public-step-desc">{task.description}</span>}
+                      </span>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
         </div>
       </div>
     </div>

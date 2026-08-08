@@ -4,14 +4,27 @@ import { generateInviteToken } from '../../shared/utils/crypto.js';
 
 /**
  * Onboarding Service
- * A plan (onboarding_plans) is a named, ordered checklist (onboarding_plan_steps).
- * Assigning a plan to an employee (onboarding_assignments) mints that employee
- * a unique, unauthenticated public link (public_token) — they tick off steps
- * (onboarding_step_completions) without ever logging in.
+ * A plan (onboarding_plans) is an ordered list of "bosqich" (onboarding_plan_steps),
+ * each of which is a container for one or more "vazifa" (onboarding_step_tasks) —
+ * a video or text task the employee actually checks off. Assigning a plan to an
+ * employee (onboarding_assignments) mints them a unique, unauthenticated public
+ * link (public_token) — they tick off tasks (onboarding_step_completions) without
+ * ever logging in.
  */
 
+function mapTask(row) {
+  return {
+    id: row.id,
+    type: row.type,
+    title: row.title,
+    videoUrl: row.video_url,
+    description: row.description,
+    orderIndex: row.order_index,
+  };
+}
+
 function mapStep(row) {
-  return { id: row.id, title: row.title, description: row.description, orderIndex: row.order_index };
+  return { id: row.id, orderIndex: row.order_index, tasks: row.tasks || [] };
 }
 
 function mapPlan(row) {
@@ -22,6 +35,7 @@ function mapPlan(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     stepCount: Number(row.step_count) || 0,
+    taskCount: Number(row.task_count) || 0,
     assignmentCount: Number(row.assignment_count) || 0,
     steps: row.steps || [],
   };
@@ -31,9 +45,11 @@ const SELECT_PLANS = `
   SELECT
     p.*,
     COUNT(DISTINCT s.id) AS step_count,
+    COUNT(DISTINCT t.id) AS task_count,
     COUNT(DISTINCT a.id) AS assignment_count
   FROM onboarding_plans p
   LEFT JOIN onboarding_plan_steps s ON s.plan_id = p.id
+  LEFT JOIN onboarding_step_tasks t ON t.step_id = s.id
   LEFT JOIN onboarding_assignments a ON a.plan_id = p.id
 `;
 
@@ -43,11 +59,22 @@ export async function listPlans() {
 }
 
 async function attachSteps(plan) {
-  const result = await query(
+  const stepsResult = await query(
     'SELECT * FROM onboarding_plan_steps WHERE plan_id = $1 ORDER BY order_index',
     [plan.id]
   );
-  return { ...plan, steps: result.rows.map(mapStep) };
+  const steps = stepsResult.rows.map(mapStep);
+  if (steps.length === 0) return { ...plan, steps: [] };
+
+  const tasksResult = await query(
+    'SELECT * FROM onboarding_step_tasks WHERE step_id = ANY($1) ORDER BY step_id, order_index',
+    [steps.map((s) => s.id)]
+  );
+  const tasksByStep = {};
+  for (const row of tasksResult.rows) {
+    (tasksByStep[row.step_id] ||= []).push(mapTask(row));
+  }
+  return { ...plan, steps: steps.map((s) => ({ ...s, tasks: tasksByStep[s.id] || [] })) };
 }
 
 export async function getPlanById(id) {
@@ -64,17 +91,29 @@ async function replaceSteps(client, planId, steps) {
   await client.query('DELETE FROM onboarding_plan_steps WHERE plan_id = $1', [planId]);
   if (!steps || steps.length === 0) return;
 
-  const params = [planId];
-  const valueRows = steps.map((s, idx) => {
-    const start = params.length + 1;
-    params.push(s.title, s.description || null, idx);
-    return `($1, $${start}, $${start + 1}, $${start + 2})`;
-  });
+  for (let stepIdx = 0; stepIdx < steps.length; stepIdx += 1) {
+    const step = steps[stepIdx];
+    const stepResult = await client.query(
+      'INSERT INTO onboarding_plan_steps (plan_id, order_index) VALUES ($1, $2) RETURNING id',
+      [planId, stepIdx]
+    );
+    const stepId = stepResult.rows[0].id;
 
-  await client.query(
-    `INSERT INTO onboarding_plan_steps (plan_id, title, description, order_index) VALUES ${valueRows.join(', ')}`,
-    params
-  );
+    const tasks = step.tasks || [];
+    if (tasks.length === 0) continue;
+
+    const params = [stepId];
+    const valueRows = tasks.map((t, taskIdx) => {
+      const start = params.length + 1;
+      params.push(t.type, t.title, t.videoUrl || null, t.description || null, taskIdx);
+      return `($1, $${start}, $${start + 1}, $${start + 2}, $${start + 3}, $${start + 4})`;
+    });
+
+    await client.query(
+      `INSERT INTO onboarding_step_tasks (step_id, type, title, video_url, description, order_index) VALUES ${valueRows.join(', ')}`,
+      params
+    );
+  }
 }
 
 export async function createPlan(data, userId) {
@@ -125,8 +164,8 @@ export async function deletePlan(id) {
 }
 
 function mapAssignment(row) {
-  const totalSteps = Number(row.total_steps) || 0;
-  const completedSteps = Number(row.completed_steps) || 0;
+  const totalTasks = Number(row.total_tasks) || 0;
+  const completedTasks = Number(row.completed_tasks) || 0;
   return {
     id: row.id,
     planId: row.plan_id,
@@ -137,10 +176,10 @@ function mapAssignment(row) {
     publicToken: row.public_token,
     createdAt: row.created_at,
     completedAt: row.completed_at,
-    totalSteps,
-    completedSteps,
-    progress: totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0,
-    currentStepTitle: row.current_step_title || null,
+    totalSteps: totalTasks,
+    completedSteps: completedTasks,
+    progress: totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0,
+    currentStepTitle: row.current_task_title || null,
     status: row.completed_at ? 'completed' : 'in_progress',
   };
 }
@@ -150,17 +189,22 @@ const SELECT_ASSIGNMENTS = `
     a.*,
     p.name AS plan_name,
     e.first_name, e.last_name, e.photo_url,
-    (SELECT COUNT(*) FROM onboarding_plan_steps WHERE plan_id = a.plan_id) AS total_steps,
-    (SELECT COUNT(*) FROM onboarding_step_completions WHERE assignment_id = a.id) AS completed_steps,
     (
-      SELECT s.title FROM onboarding_plan_steps s
+      SELECT COUNT(*) FROM onboarding_step_tasks t
+      JOIN onboarding_plan_steps s ON s.id = t.step_id
       WHERE s.plan_id = a.plan_id
-        AND s.id NOT IN (
-          SELECT step_id FROM onboarding_step_completions WHERE assignment_id = a.id
+    ) AS total_tasks,
+    (SELECT COUNT(*) FROM onboarding_step_completions WHERE assignment_id = a.id) AS completed_tasks,
+    (
+      SELECT t.title FROM onboarding_step_tasks t
+      JOIN onboarding_plan_steps s ON s.id = t.step_id
+      WHERE s.plan_id = a.plan_id
+        AND t.id NOT IN (
+          SELECT task_id FROM onboarding_step_completions WHERE assignment_id = a.id
         )
-      ORDER BY s.order_index
+      ORDER BY s.order_index, t.order_index
       LIMIT 1
-    ) AS current_step_title
+    ) AS current_task_title
   FROM onboarding_assignments a
   JOIN onboarding_plans p ON p.id = a.plan_id
   JOIN employees e ON e.id = a.employee_id
@@ -213,27 +257,41 @@ export async function getAssignmentByToken(token) {
     throw error;
   }
 
-  const steps = (await query(
+  const stepsResult = await query(
     'SELECT * FROM onboarding_plan_steps WHERE plan_id = $1 ORDER BY order_index',
     [assignment.plan_id]
-  )).rows.map(mapStep);
+  );
+  const steps = stepsResult.rows.map(mapStep);
 
-  const completedStepIds = (await query(
-    'SELECT step_id FROM onboarding_step_completions WHERE assignment_id = $1',
+  if (steps.length > 0) {
+    const tasksResult = await query(
+      'SELECT * FROM onboarding_step_tasks WHERE step_id = ANY($1) ORDER BY step_id, order_index',
+      [steps.map((s) => s.id)]
+    );
+    const tasksByStep = {};
+    for (const row of tasksResult.rows) {
+      (tasksByStep[row.step_id] ||= []).push(mapTask(row));
+    }
+    steps.forEach((s) => { s.tasks = tasksByStep[s.id] || []; });
+  }
+
+  const completedTaskIds = (await query(
+    'SELECT task_id FROM onboarding_step_completions WHERE assignment_id = $1',
     [assignment.id]
-  )).rows.map((r) => r.step_id);
+  )).rows.map((r) => r.task_id);
 
   return {
     ...mapAssignment(assignment),
     steps,
-    completedStepIds,
+    completedStepIds: completedTaskIds,
   };
 }
 
 async function recomputeAssignmentCompletion(assignmentId) {
   const result = await query(
     `SELECT
-       (SELECT COUNT(*) FROM onboarding_plan_steps s
+       (SELECT COUNT(*) FROM onboarding_step_tasks t
+          JOIN onboarding_plan_steps s ON s.id = t.step_id
           JOIN onboarding_assignments a ON a.plan_id = s.plan_id WHERE a.id = $1) AS total,
        (SELECT COUNT(*) FROM onboarding_step_completions WHERE assignment_id = $1) AS done`,
     [assignmentId]
@@ -246,7 +304,7 @@ async function recomputeAssignmentCompletion(assignmentId) {
   );
 }
 
-export async function toggleStepCompletion(token, stepId, completed) {
+export async function toggleStepCompletion(token, taskId, completed) {
   const assignmentResult = await query(
     'SELECT id, plan_id FROM onboarding_assignments WHERE public_token = $1',
     [token]
@@ -258,26 +316,28 @@ export async function toggleStepCompletion(token, stepId, completed) {
   }
   const assignment = assignmentResult.rows[0];
 
-  const stepCheck = await query(
-    'SELECT id FROM onboarding_plan_steps WHERE id = $1 AND plan_id = $2',
-    [stepId, assignment.plan_id]
+  const taskCheck = await query(
+    `SELECT t.id FROM onboarding_step_tasks t
+     JOIN onboarding_plan_steps s ON s.id = t.step_id
+     WHERE t.id = $1 AND s.plan_id = $2`,
+    [taskId, assignment.plan_id]
   );
-  if (stepCheck.rows.length === 0) {
-    const error = new Error('Bosqich topilmadi');
+  if (taskCheck.rows.length === 0) {
+    const error = new Error('Vazifa topilmadi');
     error.statusCode = HTTP_STATUS.NOT_FOUND;
     throw error;
   }
 
   if (completed) {
     await query(
-      `INSERT INTO onboarding_step_completions (assignment_id, step_id) VALUES ($1, $2)
-       ON CONFLICT (assignment_id, step_id) DO NOTHING`,
-      [assignment.id, stepId]
+      `INSERT INTO onboarding_step_completions (assignment_id, task_id) VALUES ($1, $2)
+       ON CONFLICT (assignment_id, task_id) DO NOTHING`,
+      [assignment.id, taskId]
     );
   } else {
     await query(
-      'DELETE FROM onboarding_step_completions WHERE assignment_id = $1 AND step_id = $2',
-      [assignment.id, stepId]
+      'DELETE FROM onboarding_step_completions WHERE assignment_id = $1 AND task_id = $2',
+      [assignment.id, taskId]
     );
   }
 

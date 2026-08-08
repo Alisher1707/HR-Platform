@@ -14,6 +14,8 @@ import {
   CheckCircle2,
   ChevronLeft,
   Save,
+  X,
+  Video,
 } from 'lucide-react';
 import onboardingService from '../../services/onboardingService';
 import employeeService from '../../services/employeeService';
@@ -38,10 +40,16 @@ const TABS = [
 let stepSeq = 0;
 function emptyStep() {
   stepSeq += 1;
-  // taskAdded=false: a freshly added bosqich starts empty, showing just the
-  // "+ Vazifa qo'shish" trigger — the title/description fields only appear
-  // once that's clicked (or immediately, when loaded from an existing plan).
-  return { id: `new-${stepSeq}`, title: '', description: '', taskAdded: false };
+  // A bosqich has no content of its own — it's just a numbered container
+  // for one or more vazifa (tasks), added via the "+ Vazifa qo'shish"
+  // trigger inside its card.
+  return { id: `new-${stepSeq}`, tasks: [] };
+}
+
+let taskSeq = 0;
+function emptyTask() {
+  taskSeq += 1;
+  return { id: `newtask-${taskSeq}`, type: 'video', title: '', videoUrl: '', description: '' };
 }
 
 function emptyPlanForm() {
@@ -139,7 +147,12 @@ export function OnboardingPage() {
       name: plan.name,
       description: plan.description || '',
       steps: plan.steps.length > 0
-        ? plan.steps.map((s) => ({ id: s.id, title: s.title, description: s.description || '', taskAdded: true }))
+        ? plan.steps.map((s) => ({
+            id: s.id,
+            tasks: s.tasks.map((t) => ({
+              id: t.id, type: t.type, title: t.title, videoUrl: t.videoUrl || '', description: t.description || '',
+            })),
+          }))
         : [emptyStep()],
       employeeIds: alreadyAssignedIds,
     });
@@ -149,14 +162,23 @@ export function OnboardingPage() {
   };
 
   const addStep = () => setPlanForm((f) => ({ ...f, steps: [...f.steps, emptyStep()] }));
-  const updateStep = (id, field, value) => setPlanForm((f) => ({
-    ...f,
-    steps: f.steps.map((s) => (s.id === id ? { ...s, [field]: value } : s)),
-  }));
   const removeStep = (id) => setPlanForm((f) => ({ ...f, steps: f.steps.filter((s) => s.id !== id) }));
-  const addTaskToStep = (id) => setPlanForm((f) => ({
+
+  const addTaskToStep = (stepId) => setPlanForm((f) => ({
     ...f,
-    steps: f.steps.map((s) => (s.id === id ? { ...s, taskAdded: true } : s)),
+    steps: f.steps.map((s) => (s.id === stepId ? { ...s, tasks: [...s.tasks, emptyTask()] } : s)),
+  }));
+  const updateTask = (stepId, taskId, field, value) => setPlanForm((f) => ({
+    ...f,
+    steps: f.steps.map((s) => (
+      s.id === stepId
+        ? { ...s, tasks: s.tasks.map((t) => (t.id === taskId ? { ...t, [field]: value } : t)) }
+        : s
+    )),
+  }));
+  const removeTask = (stepId, taskId) => setPlanForm((f) => ({
+    ...f,
+    steps: f.steps.map((s) => (s.id === stepId ? { ...s, tasks: s.tasks.filter((t) => t.id !== taskId) } : s)),
   }));
 
   const toggleEmployeeSelection = (employeeId) => setPlanForm((f) => ({
@@ -188,9 +210,20 @@ export function OnboardingPage() {
       toast.error('Reja nomini kiriting');
       return;
     }
-    const validSteps = planForm.steps.filter((s) => s.title.trim());
+    const validSteps = planForm.steps
+      .map((s) => ({
+        tasks: s.tasks
+          .filter((t) => t.title.trim())
+          .map((t) => ({
+            type: t.type,
+            title: t.title.trim(),
+            videoUrl: t.videoUrl?.trim() || '',
+            description: t.description?.trim() || '',
+          })),
+      }))
+      .filter((s) => s.tasks.length > 0);
     if (validSteps.length === 0) {
-      toast.error("Kamida bitta bosqich qo'shing");
+      toast.error("Kamida bitta vazifa qo'shing");
       return;
     }
     setIsSavingPlan(true);
@@ -198,7 +231,7 @@ export function OnboardingPage() {
       const payload = {
         name: planForm.name.trim(),
         description: planForm.description.trim(),
-        steps: validSteps.map((s) => ({ title: s.title.trim(), description: s.description.trim() })),
+        steps: validSteps,
       };
       let planId = editingPlanId;
       if (editingPlanId) {
@@ -424,33 +457,74 @@ export function OnboardingPage() {
                     <Trash2 size={15} strokeWidth={2.25} />
                   </button>
                 </div>
-                {step.taskAdded ? (
-                  <div className="onboarding-step-card-body">
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="Vazifa nomi"
-                      value={step.title}
-                      onChange={(e) => updateStep(step.id, 'title', e.target.value)}
-                      autoFocus
-                    />
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="Izoh (ixtiyoriy)"
-                      value={step.description}
-                      onChange={(e) => updateStep(step.id, 'description', e.target.value)}
-                    />
+                {step.tasks.map((task) => (
+                  <div key={task.id} className="onboarding-task-block">
+                    <div className="onboarding-task-row">
+                      <div className="onboarding-task-field-type">
+                        <label>Turi</label>
+                        <select
+                          className="form-select"
+                          value={task.type}
+                          onChange={(e) => updateTask(step.id, task.id, 'type', e.target.value)}
+                        >
+                          <option value="video">Video</option>
+                          <option value="matn">Matn</option>
+                        </select>
+                      </div>
+                      <div className="onboarding-task-field-name">
+                        <label>Vazifa nomi</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="Vazifa nomi"
+                          value={task.title}
+                          onChange={(e) => updateTask(step.id, task.id, 'title', e.target.value)}
+                          autoFocus
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="onboarding-task-remove"
+                        aria-label="Vazifani o'chirish"
+                        onClick={() => removeTask(step.id, task.id)}
+                      >
+                        <X size={16} strokeWidth={2.25} />
+                      </button>
+                    </div>
+
+                    {task.type === 'video' && (
+                      <div className="onboarding-task-field">
+                        <label><Video size={13} strokeWidth={2.25} /> YouTube havolasi</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="ID yoki to'liq URL"
+                          value={task.videoUrl}
+                          onChange={(e) => updateTask(step.id, task.id, 'videoUrl', e.target.value)}
+                        />
+                      </div>
+                    )}
+
+                    <div className="onboarding-task-field">
+                      <label>Ko'rsatma (Tavsif)</label>
+                      <textarea
+                        className="form-textarea"
+                        placeholder="Vazifa bo'yicha qisqacha ko'rsatma..."
+                        rows={2}
+                        value={task.description}
+                        onChange={(e) => updateTask(step.id, task.id, 'description', e.target.value)}
+                      />
+                    </div>
                   </div>
-                ) : (
-                  <button
-                    type="button"
-                    className="onboarding-task-add"
-                    onClick={() => addTaskToStep(step.id)}
-                  >
-                    <Plus size={15} strokeWidth={2.5} /> Vazifa qo'shish
-                  </button>
-                )}
+                ))}
+
+                <button
+                  type="button"
+                  className="onboarding-task-add"
+                  onClick={() => addTaskToStep(step.id)}
+                >
+                  <Plus size={15} strokeWidth={2.5} /> Vazifa qo'shish
+                </button>
               </div>
             ))}
 
@@ -520,7 +594,7 @@ export function OnboardingPage() {
                   </div>
                 </div>
                 <div className="onboarding-plan-stats">
-                  <span><ListChecks size={14} strokeWidth={2.25} /> {plan.stepCount} bosqich</span>
+                  <span><ListChecks size={14} strokeWidth={2.25} /> {plan.stepCount} bosqich, {plan.taskCount} vazifa</span>
                   <span><Users size={14} strokeWidth={2.25} /> {plan.assignmentCount} xodim</span>
                 </div>
                 <div className="onboarding-plan-actions">
@@ -548,7 +622,7 @@ export function OnboardingPage() {
                 <tr>
                   <th>Xodim</th>
                   <th>Reja</th>
-                  <th>Joriy bosqich</th>
+                  <th>Joriy vazifa</th>
                   <th>Progress</th>
                   <th>Holati</th>
                   <th>Havola</th>
