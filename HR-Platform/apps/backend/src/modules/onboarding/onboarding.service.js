@@ -53,28 +53,46 @@ const SELECT_PLANS = `
   LEFT JOIN onboarding_assignments a ON a.plan_id = p.id
 `;
 
-export async function listPlans() {
-  const result = await query(`${SELECT_PLANS} GROUP BY p.id ORDER BY p.created_at DESC`);
-  return result.rows.map(mapPlan);
+/**
+ * Batches steps+tasks for any number of plans in two queries total (not
+ * N+1) — used by both listPlans() and getPlanById() so the "Rejalar" grid
+ * always carries full nested data, not just the counts. Without this,
+ * editing a plan straight from the list (as the frontend does, reusing
+ * already-loaded data instead of a fresh per-plan fetch) would silently
+ * see zero steps and overwrite the real ones on save.
+ */
+async function attachStepsToPlans(plans) {
+  if (plans.length === 0) return plans;
+
+  const stepsResult = await query(
+    'SELECT * FROM onboarding_plan_steps WHERE plan_id = ANY($1) ORDER BY plan_id, order_index',
+    [plans.map((p) => p.id)]
+  );
+  const steps = stepsResult.rows.map((row) => ({ ...mapStep(row), planId: row.plan_id }));
+
+  if (steps.length > 0) {
+    const tasksResult = await query(
+      'SELECT * FROM onboarding_step_tasks WHERE step_id = ANY($1) ORDER BY step_id, order_index',
+      [steps.map((s) => s.id)]
+    );
+    const tasksByStep = {};
+    for (const row of tasksResult.rows) {
+      (tasksByStep[row.step_id] ||= []).push(mapTask(row));
+    }
+    steps.forEach((s) => { s.tasks = tasksByStep[s.id] || []; });
+  }
+
+  const stepsByPlan = {};
+  for (const { planId, ...step } of steps) {
+    (stepsByPlan[planId] ||= []).push(step);
+  }
+
+  return plans.map((p) => ({ ...p, steps: stepsByPlan[p.id] || [] }));
 }
 
-async function attachSteps(plan) {
-  const stepsResult = await query(
-    'SELECT * FROM onboarding_plan_steps WHERE plan_id = $1 ORDER BY order_index',
-    [plan.id]
-  );
-  const steps = stepsResult.rows.map(mapStep);
-  if (steps.length === 0) return { ...plan, steps: [] };
-
-  const tasksResult = await query(
-    'SELECT * FROM onboarding_step_tasks WHERE step_id = ANY($1) ORDER BY step_id, order_index',
-    [steps.map((s) => s.id)]
-  );
-  const tasksByStep = {};
-  for (const row of tasksResult.rows) {
-    (tasksByStep[row.step_id] ||= []).push(mapTask(row));
-  }
-  return { ...plan, steps: steps.map((s) => ({ ...s, tasks: tasksByStep[s.id] || [] })) };
+export async function listPlans() {
+  const result = await query(`${SELECT_PLANS} GROUP BY p.id ORDER BY p.created_at DESC`);
+  return attachStepsToPlans(result.rows.map(mapPlan));
 }
 
 export async function getPlanById(id) {
@@ -84,7 +102,8 @@ export async function getPlanById(id) {
     error.statusCode = HTTP_STATUS.NOT_FOUND;
     throw error;
   }
-  return attachSteps(mapPlan(result.rows[0]));
+  const [plan] = await attachStepsToPlans([mapPlan(result.rows[0])]);
+  return plan;
 }
 
 async function replaceSteps(client, planId, steps) {
