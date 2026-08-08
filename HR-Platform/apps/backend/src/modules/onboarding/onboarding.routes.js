@@ -7,10 +7,16 @@ import { USER_ROLES } from '../../config/constants.js';
 
 const router = express.Router();
 
+// Bare 11-char video ID or a full youtube.com/youtu.be URL only — anything
+// else (a random link, a different video host) is rejected outright.
+const YOUTUBE_URL_PATTERN = /^([a-zA-Z0-9_-]{11}|https?:\/\/(www\.)?(youtube\.com\/(watch\?v=|embed\/|shorts\/)|youtu\.be\/)[a-zA-Z0-9_-]{11}(&\S*|\?\S*)?)$/;
+
 const taskSchema = Joi.object({
-  type: Joi.string().valid('video', 'matn').default('video'),
+  type: Joi.string().valid('video', 'hujjat', 'harakat').default('video'),
   title: Joi.string().trim().min(1).max(200).required(),
-  videoUrl: Joi.string().trim().max(500).allow('', null),
+  videoUrl: Joi.string().trim().max(500).allow('', null).pattern(YOUTUBE_URL_PATTERN).messages({
+    'string.pattern.base': 'Faqat YouTube havolasi yoki video ID qabul qilinadi',
+  }),
   description: Joi.string().trim().max(2000).allow('', null),
 });
 

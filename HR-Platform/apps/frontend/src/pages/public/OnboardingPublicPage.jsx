@@ -3,15 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Rocket, CheckCircle2, Circle, PartyPopper, Briefcase } from 'lucide-react';
 import onboardingService from '../../services/onboardingService';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
-
-/** Accepts a bare video ID or a full youtube.com/youtu.be URL, returns the 11-char ID or null. */
-function extractYouTubeId(input) {
-  if (!input) return null;
-  const trimmed = input.trim();
-  if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) return trimmed;
-  const match = trimmed.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-  return match ? match[1] : null;
-}
+import { extractYouTubeId } from '../../utils/youtube';
 
 /**
  * OnboardingPublicPage

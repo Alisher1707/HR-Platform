@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import ReactDOM from 'react-dom';
 import {
   Rocket,
   BookOpen,
@@ -13,12 +14,17 @@ import {
   Check,
   CheckCircle2,
   ChevronLeft,
+  ChevronDown,
   Save,
   X,
   Video,
+  FileText,
+  Zap,
+  AlertCircle,
 } from 'lucide-react';
 import onboardingService from '../../services/onboardingService';
 import employeeService from '../../services/employeeService';
+import { isValidYouTubeInput } from '../../utils/youtube';
 import useToast from '../../hooks/useToast';
 import useConfirm from '../../hooks/useConfirm';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
@@ -58,6 +64,83 @@ function emptyPlanForm() {
 
 function getPublicLink(token) {
   return `${window.location.origin}/onboarding/public/${token}`;
+}
+
+const TASK_TYPES = [
+  { value: 'video', label: 'Video', icon: Video },
+  { value: 'hujjat', label: 'Hujjat', icon: FileText },
+  { value: 'harakat', label: 'Harakat', icon: Zap },
+];
+
+/**
+ * TaskTypeSelect
+ * Small custom dropdown for the "Turi" field — only 3 fixed options, so no
+ * search is needed, but a native <select>'s dropdown can't be restyled, so
+ * this portals its own panel the same safe way SearchableSelect does
+ * elsewhere in the app (position:fixed with top/bottom explicitly set to
+ * 'auto', never left undefined — otherwise a leftover CSS fallback value
+ * fights the inline one and collapses the panel to ~0 height).
+ */
+function TaskTypeSelect({ value, onChange }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [popupPos, setPopupPos] = useState({ top: 0, left: 0, width: 120 });
+  const wrapperRef = useRef(null);
+  const popupRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (
+        wrapperRef.current && !wrapperRef.current.contains(e.target) &&
+        popupRef.current && !popupRef.current.contains(e.target)
+      ) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const toggleOpen = () => {
+    if (!isOpen && wrapperRef.current) {
+      const rect = wrapperRef.current.getBoundingClientRect();
+      setPopupPos({ top: rect.bottom + 6, bottom: 'auto', left: rect.left, width: Math.max(rect.width, 140) });
+    }
+    setIsOpen((prev) => !prev);
+  };
+
+  const selected = TASK_TYPES.find((t) => t.value === value) || TASK_TYPES[0];
+  const SelectedIcon = selected.icon;
+
+  return (
+    <div className="onboarding-type-select" ref={wrapperRef}>
+      <button type="button" className={`onboarding-type-trigger ${isOpen ? 'open' : ''}`} onClick={toggleOpen}>
+        <SelectedIcon size={14} strokeWidth={2.25} />
+        <span>{selected.label}</span>
+        <ChevronDown size={14} strokeWidth={2.25} />
+      </button>
+
+      {isOpen && ReactDOM.createPortal(
+        <div
+          ref={popupRef}
+          className="onboarding-type-panel"
+          style={{ position: 'fixed', top: popupPos.top, bottom: popupPos.bottom, left: popupPos.left, width: popupPos.width }}
+        >
+          {TASK_TYPES.map((t) => (
+            <button
+              key={t.value}
+              type="button"
+              className={`onboarding-type-option ${t.value === value ? 'selected' : ''}`}
+              onClick={() => { onChange(t.value); setIsOpen(false); }}
+            >
+              <t.icon size={14} strokeWidth={2.25} />
+              {t.label}
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
+    </div>
+  );
 }
 
 export function OnboardingPage() {
@@ -210,6 +293,14 @@ export function OnboardingPage() {
       toast.error('Reja nomini kiriting');
       return;
     }
+    const hasInvalidVideoLink = planForm.steps.some((s) => s.tasks.some(
+      (t) => t.title.trim() && t.type === 'video' && t.videoUrl.trim() && !isValidYouTubeInput(t.videoUrl)
+    ));
+    if (hasInvalidVideoLink) {
+      toast.error("Video vazifalarga faqat YouTube havolasi yoki video ID kiriting");
+      return;
+    }
+
     const validSteps = planForm.steps
       .map((s) => ({
         tasks: s.tasks
@@ -457,66 +548,71 @@ export function OnboardingPage() {
                     <Trash2 size={15} strokeWidth={2.25} />
                   </button>
                 </div>
-                {step.tasks.map((task) => (
-                  <div key={task.id} className="onboarding-task-block">
-                    <div className="onboarding-task-row">
-                      <div className="onboarding-task-field-type">
-                        <label>Turi</label>
-                        <select
-                          className="form-select"
-                          value={task.type}
-                          onChange={(e) => updateTask(step.id, task.id, 'type', e.target.value)}
+                {step.tasks.map((task) => {
+                  const videoUrlTouched = task.videoUrl.trim().length > 0;
+                  const videoUrlInvalid = task.type === 'video' && videoUrlTouched && !isValidYouTubeInput(task.videoUrl);
+                  return (
+                    <div key={task.id} className="onboarding-task-block">
+                      <div className="onboarding-task-row">
+                        <div className="onboarding-task-field-type">
+                          <label>Turi</label>
+                          <TaskTypeSelect
+                            value={task.type}
+                            onChange={(type) => updateTask(step.id, task.id, 'type', type)}
+                          />
+                        </div>
+                        <div className="onboarding-task-field-name">
+                          <label>Vazifa nomi</label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            placeholder="Vazifa nomi"
+                            value={task.title}
+                            onChange={(e) => updateTask(step.id, task.id, 'title', e.target.value)}
+                            autoFocus
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          className="onboarding-task-remove"
+                          aria-label="Vazifani o'chirish"
+                          onClick={() => removeTask(step.id, task.id)}
                         >
-                          <option value="video">Video</option>
-                          <option value="matn">Matn</option>
-                        </select>
+                          <X size={16} strokeWidth={2.25} />
+                        </button>
                       </div>
-                      <div className="onboarding-task-field-name">
-                        <label>Vazifa nomi</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          placeholder="Vazifa nomi"
-                          value={task.title}
-                          onChange={(e) => updateTask(step.id, task.id, 'title', e.target.value)}
-                          autoFocus
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        className="onboarding-task-remove"
-                        aria-label="Vazifani o'chirish"
-                        onClick={() => removeTask(step.id, task.id)}
-                      >
-                        <X size={16} strokeWidth={2.25} />
-                      </button>
-                    </div>
 
-                    {task.type === 'video' && (
+                      {task.type === 'video' && (
+                        <div className="onboarding-task-field">
+                          <label><Video size={13} strokeWidth={2.25} /> YouTube havolasi</label>
+                          <input
+                            type="text"
+                            className={`form-input ${videoUrlInvalid ? 'error' : ''}`}
+                            placeholder="ID yoki to'liq URL"
+                            value={task.videoUrl}
+                            onChange={(e) => updateTask(step.id, task.id, 'videoUrl', e.target.value)}
+                          />
+                          {videoUrlInvalid && (
+                            <span className="onboarding-task-field-error">
+                              <AlertCircle size={12} strokeWidth={2.25} /> Faqat YouTube havolasi yoki video ID qabul qilinadi
+                            </span>
+                          )}
+                        </div>
+                      )}
+
                       <div className="onboarding-task-field">
-                        <label><Video size={13} strokeWidth={2.25} /> YouTube havolasi</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          placeholder="ID yoki to'liq URL"
-                          value={task.videoUrl}
-                          onChange={(e) => updateTask(step.id, task.id, 'videoUrl', e.target.value)}
+                        <label>Ko'rsatma (Tavsif)</label>
+                        <textarea
+                          className="form-textarea"
+                          placeholder="Vazifa bo'yicha qisqacha ko'rsatma..."
+                          rows={2}
+                          value={task.description}
+                          onChange={(e) => updateTask(step.id, task.id, 'description', e.target.value)}
                         />
                       </div>
-                    )}
-
-                    <div className="onboarding-task-field">
-                      <label>Ko'rsatma (Tavsif)</label>
-                      <textarea
-                        className="form-textarea"
-                        placeholder="Vazifa bo'yicha qisqacha ko'rsatma..."
-                        rows={2}
-                        value={task.description}
-                        onChange={(e) => updateTask(step.id, task.id, 'description', e.target.value)}
-                      />
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 <button
                   type="button"
