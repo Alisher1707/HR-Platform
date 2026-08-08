@@ -263,14 +263,6 @@ export function AppRouter() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/hr/onboarding"
-            element={
-              <ProtectedRoute allowedRoles={['HR']}>
-                <OnboardingPage />
-              </ProtectedRoute>
-            }
-          />
         </Route>
 
         {/* Fallbacks */}
