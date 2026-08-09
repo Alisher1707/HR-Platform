@@ -90,16 +90,55 @@ export async function getScheduleById(id) {
   return schedule;
 }
 
+/**
+ * A schedule's employee roster is replaced wholesale on every save. Bir
+ * xodim faqat bitta jadvalga tegishli bo'ladi (employee_id ustidagi UNIQUE
+ * — migration 038) — shu sabab bu yerdagi INSERT oddiy qo'shish emas,
+ * "ko'chirish" semantikasiga ega: agar xodim boshqa jadvalda bo'lsa, u
+ * shu yerga ko'chiriladi va o'sha eski biriktirish avtomatik yo'qoladi.
+ * created_at faqat haqiqiy ko'chishda yangilanadi — xodim allaqachon shu
+ * jadvalda bo'lib, shunchaki qolayotgan bo'lsa (masalan, admin faqat
+ * jadval nomini tahrirlagan bo'lsa), eski sana saqlanib qoladi.
+ */
 async function assignEmployees(client, scheduleId, employeeIds) {
-  await client.query('DELETE FROM work_schedule_employees WHERE schedule_id = $1', [scheduleId]);
+  let movedFrom = [];
+  if (employeeIds.length > 0) {
+    const movedResult = await client.query(
+      `SELECT wse.employee_id, e.first_name, e.last_name, ws.name AS previous_schedule_name
+       FROM work_schedule_employees wse
+       JOIN work_schedules ws ON ws.id = wse.schedule_id
+       JOIN employees e ON e.id = wse.employee_id
+       WHERE wse.employee_id = ANY($1::uuid[]) AND wse.schedule_id != $2`,
+      [employeeIds, scheduleId]
+    );
+    movedFrom = movedResult.rows.map((r) => ({
+      employeeId: r.employee_id,
+      employeeName: `${r.first_name} ${r.last_name}`,
+      previousScheduleName: r.previous_schedule_name,
+    }));
+  }
 
-  if (employeeIds.length === 0) return;
-
-  const values = employeeIds.map((_, idx) => `($1, $${idx + 2})`).join(', ');
   await client.query(
-    `INSERT INTO work_schedule_employees (schedule_id, employee_id) VALUES ${values}`,
-    [scheduleId, ...employeeIds]
+    'DELETE FROM work_schedule_employees WHERE schedule_id = $1 AND employee_id != ALL($2::uuid[])',
+    [scheduleId, employeeIds]
   );
+
+  if (employeeIds.length > 0) {
+    const values = employeeIds.map((_, idx) => `($1, $${idx + 2})`).join(', ');
+    await client.query(
+      `INSERT INTO work_schedule_employees (schedule_id, employee_id)
+       VALUES ${values}
+       ON CONFLICT (employee_id) DO UPDATE SET
+         schedule_id = EXCLUDED.schedule_id,
+         created_at = CASE
+           WHEN work_schedule_employees.schedule_id = EXCLUDED.schedule_id THEN work_schedule_employees.created_at
+           ELSE NOW()
+         END`,
+      [scheduleId, ...employeeIds]
+    );
+  }
+
+  return movedFrom;
 }
 
 async function assignDays(client, scheduleId, days) {
@@ -140,11 +179,12 @@ export async function createSchedule(data, userId) {
     );
 
     const scheduleId = insertResult.rows[0].id;
-    await assignEmployees(client, scheduleId, data.employeeIds);
+    const movedFrom = await assignEmployees(client, scheduleId, data.employeeIds);
     await assignDays(client, scheduleId, data.days);
 
     await client.query('COMMIT');
-    return getScheduleById(scheduleId);
+    const schedule = await getScheduleById(scheduleId);
+    return { ...schedule, movedFromOtherSchedule: movedFrom };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -172,11 +212,12 @@ export async function updateSchedule(id, data) {
       ]
     );
 
-    await assignEmployees(client, id, data.employeeIds);
+    const movedFrom = await assignEmployees(client, id, data.employeeIds);
     await assignDays(client, id, data.days);
 
     await client.query('COMMIT');
-    return getScheduleById(id);
+    const schedule = await getScheduleById(id);
+    return { ...schedule, movedFromOtherSchedule: movedFrom };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -322,6 +363,15 @@ function timeStringToMinutes(timeStr) {
  */
 export async function computeLateness(employeeId, recordedAt) {
   const schedule = await getActiveScheduleForEmployee(employeeId);
+
+  // "Gibrid"/"Erkin" jadvallarda qat'iy boshlanish vaqti yo'q — ular kun
+  // ichidagi vaqt o'rniga bitta smenaning umumiy davomiyligini ("Smena
+  // limit soatlari") cheklaydi, shuning uchun "kech qolish" tushunchasi
+  // ularga qo'llanmaydi (computeShiftLimit "ketdi"da buni tekshiradi).
+  if (schedule && schedule.type !== 'moslashuvchan') {
+    return { isLate: null, isAfterHours: null, scheduleId: schedule.id };
+  }
+
   const scanDate = new Date(recordedAt);
   const day = schedule ? await getScheduleDay(schedule.id, getDayNumberForDate(schedule, scanDate)) : null;
 
@@ -347,6 +397,11 @@ export async function computeLateness(employeeId, recordedAt) {
  */
 export async function computeEarlyLeave(employeeId, recordedAt) {
   const schedule = await getActiveScheduleForEmployee(employeeId);
+
+  if (schedule && schedule.type !== 'moslashuvchan') {
+    return { isEarly: null, scheduleId: schedule.id };
+  }
+
   const scanDate = new Date(recordedAt);
   const day = schedule ? await getScheduleDay(schedule.id, getDayNumberForDate(schedule, scanDate)) : null;
 
@@ -358,4 +413,37 @@ export async function computeEarlyLeave(employeeId, recordedAt) {
   const scheduleMinutes = timeStringToMinutes(day?.end_time || DEFAULT_END_TIME);
 
   return { isEarly: scanMinutes < scheduleMinutes, scheduleId: schedule ? schedule.id : null };
+}
+
+/**
+ * "Gibrid"/"Erkin" jadvallar uchun — qat'iy boshlanish/tugash vaqti
+ * o'rniga bitta smenaning umumiy davomiyligi "Smena limit soatlari"dan
+ * oshib ketganini tekshiradi. "Ketdi" hodisasida chaqiriladi, shu kun
+ * ichidagi eng so'nggi "keldi" hodisasiga nisbatan hisoblanadi. Boshqa
+ * jadval turlari yoki limit belgilanmagan bo'lsa, natija null — bu
+ * metrika ularga qo'llanmaydi.
+ */
+export async function computeShiftLimit(employeeId, recordedAt) {
+  const schedule = await getActiveScheduleForEmployee(employeeId);
+  if (!schedule || schedule.type === 'moslashuvchan' || !schedule.shift_limit_hours) {
+    return { isOverShiftLimit: null };
+  }
+
+  const scanDate = new Date(recordedAt);
+  const dayStart = new Date(scanDate);
+  dayStart.setHours(0, 0, 0, 0);
+
+  const result = await query(
+    `SELECT recorded_at FROM attendance_records
+     WHERE employee_id = $1 AND type = 'keldi' AND recorded_at >= $2 AND recorded_at <= $3
+     ORDER BY recorded_at DESC LIMIT 1`,
+    [employeeId, dayStart, scanDate]
+  );
+
+  if (result.rows.length === 0) {
+    return { isOverShiftLimit: null };
+  }
+
+  const shiftHours = (scanDate - new Date(result.rows[0].recorded_at)) / (1000 * 60 * 60);
+  return { isOverShiftLimit: shiftHours > schedule.shift_limit_hours };
 }

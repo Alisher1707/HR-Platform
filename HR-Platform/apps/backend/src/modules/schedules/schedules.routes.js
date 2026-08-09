@@ -27,9 +27,19 @@ const scheduleSchema = Joi.object({
   deductBreak: Joi.boolean().default(false),
   extendedHours: Joi.number().integer().min(0).max(24).default(0),
   limitType: Joi.string().valid('kunlik', 'haftalik', 'oylik').allow('', null),
-  limitHours: Joi.number().integer().min(0).max(24).allow(null),
+  // 744 = 31 kunlik oyning soat soni — "Oylik" limit uchun yetadigan yuqori
+  // chegara; "Kunlik"/"Haftalik" bunchalik katta qiymat kiritmaydi, lekin
+  // bitta umumiy chegara oddiyroq va baribir mazmunsiz qiymatlarni to'sadi.
+  limitHours: Joi.number().integer().min(0).max(744).allow(null),
   shiftLimitHours: Joi.number().integer().min(0).max(24).allow(null),
-  days: Joi.array().items(dayConfigSchema).min(1).required(),
+  // "Moslashuvchan" sikl davomida har bir kunning o'z vaqti bilan sozlanadi
+  // (kamida 1 kun shart). "Gibrid"/"Erkin"da qat'iy vaqt tushunchasi yo'q —
+  // ular limit-asosli, shuning uchun kunlar ro'yxati bo'sh bo'lishi mumkin.
+  days: Joi.when('type', {
+    is: 'moslashuvchan',
+    then: Joi.array().items(dayConfigSchema).min(1).required(),
+    otherwise: Joi.array().items(dayConfigSchema).min(0).default([]),
+  }),
   employeeIds: Joi.array().items(commonSchemas.uuid).min(1).required(),
 });
 

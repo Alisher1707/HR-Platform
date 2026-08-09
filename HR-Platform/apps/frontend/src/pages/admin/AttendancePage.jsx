@@ -2266,9 +2266,15 @@ export function AttendancePage() {
                               <td>
                                 {record.type === 'keldi' ? (
                                   record.is_late === null || record.is_late === undefined ? (
-                                    <Badge variant="info" title="Xodimning biriktirilgan jadvali bu kunni dam olish kuni deb belgilagan">
-                                      <CalendarOff size={12} strokeWidth={2.25} /> Dam olish kuni
-                                    </Badge>
+                                    record.schedule_type === 'gibrid' || record.schedule_type === 'erkin' ? (
+                                      <Badge variant="info" title="Bu jadvalda qat'iy boshlanish vaqti yo'q — smena limiti asosida ishlaydi">
+                                        <Zap size={12} strokeWidth={2.25} /> Erkin jadval
+                                      </Badge>
+                                    ) : (
+                                      <Badge variant="info" title="Xodimning biriktirilgan jadvali bu kunni dam olish kuni deb belgilagan">
+                                        <CalendarOff size={12} strokeWidth={2.25} /> Dam olish kuni
+                                      </Badge>
+                                    )
                                   ) : record.is_late && record.is_after_hours ? (
                                     <Badge variant="afterhours" title="Ish kuni allaqachon tugagandan keyin kelgan">
                                       <LogIn size={12} strokeWidth={2.25} /> Ishdan keyin keldi
@@ -2280,9 +2286,18 @@ export function AttendancePage() {
                                   )
                                 ) : (
                                   record.is_early_leave === null || record.is_early_leave === undefined ? (
-                                    <Badge variant="info" title="Xodimning biriktirilgan jadvali bu kunni dam olish kuni deb belgilagan">
-                                      <CalendarOff size={12} strokeWidth={2.25} /> Dam olish kuni
-                                    </Badge>
+                                    record.is_over_shift_limit === null || record.is_over_shift_limit === undefined ? (
+                                      <Badge variant="info" title="Xodimning biriktirilgan jadvali bu kunni dam olish kuni deb belgilagan">
+                                        <CalendarOff size={12} strokeWidth={2.25} /> Dam olish kuni
+                                      </Badge>
+                                    ) : (
+                                      <Badge
+                                        variant={record.is_over_shift_limit ? 'warning' : 'success'}
+                                        title="Smenaning umumiy davomiyligi jadvaldagi 'Smena limit soatlari' bilan solishtirilgan"
+                                      >
+                                        <Clock size={12} strokeWidth={2.25} /> {record.is_over_shift_limit ? 'Smena limitidan oshdi' : 'Smena limitida'}
+                                      </Badge>
+                                    )
                                   ) : (
                                     <Badge variant={record.is_early_leave ? 'warning' : 'success'}>
                                       <LogOut size={12} strokeWidth={2.25} /> {record.is_early_leave ? 'Erta ketdi' : 'Vaqtida ketdi'}

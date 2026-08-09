@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { query } from '../../config/database.js';
-import { computeLateness, computeEarlyLeave } from '../schedules/schedules.service.js';
+import { computeLateness, computeEarlyLeave, computeShiftLimit } from '../schedules/schedules.service.js';
 import { recomputeEmployeePresence } from '../attendance/attendance.service.js';
 import { generateRandomString } from '../../shared/utils/crypto.js';
 
@@ -207,15 +207,20 @@ async function recordAttendance(employeeId, deviceToken, rawPersonId, explicitTy
   const type = explicitType || (!hasKeldi ? 'keldi' : 'ketdi');
 
   const recordedAt = new Date();
-  const { isLate, isAfterHours, isEarly, scheduleId } = type === 'keldi'
-    ? { ...(await computeLateness(employeeId, recordedAt)), isEarly: null }
-    : { isLate: null, isAfterHours: null, ...(await computeEarlyLeave(employeeId, recordedAt)) };
+  const { isLate, isAfterHours, isEarly, isOverShiftLimit, scheduleId } = type === 'keldi'
+    ? { ...(await computeLateness(employeeId, recordedAt)), isEarly: null, isOverShiftLimit: null }
+    : {
+        isLate: null,
+        isAfterHours: null,
+        ...(await computeEarlyLeave(employeeId, recordedAt)),
+        ...(await computeShiftLimit(employeeId, recordedAt)),
+      };
 
   await query(
     `INSERT INTO attendance_records
-       (employee_id, type, device_token, raw_person_id, recorded_at, is_late, is_after_hours, is_early_leave, schedule_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-    [employeeId, type, deviceToken, rawPersonId, recordedAt, isLate, isAfterHours, isEarly, scheduleId]
+       (employee_id, type, device_token, raw_person_id, recorded_at, is_late, is_after_hours, is_early_leave, is_over_shift_limit, schedule_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    [employeeId, type, deviceToken, rawPersonId, recordedAt, isLate, isAfterHours, isEarly, isOverShiftLimit, scheduleId]
   );
 
   await recomputeEmployeePresence(employeeId);

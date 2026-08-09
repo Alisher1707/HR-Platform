@@ -64,6 +64,8 @@ const LIMIT_TYPES = [
   { value: 'oylik', label: 'Oylik' },
 ];
 
+const LIMIT_HOURS_MAX = { kunlik: 24, haftalik: 168, oylik: 744 };
+
 // Filiallar/Bo'limlar/Lavozimlar uchun hali alohida backend yo'q — tashkilot
 // bo'limidagi kabi (OrganizationPage), shu sabab faqat kompaniyaning o'zi
 // ("IT Live") mavjud filial sifatida ko'rsatiladi.
@@ -164,7 +166,10 @@ function scheduleToPayload(form) {
     limitType: form.limitType,
     limitHours: form.limitHours,
     shiftLimitHours: form.shiftLimitHours,
-    days: form.days,
+    // "Gibrid"/"Erkin"da qat'iy kunlik vaqt tushunchasi yo'q (limit-asosli
+    // ishlaydi), shuning uchun mazmunsiz standart 09:00-18:00 qatorlarini
+    // bazaga yubormaymiz.
+    days: form.type === 'moslashuvchan' ? form.days : [],
     employeeIds: form.employeeIds,
   };
 }
@@ -480,6 +485,16 @@ export function IshJadvallariPage() {
 
   const typeLabelOf = (value) => SCHEDULE_TYPES.find((t) => t.value === value)?.label || value;
 
+  // Bitta xodim faqat bitta jadvalga tegishli bo'lgani uchun (migration 038),
+  // bitta jadvalni saqlash boshqa bir jadvalning xodimlar ro'yxatini ham
+  // o'zgartirib qo'yishi mumkin (ko'chirish orqali) — shu sabab saqlashdan
+  // keyin faqat o'sha bitta jadvalni emas, hammasini qayta yuklaymiz, aks
+  // holda boshqa jadval eskirgan "xodimlar soni" bilan qolib ketardi.
+  const refreshSchedules = async () => {
+    const scheduleList = await workScheduleService.getSchedules();
+    setSchedules(scheduleList.map(apiScheduleToItem));
+  };
+
   useEffect(() => {
     let cancelled = false;
 
@@ -503,9 +518,32 @@ export function IshJadvallariPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Xodim faqat bitta jadvalga tegishli bo'ladi — agar u boshqa jadvalda
+  // bo'lsa (hozir tahrirlanayotgan jadvaldan farqli), shuni tanlashdan
+  // oldinoq ko'rsatamiz, saqlangandan keyin kutilmagan "ko'chirish"
+  // bo'lib qolmasin.
+  const employeeScheduleMap = useMemo(() => {
+    const map = {};
+    schedules.forEach((s) => {
+      (s.employees || []).forEach((e) => {
+        map[e.id] = { scheduleId: s.id, scheduleName: s.name };
+      });
+    });
+    return map;
+  }, [schedules]);
+
   const employeeOptions = useMemo(
-    () => employees.map((e) => ({ value: e.id, label: `${e.first_name} ${e.last_name}` })),
-    [employees]
+    () => employees.map((e) => {
+      const current = employeeScheduleMap[e.id];
+      const isOnOtherSchedule = current && current.scheduleId !== activeId;
+      return {
+        value: e.id,
+        label: isOnOtherSchedule
+          ? `${e.first_name} ${e.last_name} — hozir: "${current.scheduleName}"`
+          : `${e.first_name} ${e.last_name}`,
+      };
+    }),
+    [employees, employeeScheduleMap, activeId]
   );
 
   const filteredSchedules = useMemo(() => {
@@ -569,15 +607,30 @@ export function IshJadvallariPage() {
     try {
       const payload = scheduleToPayload(form);
 
+      let movedFrom = [];
       if (panelMode === 'edit') {
         const updated = await workScheduleService.updateSchedule(activeId, payload);
-        setSchedules((prev) => prev.map((s) => (s.id === activeId ? apiScheduleToItem(updated) : s)));
+        movedFrom = updated.movedFromOtherSchedule || [];
         toast.success('Jadval yangilandi');
       } else {
         const created = await workScheduleService.createSchedule(payload);
-        setSchedules((prev) => [apiScheduleToItem(created), ...prev]);
+        movedFrom = created.movedFromOtherSchedule || [];
         toast.success("Yangi jadval qo'shildi");
       }
+
+      // Bitta jadvalni saqlash boshqa jadval(lar)ning xodimlar ro'yxatini
+      // ham o'zgartirgan bo'lishi mumkin (ko'chirish orqali) — shu sabab
+      // faqat shu jadvalni emas, hammasini qayta yuklaymiz.
+      await refreshSchedules();
+
+      // Bir xodim faqat bitta jadvalga tegishli bo'ladi — agar shu saqlash
+      // paytida kimdir boshqa jadvaldan bu yerga ko'chirilgan bo'lsa, buni
+      // ochiq-oydin bildiramiz (jimgina, sezdirmasdan bo'lib qolmasin).
+      if (movedFrom.length > 0) {
+        const names = movedFrom.map((m) => `${m.employeeName} ("${m.previousScheduleName}"dan)`).join(', ');
+        toast.warning(`Ko'chirildi: ${names}`);
+      }
+
       setIsPanelOpen(false);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Jadvalni saqlashda xatolik yuz berdi');
@@ -980,7 +1033,13 @@ export function IshJadvallariPage() {
 
               <div className="form-group">
                 <label className="form-label">Limit soatlar</label>
-                <Stepper value={form.limitHours} onChange={(v) => setForm((f) => ({ ...f, limitHours: v }))} min={0} max={24} disabled={isReadOnly} />
+                <Stepper
+                  value={form.limitHours}
+                  onChange={(v) => setForm((f) => ({ ...f, limitHours: v }))}
+                  min={0}
+                  max={LIMIT_HOURS_MAX[form.limitType] || 24}
+                  disabled={isReadOnly}
+                />
               </div>
 
               <div className="form-group">
