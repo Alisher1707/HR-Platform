@@ -3141,6 +3141,7 @@ button.header-pill {
 
 .onboarding-public-step-text {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 0.1875rem;
   min-width: 0;
