@@ -39,7 +39,6 @@ import EmptyState from '../../components/ui/EmptyState';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import Input from '../../components/ui/Input';
 import Textarea from '../../components/ui/Textarea';
-import Select from '../../components/ui/Select';
 import Modal from '../../components/ui/Modal';
 
 const TABS = [
@@ -217,11 +216,6 @@ export function OnboardingPage() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const employeeOptions = useMemo(
-    () => employees.map((e) => ({ value: e.id, label: `${e.first_name} ${e.last_name}` })),
-    [employees]
-  );
 
   // Bo'lim nomi bo'yicha guruhlangan xodimlar — "Bo'limlar (Kimlar uchun?)"
   // checkboxi shu bo'limdagi hamma xodimni bir zumda tanlaydi/bekor qiladi.
@@ -442,31 +436,56 @@ export function OnboardingPage() {
     }
   };
 
-  // --- Assign to employee ---
+  // --- Assign to employee (bir nechta xodimni bir vaqtda tanlab biriktirish) ---
   const [isAssignOpen, setIsAssignOpen] = useState(false);
   const [assignPlan, setAssignPlan] = useState(null);
-  const [assignEmployeeId, setAssignEmployeeId] = useState('');
+  const [assignEmployeeIds, setAssignEmployeeIds] = useState([]);
+  const [assignSearch, setAssignSearch] = useState('');
   const [isAssigning, setIsAssigning] = useState(false);
-  const [createdAssignment, setCreatedAssignment] = useState(null);
-  const [isLinkCopied, setIsLinkCopied] = useState(false);
+  const [createdAssignments, setCreatedAssignments] = useState([]);
+  const [copiedToken, setCopiedToken] = useState(null);
 
   const openAssign = (plan) => {
     setAssignPlan(plan);
-    setAssignEmployeeId('');
-    setCreatedAssignment(null);
-    setIsLinkCopied(false);
+    setAssignEmployeeIds([]);
+    setAssignSearch('');
+    setCreatedAssignments([]);
+    setCopiedToken(null);
     setIsAssignOpen(true);
   };
 
+  const toggleAssignEmployee = (employeeId) => setAssignEmployeeIds((ids) => (
+    ids.includes(employeeId) ? ids.filter((id) => id !== employeeId) : [...ids, employeeId]
+  ));
+
+  const alreadyAssignedToPlan = useMemo(() => {
+    if (!assignPlan) return new Set();
+    return new Set(assignments.filter((a) => a.planId === assignPlan.id).map((a) => a.employeeId));
+  }, [assignments, assignPlan]);
+
+  const assignPickerEmployees = useMemo(() => {
+    const q = assignSearch.trim().toLowerCase();
+    return employees
+      .filter((e) => !alreadyAssignedToPlan.has(e.id))
+      .filter((e) => !q || `${e.first_name} ${e.last_name}`.toLowerCase().includes(q));
+  }, [employees, assignSearch, alreadyAssignedToPlan]);
+
   const handleAssign = async () => {
-    if (!assignEmployeeId) {
-      toast.error('Xodimni tanlang');
+    if (assignEmployeeIds.length === 0) {
+      toast.error('Kamida bitta xodimni tanlang');
       return;
     }
     setIsAssigning(true);
     try {
-      const result = await onboardingService.createAssignment(assignPlan.id, assignEmployeeId);
-      setCreatedAssignment(result);
+      const results = await Promise.allSettled(
+        assignEmployeeIds.map((employeeId) => onboardingService.createAssignment(assignPlan.id, employeeId))
+      );
+      const created = results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
+      const failedCount = results.length - created.length;
+      setCreatedAssignments(created);
+      if (failedCount > 0) {
+        toast.error(`${failedCount} ta xodimga biriktirishda xatolik yuz berdi`);
+      }
       refreshPlans();
       refreshAssignments();
       refreshStats();
@@ -480,8 +499,8 @@ export function OnboardingPage() {
   const handleCopyLink = async (token) => {
     try {
       await navigator.clipboard.writeText(getPublicLink(token));
-      setIsLinkCopied(true);
-      setTimeout(() => setIsLinkCopied(false), 2000);
+      setCopiedToken(token);
+      setTimeout(() => setCopiedToken(null), 2000);
     } catch (err) {
       toast.error("Nusxalashda xatolik — havolani qo'lda belgilab oling");
     }
@@ -943,14 +962,14 @@ export function OnboardingPage() {
         )
       )}
 
-      {/* Assign to employee modal */}
+      {/* Assign to employee modal — bir nechta xodimni bir vaqtda tanlab biriktirish */}
       <Modal
         isOpen={isAssignOpen}
         onClose={() => setIsAssignOpen(false)}
-        title={createdAssignment ? 'Havola tayyor' : 'Xodimga biriktirish'}
-        size="sm"
+        title={createdAssignments.length > 0 ? 'Havolalar tayyor' : 'Xodimga biriktirish'}
+        size="md"
         footer={
-          createdAssignment ? (
+          createdAssignments.length > 0 ? (
             <Button variant="primary" onClick={() => setIsAssignOpen(false)} style={{ width: '100%' }}>
               Yopish
             </Button>
@@ -958,37 +977,64 @@ export function OnboardingPage() {
             <>
               <Button variant="ghost" className="onboarding-btn-wide" onClick={() => setIsAssignOpen(false)}>Bekor qilish</Button>
               <Button variant="primary" className="onboarding-btn-wide" onClick={handleAssign} disabled={isAssigning}>
-                {isAssigning ? 'Biriktirilmoqda...' : 'Biriktirish'}
+                {isAssigning
+                  ? 'Biriktirilmoqda...'
+                  : `Biriktirish${assignEmployeeIds.length > 0 ? ` (${assignEmployeeIds.length})` : ''}`}
               </Button>
             </>
           )
         }
       >
-        {createdAssignment ? (
-          <div className="attendance-device-created">
-            <span className="attendance-device-created-icon"><Check size={26} strokeWidth={2.25} /></span>
-            <h3>{createdAssignment.employeeName} uchun havola yaratildi</h3>
-            <p>Bu shaxsiy havola — xodim login qilmasdan o'z bosqichlarini shu yerdan belgilaydi. Nusxalab, xodimga yuboring.</p>
-            <div className="attendance-device-token-box">
-              <code>{getPublicLink(createdAssignment.publicToken)}</code>
-              <button type="button" className="attendance-device-token-copy" onClick={() => handleCopyLink(createdAssignment.publicToken)}>
-                {isLinkCopied ? <Check size={15} strokeWidth={2.5} /> : <Copy size={15} strokeWidth={2.25} />}
-              </button>
+        {createdAssignments.length > 0 ? (
+          <div className="onboarding-assign-created-list">
+            <div className="attendance-device-created" style={{ paddingBottom: 0 }}>
+              <span className="attendance-device-created-icon"><Check size={26} strokeWidth={2.25} /></span>
+              <h3>{createdAssignments.length} ta xodimga havola yaratildi</h3>
+              <p>Bular shaxsiy havolalar — xodimlar login qilmasdan o'z bosqichlarini shu yerdan belgilaydi. Nusxalab, har biriga yuboring.</p>
             </div>
+            {createdAssignments.map((a) => (
+              <div key={a.id} className="attendance-device-token-box onboarding-assign-created-row">
+                <span className="onboarding-assign-created-name">{a.employeeName}</span>
+                <code>{getPublicLink(a.publicToken)}</code>
+                <button type="button" className="attendance-device-token-copy" onClick={() => handleCopyLink(a.publicToken)}>
+                  {copiedToken === a.publicToken ? <Check size={15} strokeWidth={2.5} /> : <Copy size={15} strokeWidth={2.25} />}
+                </button>
+              </div>
+            ))}
           </div>
         ) : (
           <>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '1rem' }}>
-              <strong>{assignPlan?.name}</strong> rejasini qaysi xodimga biriktiramiz?
+              <strong>{assignPlan?.name}</strong> rejasini qaysi xodimlarga biriktiramiz? Bir nechtasini tanlashingiz mumkin.
             </p>
-            <Select
-              label="Xodim"
-              name="assignEmployee"
-              value={assignEmployeeId}
-              onChange={(e) => setAssignEmployeeId(e.target.value)}
-              options={employeeOptions}
-              required
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Xodim ismini yozing..."
+              value={assignSearch}
+              onChange={(e) => setAssignSearch(e.target.value)}
+              style={{ marginBottom: '0.75rem' }}
             />
+            <div className="onboarding-employee-list">
+              {assignPickerEmployees.map((e) => (
+                <label key={e.id} className="onboarding-checkbox-row onboarding-employee-row">
+                  <input
+                    type="checkbox"
+                    checked={assignEmployeeIds.includes(e.id)}
+                    onChange={() => toggleAssignEmployee(e.id)}
+                  />
+                  <span className="onboarding-employee-row-info">
+                    <span className="onboarding-employee-row-name">{e.first_name} {e.last_name}</span>
+                    {e.department && <span className="onboarding-employee-row-dept">{e.department}</span>}
+                  </span>
+                </label>
+              ))}
+              {assignPickerEmployees.length === 0 && (
+                <p className="onboarding-employee-list-empty">
+                  {alreadyAssignedToPlan.size > 0 ? 'Barcha mos xodimlar allaqachon biriktirilgan' : 'Xodim topilmadi'}
+                </p>
+              )}
+            </div>
           </>
         )}
       </Modal>

@@ -2735,6 +2735,26 @@ button.header-pill {
   color: var(--error);
 }
 
+.onboarding-assign-created-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.onboarding-assign-created-row {
+  flex-wrap: wrap;
+}
+
+.onboarding-assign-created-name {
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-right: 0.25rem;
+}
+
 /* ========== ONBOARDING — STATISTIKA ========== */
 .onboarding-stats-grid {
   display: grid;
