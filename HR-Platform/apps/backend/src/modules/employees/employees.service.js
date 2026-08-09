@@ -19,7 +19,9 @@ export async function getNextAutoPersonId(client) {
 }
 
 /**
- * Create employee and automatically create application
+ * Create employee and automatically create a matching "Shartnoma imzolandi"
+ * application row, so they show up on the Lead kanban as an already-hired
+ * record rather than a fresh candidate application.
  */
 export async function createEmployee(employeeData, createdBy) {
   const client = await getClient();
@@ -80,14 +82,20 @@ export async function createEmployee(employeeData, createdBy) {
 
     const employee = employeeResult.rows[0];
 
-    // Automatically create application with status 'KELDI'
+    // Xodimlar bo'limidan qo'lda qo'shilgan xodim allaqachon ishga qabul
+    // qilingan hisoblanadi — Lead kanbanida yangi ariza ("KELDI") emas,
+    // to'g'ridan-to'g'ri "Shartnoma imzolandi" ustunida ko'rinishi kerak.
+    // shartnoma_start_date qasddan bo'sh qoldiriladi — bu qator hech qachon
+    // avtomatik promotsiya jobi (1 soatlik taymer) tomonidan qayta ishlanmasin,
+    // chunki bu xodim allaqachon to'liq ro'yxatga olingan (o'sha job faqat
+    // haqiqiy nomzod-> xodim o'tishini yakunlash uchun mo'ljallangan).
     const applicationResult = await client.query(
       `INSERT INTO applications (employee_id, status, position, notes, order_index)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
       [
         employee.id,
-        'KELDI',
+        'SHARTNOMA',
         employeeData.position || null,
         employeeData.notes || null,
         0, // Default order
@@ -100,7 +108,7 @@ export async function createEmployee(employeeData, createdBy) {
     await client.query(
       `INSERT INTO application_history (application_id, changed_by, new_status, comment)
        VALUES ($1, $2, $3, $4)`,
-      [application.id, createdBy, 'KELDI', 'Ariza yaratildi']
+      [application.id, createdBy, 'SHARTNOMA', 'Xodim to\'g\'ridan-to\'g\'ri qo\'shildi']
     );
 
     await client.query('COMMIT');
