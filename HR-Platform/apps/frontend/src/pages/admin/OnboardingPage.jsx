@@ -193,6 +193,31 @@ export function OnboardingPage() {
     }
   };
 
+  // Progress jadvalida bitta xodim uchun bir nechta reja biriktirilgan
+  // bo'lsa ham bitta qator ko'rsatiladi — hammasi umumlashtirilib, ustiga
+  // bosilganda barcha rejalari birga ochiladi (pastda openViewSubmissions).
+  const employeeProgressGroups = useMemo(() => {
+    const groups = {};
+    assignments.forEach((a) => {
+      const group = (groups[a.employeeId] ||= {
+        employeeId: a.employeeId,
+        employeeName: a.employeeName,
+        employeePhotoUrl: a.employeePhotoUrl,
+        assignments: [],
+        totalTasks: 0,
+        completedTasks: 0,
+      });
+      group.assignments.push(a);
+      group.totalTasks += a.totalSteps;
+      group.completedTasks += a.completedSteps;
+    });
+    return Object.values(groups).map((g) => ({
+      ...g,
+      progress: g.totalTasks > 0 ? Math.round((g.completedTasks / g.totalTasks) * 100) : 0,
+      allCompleted: g.assignments.every((a) => a.status === 'completed'),
+    }));
+  }, [assignments]);
+
   const refreshStats = async () => {
     setIsLoadingStats(true);
     try {
@@ -509,7 +534,33 @@ export function OnboardingPage() {
     }
   };
 
-  const handleDeleteAssignment = async (assignment) => {
+  // --- View submissions (Progress jadvalida xodim ustiga bosilganda) ---
+  // Bitta xodimning barcha rejalari (biriktirishlari) shu bitta oynada,
+  // har biri o'z bo'limi sifatida, birga ko'rsatiladi.
+  const [isViewOpen, setIsViewOpen] = useState(false);
+  const [viewEmployee, setViewEmployee] = useState(null);
+  const [viewAssignments, setViewAssignments] = useState([]);
+  const [isLoadingView, setIsLoadingView] = useState(false);
+
+  const openViewSubmissions = async (group) => {
+    setIsViewOpen(true);
+    setIsLoadingView(true);
+    setViewEmployee({ name: group.employeeName, photoUrl: group.employeePhotoUrl });
+    setViewAssignments([]);
+    try {
+      const details = await Promise.all(
+        group.assignments.map((a) => onboardingService.getAssignmentDetail(a.id))
+      );
+      setViewAssignments(details);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Tafsilotlarni yuklashda xatolik');
+      setIsViewOpen(false);
+    } finally {
+      setIsLoadingView(false);
+    }
+  };
+
+  const handleDeleteAssignmentFromView = async (assignment) => {
     const ok = await confirm({
       title: 'Biriktirishni bekor qilish',
       message: `${assignment.employeeName} uchun "${assignment.planName}" rejasini bekor qilmoqchimisiz? Havola ishlamay qoladi.`,
@@ -518,31 +569,16 @@ export function OnboardingPage() {
     try {
       await onboardingService.deleteAssignment(assignment.id);
       toast.success("Biriktirish bekor qilindi");
+      setViewAssignments((prev) => {
+        const next = prev.filter((a) => a.id !== assignment.id);
+        if (next.length === 0) setIsViewOpen(false);
+        return next;
+      });
       refreshAssignments();
       refreshPlans();
       refreshStats();
     } catch (err) {
       toast.error(err.response?.data?.message || "Bekor qilishda xatolik");
-    }
-  };
-
-  // --- View submissions (Progress jadvalida xodim ustiga bosilganda) ---
-  const [isViewOpen, setIsViewOpen] = useState(false);
-  const [viewAssignment, setViewAssignment] = useState(null);
-  const [isLoadingView, setIsLoadingView] = useState(false);
-
-  const openViewSubmissions = async (assignment) => {
-    setIsViewOpen(true);
-    setIsLoadingView(true);
-    setViewAssignment(null);
-    try {
-      const detail = await onboardingService.getAssignmentDetail(assignment.id);
-      setViewAssignment(detail);
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Tafsilotlarni yuklashda xatolik');
-      setIsViewOpen(false);
-    } finally {
-      setIsLoadingView(false);
     }
   };
 
@@ -868,74 +904,58 @@ export function OnboardingPage() {
               <thead>
                 <tr>
                   <th>Xodim</th>
-                  <th>Reja</th>
-                  <th>Joriy vazifa</th>
+                  <th>Rejalar</th>
                   <th>Progress</th>
                   <th>Holati</th>
-                  <th>Havola</th>
                   <th></th>
                 </tr>
               </thead>
-              {isLoadingAssignments ? null : assignments.length > 0 && (
+              {isLoadingAssignments ? null : employeeProgressGroups.length > 0 && (
                 <tbody>
-                  {assignments.map((a) => (
-                    <tr key={a.id} className="onboarding-progress-row" onClick={() => openViewSubmissions(a)}>
+                  {employeeProgressGroups.map((g) => (
+                    <tr key={g.employeeId} className="onboarding-progress-row" onClick={() => openViewSubmissions(g)}>
                       <td>
                         <div className="attendance-employee-cell">
-                          {a.employeePhotoUrl ? (
-                            <img className="attendance-avatar" src={employeeService.getPhotoUrl(a.employeePhotoUrl)} alt={a.employeeName} />
+                          {g.employeePhotoUrl ? (
+                            <img className="attendance-avatar" src={employeeService.getPhotoUrl(g.employeePhotoUrl)} alt={g.employeeName} />
                           ) : (
                             <div className="attendance-avatar-fallback">
-                              {a.employeeName.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()}
+                              {g.employeeName.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()}
                             </div>
                           )}
-                          <div className="attendance-employee-name">{a.employeeName}</div>
+                          <div className="attendance-employee-name">{g.employeeName}</div>
                         </div>
                       </td>
-                      <td>{a.planName}</td>
                       <td>
-                        {a.currentStepTitle ? (
-                          <span className="onboarding-current-step">{a.currentStepTitle}</span>
-                        ) : (
-                          <span className="onboarding-current-step complete">
-                            <CheckCircle2 size={14} strokeWidth={2.25} /> Yakunlandi
-                          </span>
-                        )}
+                        <div className="onboarding-plan-pills">
+                          {g.assignments.slice(0, 2).map((a) => (
+                            <span key={a.id} className="onboarding-plan-pill">{a.planName}</span>
+                          ))}
+                          {g.assignments.length > 2 && (
+                            <span className="onboarding-plan-pill onboarding-plan-pill-more">+{g.assignments.length - 2}</span>
+                          )}
+                        </div>
                       </td>
                       <td>
                         <div className="onboarding-progress-cell">
                           <div className="onboarding-progress-track">
                             <div
-                              className={`onboarding-progress-fill ${a.progress === 100 ? 'complete' : ''}`}
-                              style={{ width: `${a.progress}%` }}
+                              className={`onboarding-progress-fill ${g.progress === 100 ? 'complete' : ''}`}
+                              style={{ width: `${g.progress}%` }}
                             />
                           </div>
-                          <span className="onboarding-progress-label">{a.progress}%</span>
+                          <span className="onboarding-progress-label">{g.progress}%</span>
                         </div>
                       </td>
                       <td>
-                        <Badge variant={a.status === 'completed' ? 'success' : 'warning'}>
-                          {a.status === 'completed' ? 'Yakunlandi' : 'Jarayonda'}
+                        <Badge variant={g.allCompleted ? 'success' : 'warning'}>
+                          {g.allCompleted ? 'Yakunlandi' : 'Jarayonda'}
                         </Badge>
                       </td>
                       <td>
-                        <button
-                          type="button"
-                          className="attendance-token-chip"
-                          onClick={(e) => { e.stopPropagation(); handleCopyLink(a.publicToken); }}
-                        >
-                          <Copy size={13} strokeWidth={2.25} /> <code>{a.publicToken.slice(0, 10)}...</code>
-                        </button>
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          className="attendance-toggle-btn"
-                          title="Bekor qilish"
-                          onClick={(e) => { e.stopPropagation(); handleDeleteAssignment(a); }}
-                        >
-                          <Trash2 size={15} strokeWidth={2.25} />
-                        </button>
+                        <span className="onboarding-progress-view-hint">
+                          <Eye size={14} strokeWidth={2.25} /> Ko'rish
+                        </span>
                       </td>
                     </tr>
                   ))}
@@ -945,7 +965,7 @@ export function OnboardingPage() {
           </div>
           {isLoadingAssignments ? (
             <div style={{ padding: '2rem' }}><LoadingSpinner /></div>
-          ) : assignments.length === 0 && (
+          ) : employeeProgressGroups.length === 0 && (
             <p className="onboarding-progress-empty">Progress ma'lumotlari mavjud emas</p>
           )}
         </Card>
@@ -1071,7 +1091,8 @@ export function OnboardingPage() {
         )}
       </Modal>
 
-      {/* View submissions modal — Progress jadvalida xodim ustiga bosilganda */}
+      {/* View submissions modal — Progress jadvalida xodim ustiga bosilganda,
+          uning barcha rejalari (biriktirishlari) shu bitta joyda */}
       <Modal
         isOpen={isViewOpen}
         onClose={() => setIsViewOpen(false)}
@@ -1085,48 +1106,86 @@ export function OnboardingPage() {
       >
         {isLoadingView ? (
           <div style={{ padding: '1.5rem' }}><LoadingSpinner /></div>
-        ) : viewAssignment && (
+        ) : viewAssignments.length > 0 && (
           <div className="onboarding-view-submissions">
             <div className="onboarding-view-header">
-              <strong>{viewAssignment.employeeName}</strong>
-              <span>{viewAssignment.planName}</span>
+              {viewEmployee?.photoUrl ? (
+                <img className="attendance-avatar" src={employeeService.getPhotoUrl(viewEmployee.photoUrl)} alt={viewEmployee.name} />
+              ) : (
+                <div className="attendance-avatar-fallback">
+                  {viewEmployee?.name.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()}
+                </div>
+              )}
+              <div>
+                <strong>{viewEmployee?.name}</strong>
+                <span>{viewAssignments.length} ta reja biriktirilgan</span>
+              </div>
             </div>
-            {viewAssignment.steps.map((step, idx) => (
-              <div key={step.id} className="onboarding-view-step-group">
-                <div className="onboarding-view-step-title">{idx + 1}-bosqich</div>
-                {step.tasks.map((task) => {
-                  const completion = viewAssignment.completions.find((c) => c.taskId === task.id);
-                  const TaskIcon = TASK_TYPES.find((t) => t.value === task.type)?.icon || Zap;
-                  return (
-                    <div key={task.id} className="onboarding-view-task">
-                      <div className="onboarding-view-task-header">
-                        <span className="onboarding-view-task-icon"><TaskIcon size={14} strokeWidth={2.25} /></span>
-                        <span className="onboarding-view-task-title">{task.title}</span>
-                        <Badge variant={completion ? 'success' : 'warning'}>
-                          {completion ? 'Topshirilgan' : 'Kutilmoqda'}
-                        </Badge>
-                      </div>
-                      {completion && (
-                        <div className="onboarding-view-task-submission">
-                          {completion.submissionType === 'text' && <p>{completion.submissionText}</p>}
-                          {completion.submissionType === 'link' && (
-                            <a href={completion.submissionLink} target="_blank" rel="noreferrer">
-                              <Link2 size={13} strokeWidth={2.25} /> {completion.submissionLink}
-                            </a>
+
+            {viewAssignments.map((assignment) => (
+              <div key={assignment.id} className="onboarding-view-plan-section">
+                <div className="onboarding-view-plan-header">
+                  <span className="onboarding-view-plan-icon"><BookOpen size={14} strokeWidth={2.25} /></span>
+                  <span className="onboarding-view-plan-name">{assignment.planName}</span>
+                  <Badge variant={assignment.status === 'completed' ? 'success' : 'warning'}>
+                    {assignment.progress}%
+                  </Badge>
+                  <button
+                    type="button"
+                    className="attendance-toggle-btn"
+                    title="Havolani nusxalash"
+                    onClick={() => handleCopyLink(assignment.publicToken)}
+                  >
+                    <Copy size={14} strokeWidth={2.25} />
+                  </button>
+                  <button
+                    type="button"
+                    className="attendance-toggle-btn"
+                    title="Bekor qilish"
+                    onClick={() => handleDeleteAssignmentFromView(assignment)}
+                  >
+                    <Trash2 size={14} strokeWidth={2.25} />
+                  </button>
+                </div>
+
+                {assignment.steps.map((step, idx) => (
+                  <div key={step.id} className="onboarding-view-step-group">
+                    <div className="onboarding-view-step-title">{idx + 1}-bosqich</div>
+                    {step.tasks.map((task) => {
+                      const completion = assignment.completions.find((c) => c.taskId === task.id);
+                      const TaskIcon = TASK_TYPES.find((t) => t.value === task.type)?.icon || Zap;
+                      return (
+                        <div key={task.id} className="onboarding-view-task">
+                          <div className="onboarding-view-task-header">
+                            <span className="onboarding-view-task-icon"><TaskIcon size={14} strokeWidth={2.25} /></span>
+                            <span className="onboarding-view-task-title">{task.title}</span>
+                            <Badge variant={completion ? 'success' : 'warning'}>
+                              {completion ? 'Topshirilgan' : 'Kutilmoqda'}
+                            </Badge>
+                          </div>
+                          {completion && (
+                            <div className="onboarding-view-task-submission">
+                              {completion.submissionType === 'text' && <p>{completion.submissionText}</p>}
+                              {completion.submissionType === 'link' && (
+                                <a href={completion.submissionLink} target="_blank" rel="noreferrer">
+                                  <Link2 size={13} strokeWidth={2.25} /> {completion.submissionLink}
+                                </a>
+                              )}
+                              {completion.submissionType === 'file' && (
+                                <a href={onboardingService.getDocumentUrl(completion.submissionFileUrl)} target="_blank" rel="noreferrer">
+                                  <FileText size={13} strokeWidth={2.25} /> {completion.submissionFileName || 'Fayl'}
+                                </a>
+                              )}
+                              <span className="onboarding-view-task-date">
+                                <Clock size={11} strokeWidth={2.25} /> {new Date(completion.completedAt).toLocaleString('uz-UZ')}
+                              </span>
+                            </div>
                           )}
-                          {completion.submissionType === 'file' && (
-                            <a href={onboardingService.getDocumentUrl(completion.submissionFileUrl)} target="_blank" rel="noreferrer">
-                              <FileText size={13} strokeWidth={2.25} /> {completion.submissionFileName || 'Fayl'}
-                            </a>
-                          )}
-                          <span className="onboarding-view-task-date">
-                            <Clock size={11} strokeWidth={2.25} /> {new Date(completion.completedAt).toLocaleString('uz-UZ')}
-                          </span>
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
             ))}
           </div>
