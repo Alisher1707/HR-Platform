@@ -171,6 +171,52 @@ export const uploadOnboardingDocument = multer({
   }
 }).single('document'); // Field name: 'document'
 
+// =============================================
+// Onboarding task submission upload (xodim "Topshirish" fayli)
+// =============================================
+
+const onboardingSubmissionsDir = path.join(__dirname, '../../../uploads/onboarding/submissions');
+if (!fs.existsSync(onboardingSubmissionsDir)) {
+  fs.mkdirSync(onboardingSubmissionsDir, { recursive: true });
+}
+
+const onboardingSubmissionStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, onboardingSubmissionsDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `${uniqueSuffix}${ext}`);
+  }
+});
+
+// Xodim topshiradigan fayl — hujjat yoki rasm (masalan, ekran surati)
+const ONBOARDING_SUBMISSION_MIME_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+];
+
+const onboardingSubmissionFileFilter = (req, file, cb) => {
+  if (ONBOARDING_SUBMISSION_MIME_TYPES.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Fayl faqat PDF, DOC, DOCX yoki rasm (JPG, PNG, WEBP) formatida bo\'lishi kerak'));
+  }
+};
+
+export const uploadOnboardingSubmission = multer({
+  storage: onboardingSubmissionStorage,
+  fileFilter: onboardingSubmissionFileFilter,
+  limits: {
+    fileSize: 15 * 1024 * 1024, // 15MB max
+  }
+}).single('file'); // Field name: 'file'
+
 // Error handler middleware
 export function handleMulterError(err, req, res, next) {
   if (err instanceof multer.MulterError) {

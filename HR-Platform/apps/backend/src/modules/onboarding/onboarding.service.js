@@ -6,10 +6,10 @@ import { generateInviteToken } from '../../shared/utils/crypto.js';
  * Onboarding Service
  * A plan (onboarding_plans) is an ordered list of "bosqich" (onboarding_plan_steps),
  * each of which is a container for one or more "vazifa" (onboarding_step_tasks) —
- * a video or text task the employee actually checks off. Assigning a plan to an
- * employee (onboarding_assignments) mints them a unique, unauthenticated public
- * link (public_token) — they tick off tasks (onboarding_step_completions) without
- * ever logging in.
+ * a video, document or action task the employee actually completes. Assigning a
+ * plan to an employee (onboarding_assignments) mints them a unique,
+ * unauthenticated public link (public_token) — they submit each task (text,
+ * file, or link — onboarding_step_completions) without ever logging in.
  */
 
 function mapTask(row) {
@@ -27,6 +27,18 @@ function mapTask(row) {
 
 function mapStep(row) {
   return { id: row.id, orderIndex: row.order_index, tasks: row.tasks || [] };
+}
+
+function mapCompletion(row) {
+  return {
+    taskId: row.task_id,
+    completedAt: row.completed_at,
+    submissionType: row.submission_type,
+    submissionText: row.submission_text,
+    submissionFileUrl: row.submission_file_url,
+    submissionFileName: row.submission_file_name,
+    submissionLink: row.submission_link,
+  };
 }
 
 function mapPlan(row) {
@@ -295,19 +307,14 @@ export async function getStats() {
 }
 
 /**
- * Public (unauthenticated, token-gated) reads/writes — the employee-facing side.
+ * Bitta biriktirish uchun bosqich/vazifa daraxti va topshirilgan
+ * vazifalarni birga yig'ib beradi — public token orqali (xodim) va admin
+ * id orqali (Progress jadvalidagi "Ko'rish") ikkalasida ham ishlatiladi.
  */
-export async function getAssignmentByToken(token) {
-  const [assignment] = (await query(`${SELECT_ASSIGNMENTS} WHERE a.public_token = $1`, [token])).rows;
-  if (!assignment) {
-    const error = new Error('Havola topilmadi yoki eskirgan');
-    error.statusCode = HTTP_STATUS.NOT_FOUND;
-    throw error;
-  }
-
+async function attachStepsAndCompletions(assignmentRow) {
   const stepsResult = await query(
     'SELECT * FROM onboarding_plan_steps WHERE plan_id = $1 ORDER BY order_index',
-    [assignment.plan_id]
+    [assignmentRow.plan_id]
   );
   const steps = stepsResult.rows.map(mapStep);
 
@@ -323,15 +330,53 @@ export async function getAssignmentByToken(token) {
     steps.forEach((s) => { s.tasks = tasksByStep[s.id] || []; });
   }
 
-  const completedTaskIds = (await query(
-    'SELECT task_id FROM onboarding_step_completions WHERE assignment_id = $1',
-    [assignment.id]
-  )).rows.map((r) => r.task_id);
+  const completions = (await query(
+    'SELECT * FROM onboarding_step_completions WHERE assignment_id = $1',
+    [assignmentRow.id]
+  )).rows.map(mapCompletion);
+
+  return { steps, completions };
+}
+
+/**
+ * Public (unauthenticated, token-gated) reads/writes — the employee-facing side.
+ */
+export async function getAssignmentByToken(token) {
+  const [assignment] = (await query(`${SELECT_ASSIGNMENTS} WHERE a.public_token = $1`, [token])).rows;
+  if (!assignment) {
+    const error = new Error('Havola topilmadi yoki eskirgan');
+    error.statusCode = HTTP_STATUS.NOT_FOUND;
+    throw error;
+  }
+
+  const { steps, completions } = await attachStepsAndCompletions(assignment);
 
   return {
     ...mapAssignment(assignment),
     steps,
-    completedStepIds: completedTaskIds,
+    completedStepIds: completions.map((c) => c.taskId),
+    completions,
+  };
+}
+
+/**
+ * Admin/HR (authenticated) — Progress jadvalida xodim qatoriga bosilganda
+ * uning topshirgan barcha vazifalarini ko'rish uchun.
+ */
+export async function getAssignmentById(id) {
+  const [assignment] = (await query(`${SELECT_ASSIGNMENTS} WHERE a.id = $1`, [id])).rows;
+  if (!assignment) {
+    const error = new Error('Biriktirilgan reja topilmadi');
+    error.statusCode = HTTP_STATUS.NOT_FOUND;
+    throw error;
+  }
+
+  const { steps, completions } = await attachStepsAndCompletions(assignment);
+
+  return {
+    ...mapAssignment(assignment),
+    steps,
+    completions,
   };
 }
 
@@ -352,7 +397,12 @@ async function recomputeAssignmentCompletion(assignmentId) {
   );
 }
 
-export async function toggleStepCompletion(token, taskId, completed) {
+/**
+ * Xodim vazifani "topshiradi" — matn, fayl yoki havola sifatida. Bir vazifa
+ * qayta topshirilsa (Qayta topshirish), avvalgi topshiriq ustidan yoziladi
+ * (assignment_id+task_id UNIQUE bo'ylab UPSERT).
+ */
+export async function submitTask(token, taskId, submission) {
   const assignmentResult = await query(
     'SELECT id, plan_id FROM onboarding_assignments WHERE public_token = $1',
     [token]
@@ -376,18 +426,27 @@ export async function toggleStepCompletion(token, taskId, completed) {
     throw error;
   }
 
-  if (completed) {
-    await query(
-      `INSERT INTO onboarding_step_completions (assignment_id, task_id) VALUES ($1, $2)
-       ON CONFLICT (assignment_id, task_id) DO NOTHING`,
-      [assignment.id, taskId]
-    );
-  } else {
-    await query(
-      'DELETE FROM onboarding_step_completions WHERE assignment_id = $1 AND task_id = $2',
-      [assignment.id, taskId]
-    );
-  }
+  await query(
+    `INSERT INTO onboarding_step_completions
+       (assignment_id, task_id, completed_at, submission_type, submission_text, submission_file_url, submission_file_name, submission_link)
+     VALUES ($1, $2, NOW(), $3, $4, $5, $6, $7)
+     ON CONFLICT (assignment_id, task_id) DO UPDATE SET
+       completed_at = NOW(),
+       submission_type = EXCLUDED.submission_type,
+       submission_text = EXCLUDED.submission_text,
+       submission_file_url = EXCLUDED.submission_file_url,
+       submission_file_name = EXCLUDED.submission_file_name,
+       submission_link = EXCLUDED.submission_link`,
+    [
+      assignment.id,
+      taskId,
+      submission.type,
+      submission.type === 'text' ? submission.text : null,
+      submission.type === 'file' ? submission.file?.url || null : null,
+      submission.type === 'file' ? submission.file?.name || null : null,
+      submission.type === 'link' ? submission.link : null,
+    ]
+  );
 
   await recomputeAssignmentCompletion(assignment.id);
   return getAssignmentByToken(token);

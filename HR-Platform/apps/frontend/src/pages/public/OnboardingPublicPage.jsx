@@ -1,22 +1,55 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Rocket, CheckCircle2, Circle, PartyPopper, Briefcase, FileText, Download } from 'lucide-react';
+import {
+  Rocket,
+  CheckCircle2,
+  Circle,
+  PartyPopper,
+  Briefcase,
+  FileText,
+  Download,
+  Send,
+  Eye,
+  Type,
+  Upload,
+  Link2,
+  AlertCircle,
+} from 'lucide-react';
 import onboardingService from '../../services/onboardingService';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import Modal from '../../components/ui/Modal';
+import Button from '../../components/ui/Button';
 import { extractYouTubeId } from '../../utils/youtube';
+
+const SUBMISSION_TYPES = [
+  { value: 'text', label: 'Matn', icon: Type },
+  { value: 'file', label: 'Fayl', icon: Upload },
+  { value: 'link', label: 'Havola', icon: Link2 },
+];
+
+const SUBMISSION_FILE_ACCEPT = '.pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,image/webp';
 
 /**
  * OnboardingPublicPage
- * No login, no sidebar — an employee opens their personal link and ticks
- * off onboarding tasks (grouped into numbered bosqich) directly. Token-gated
- * on the backend, not user-gated.
+ * No login, no sidebar — an employee opens their personal link and submits
+ * each onboarding task (grouped into numbered bosqich) as text, a file, or
+ * a link — their choice. Token-gated on the backend, not user-gated.
  */
 export function OnboardingPublicPage() {
   const { token } = useParams();
   const [assignment, setAssignment] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [togglingTaskId, setTogglingTaskId] = useState(null);
+
+  // --- Submission modal ---
+  const [modalTask, setModalTask] = useState(null);
+  const [modalMode, setModalMode] = useState('edit'); // 'edit' | 'view'
+  const [subType, setSubType] = useState('text');
+  const [subText, setSubText] = useState('');
+  const [subLink, setSubLink] = useState('');
+  const [subFile, setSubFile] = useState(null);
+  const [formError, setFormError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -31,15 +64,49 @@ export function OnboardingPublicPage() {
     })();
   }, [token]);
 
-  const handleToggle = async (taskId, currentlyDone) => {
-    setTogglingTaskId(taskId);
+  const getCompletion = (taskId) => assignment?.completions?.find((c) => c.taskId === taskId) || null;
+
+  const openSubmitModal = (task) => {
+    const existing = getCompletion(task.id);
+    setModalTask(task);
+    setModalMode(existing ? 'view' : 'edit');
+    setSubType(existing?.submissionType || 'text');
+    setSubText(existing?.submissionType === 'text' ? existing.submissionText || '' : '');
+    setSubLink(existing?.submissionType === 'link' ? existing.submissionLink || '' : '');
+    setSubFile(null);
+    setFormError('');
+  };
+
+  const closeModal = () => setModalTask(null);
+
+  const handleSubmit = async () => {
+    if (subType === 'text' && !subText.trim()) {
+      setFormError('Matn kiriting');
+      return;
+    }
+    if (subType === 'link' && !/^https?:\/\/.+/i.test(subLink.trim())) {
+      setFormError("To'g'ri havola kiriting (http:// yoki https:// bilan boshlanishi kerak)");
+      return;
+    }
+    if (subType === 'file' && !subFile) {
+      setFormError('Fayl tanlang');
+      return;
+    }
+    setFormError('');
+    setIsSubmitting(true);
     try {
-      const updated = await onboardingService.toggleStep(token, taskId, !currentlyDone);
+      const updated = await onboardingService.submitTask(token, modalTask.id, {
+        type: subType,
+        text: subText,
+        link: subLink,
+        file: subFile,
+      });
       setAssignment(updated);
+      setModalTask(null);
     } catch (err) {
-      // Silently keep the previous state — the checkbox simply won't move.
+      setFormError(err.response?.data?.message || 'Topshirishda xatolik yuz berdi');
     } finally {
-      setTogglingTaskId(null);
+      setIsSubmitting(false);
     }
   };
 
@@ -64,6 +131,7 @@ export function OnboardingPublicPage() {
   }
 
   const isComplete = assignment.progress === 100;
+  const existingCompletion = modalTask ? getCompletion(modalTask.id) : null;
 
   return (
     <div className="onboarding-public-page">
@@ -107,7 +175,6 @@ export function OnboardingPublicPage() {
 
               {step.tasks.map((task) => {
                 const done = assignment.completedStepIds.includes(task.id);
-                const isToggling = togglingTaskId === task.id;
                 const youtubeId = task.type === 'video' ? extractYouTubeId(task.videoUrl) : null;
                 return (
                   <div key={task.id} className="onboarding-public-task">
@@ -133,12 +200,7 @@ export function OnboardingPublicPage() {
                         <Download size={14} strokeWidth={2.25} />
                       </a>
                     )}
-                    <button
-                      type="button"
-                      className={`onboarding-public-step ${done ? 'done' : ''}`}
-                      onClick={() => handleToggle(task.id, done)}
-                      disabled={isToggling}
-                    >
+                    <div className={`onboarding-public-step ${done ? 'done' : ''}`}>
                       <span className="onboarding-public-step-check">
                         {done ? <CheckCircle2 size={22} strokeWidth={2} /> : <Circle size={22} strokeWidth={1.75} />}
                       </span>
@@ -146,7 +208,14 @@ export function OnboardingPublicPage() {
                         <span className="onboarding-public-step-title">{task.title}</span>
                         {task.description && <span className="onboarding-public-step-desc">{task.description}</span>}
                       </span>
-                    </button>
+                      <button
+                        type="button"
+                        className={`onboarding-public-submit-btn ${done ? 'done' : ''}`}
+                        onClick={() => openSubmitModal(task)}
+                      >
+                        {done ? <><Eye size={14} strokeWidth={2.25} /> Ko'rish</> : <><Send size={14} strokeWidth={2.25} /> Topshirish</>}
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -154,6 +223,125 @@ export function OnboardingPublicPage() {
           ))}
         </div>
       </div>
+
+      <Modal
+        isOpen={!!modalTask}
+        onClose={closeModal}
+        title={modalMode === 'view' ? 'Topshirilgan vazifa' : 'Vazifani topshirish'}
+        size="sm"
+        footer={
+          modalMode === 'view' ? (
+            <>
+              <Button variant="ghost" className="onboarding-btn-wide" onClick={closeModal}>Yopish</Button>
+              <Button variant="primary" className="onboarding-btn-wide" onClick={() => setModalMode('edit')}>
+                Qayta topshirish
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="ghost" className="onboarding-btn-wide" onClick={closeModal}>Bekor qilish</Button>
+              <Button variant="primary" className="onboarding-btn-wide" onClick={handleSubmit} disabled={isSubmitting}>
+                {isSubmitting ? 'Yuborilmoqda...' : 'Yuborish'}
+              </Button>
+            </>
+          )
+        }
+      >
+        {modalTask && (
+          <>
+            <p className="onboarding-submit-task-title">{modalTask.title}</p>
+
+            {modalMode === 'view' && existingCompletion ? (
+              <div className="onboarding-submission-view">
+                <div className="onboarding-submission-view-meta">
+                  <CheckCircle2 size={15} strokeWidth={2.25} />
+                  {new Date(existingCompletion.completedAt).toLocaleString('uz-UZ')} da topshirilgan
+                </div>
+                {existingCompletion.submissionType === 'text' && (
+                  <p className="onboarding-submission-text">{existingCompletion.submissionText}</p>
+                )}
+                {existingCompletion.submissionType === 'link' && (
+                  <a
+                    href={existingCompletion.submissionLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="onboarding-public-doc"
+                  >
+                    <Link2 size={16} strokeWidth={2.25} />
+                    <span>{existingCompletion.submissionLink}</span>
+                  </a>
+                )}
+                {existingCompletion.submissionType === 'file' && (
+                  <a
+                    href={onboardingService.getDocumentUrl(existingCompletion.submissionFileUrl)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="onboarding-public-doc"
+                  >
+                    <FileText size={16} strokeWidth={2.25} />
+                    <span>{existingCompletion.submissionFileName || 'Fayl'}</span>
+                    <Download size={14} strokeWidth={2.25} />
+                  </a>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="onboarding-submit-type-tabs">
+                  {SUBMISSION_TYPES.map((t) => (
+                    <button
+                      key={t.value}
+                      type="button"
+                      className={`onboarding-submit-type-tab ${subType === t.value ? 'active' : ''}`}
+                      onClick={() => { setSubType(t.value); setFormError(''); }}
+                    >
+                      <t.icon size={15} strokeWidth={2.25} />
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                {subType === 'text' && (
+                  <textarea
+                    className="form-textarea"
+                    rows={5}
+                    placeholder="Bajargan ishingiz haqida yozing..."
+                    value={subText}
+                    onChange={(e) => setSubText(e.target.value)}
+                    autoFocus
+                  />
+                )}
+                {subType === 'link' && (
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="https://..."
+                    value={subLink}
+                    onChange={(e) => setSubLink(e.target.value)}
+                    autoFocus
+                  />
+                )}
+                {subType === 'file' && (
+                  <label className={`onboarding-doc-upload-btn ${subFile ? 'has-file' : ''}`}>
+                    <Upload size={14} strokeWidth={2.25} />
+                    {subFile ? subFile.name : 'Fayl tanlash (PDF, DOC, DOCX, JPG, PNG)'}
+                    <input
+                      type="file"
+                      accept={SUBMISSION_FILE_ACCEPT}
+                      onChange={(e) => setSubFile(e.target.files?.[0] || null)}
+                    />
+                  </label>
+                )}
+
+                {formError && (
+                  <span className="onboarding-task-field-error">
+                    <AlertCircle size={12} strokeWidth={2.25} /> {formError}
+                  </span>
+                )}
+              </>
+            )}
+          </>
+        )}
+      </Modal>
     </div>
   );
 }

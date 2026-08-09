@@ -55,8 +55,20 @@ export const onboardingService = {
     return response.data.data;
   },
 
-  async toggleStep(token, taskId, completed) {
-    const response = await api.post(`/onboarding/public/${token}/tasks/${taskId}`, { completed });
+  async submitTask(token, taskId, { type, text, link, file }) {
+    const formData = new FormData();
+    formData.append('type', type);
+    if (type === 'text') formData.append('text', text || '');
+    if (type === 'link') formData.append('link', link || '');
+    if (type === 'file' && file) formData.append('file', file);
+    const response = await api.post(`/onboarding/public/${token}/tasks/${taskId}/submit`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data.data;
+  },
+
+  async getAssignmentDetail(id) {
+    const response = await api.get(`/onboarding/assignments/${id}`);
     return response.data.data;
   },
 

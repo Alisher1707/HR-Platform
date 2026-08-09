@@ -3,7 +3,7 @@ import Joi from 'joi';
 import * as onboardingController from './onboarding.controller.js';
 import { authenticate, authorize } from '../auth/auth.middleware.js';
 import { validate, validateParams, commonSchemas } from '../../shared/middleware/validate.js';
-import { uploadOnboardingDocument, handleMulterError } from '../../shared/middleware/upload.js';
+import { uploadOnboardingDocument, uploadOnboardingSubmission, handleMulterError } from '../../shared/middleware/upload.js';
 import { USER_ROLES } from '../../config/constants.js';
 
 const router = express.Router();
@@ -38,8 +38,21 @@ const assignmentSchema = Joi.object({
   employeeId: commonSchemas.uuid.required(),
 });
 
-const toggleSchema = Joi.object({
-  completed: Joi.boolean().required(),
+const submissionSchema = Joi.object({
+  type: Joi.string().valid('text', 'file', 'link').required(),
+  text: Joi.when('type', {
+    is: 'text',
+    then: Joi.string().trim().min(1).max(2000).required(),
+    otherwise: Joi.string().trim().max(2000).allow('', null),
+  }),
+  link: Joi.when('type', {
+    is: 'link',
+    then: Joi.string().trim().uri({ scheme: ['http', 'https'] }).max(500).required().messages({
+      'string.uri': "Havola http:// yoki https:// bilan boshlanishi kerak",
+      'string.uriCustomScheme': "Havola http:// yoki https:// bilan boshlanishi kerak",
+    }),
+    otherwise: Joi.string().trim().max(500).allow('', null),
+  }),
 });
 
 const uuidParamSchema = Joi.object({ id: commonSchemas.uuid });
@@ -80,6 +93,13 @@ router.delete(
 
 // Biriktirishlar (admin/HR)
 router.get('/assignments', authenticate, canManage, onboardingController.getAssignments);
+router.get(
+  '/assignments/:id',
+  authenticate,
+  canManage,
+  validateParams(uuidParamSchema),
+  onboardingController.getAssignmentDetail
+);
 router.post('/assignments', authenticate, canManage, validate(assignmentSchema), onboardingController.createAssignment);
 router.delete(
   '/assignments/:id',
@@ -91,6 +111,12 @@ router.delete(
 
 // Ommaviy (login talab qilinmaydi - xodim shaxsiy token orqali kiradi)
 router.get('/public/:token', onboardingController.getPublicAssignment);
-router.post('/public/:token/tasks/:taskId', validate(toggleSchema), onboardingController.toggleStep);
+router.post(
+  '/public/:token/tasks/:taskId/submit',
+  uploadOnboardingSubmission,
+  handleMulterError,
+  validate(submissionSchema),
+  onboardingController.submitTask
+);
 
 export default router;

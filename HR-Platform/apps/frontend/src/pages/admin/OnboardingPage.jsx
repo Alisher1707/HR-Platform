@@ -25,6 +25,9 @@ import {
   Paperclip,
   Percent,
   CalendarCheck,
+  Eye,
+  Link2,
+  Clock,
 } from 'lucide-react';
 import onboardingService from '../../services/onboardingService';
 import employeeService from '../../services/employeeService';
@@ -523,6 +526,26 @@ export function OnboardingPage() {
     }
   };
 
+  // --- View submissions (Progress jadvalida xodim ustiga bosilganda) ---
+  const [isViewOpen, setIsViewOpen] = useState(false);
+  const [viewAssignment, setViewAssignment] = useState(null);
+  const [isLoadingView, setIsLoadingView] = useState(false);
+
+  const openViewSubmissions = async (assignment) => {
+    setIsViewOpen(true);
+    setIsLoadingView(true);
+    setViewAssignment(null);
+    try {
+      const detail = await onboardingService.getAssignmentDetail(assignment.id);
+      setViewAssignment(detail);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Tafsilotlarni yuklashda xatolik');
+      setIsViewOpen(false);
+    } finally {
+      setIsLoadingView(false);
+    }
+  };
+
   if (isPlanPanelOpen) {
     return (
       <div className="animate-fade-in onboarding-form-page">
@@ -856,7 +879,7 @@ export function OnboardingPage() {
               {isLoadingAssignments ? null : assignments.length > 0 && (
                 <tbody>
                   {assignments.map((a) => (
-                    <tr key={a.id}>
+                    <tr key={a.id} className="onboarding-progress-row" onClick={() => openViewSubmissions(a)}>
                       <td>
                         <div className="attendance-employee-cell">
                           {a.employeePhotoUrl ? (
@@ -896,12 +919,21 @@ export function OnboardingPage() {
                         </Badge>
                       </td>
                       <td>
-                        <button type="button" className="attendance-token-chip" onClick={() => handleCopyLink(a.publicToken)}>
+                        <button
+                          type="button"
+                          className="attendance-token-chip"
+                          onClick={(e) => { e.stopPropagation(); handleCopyLink(a.publicToken); }}
+                        >
                           <Copy size={13} strokeWidth={2.25} /> <code>{a.publicToken.slice(0, 10)}...</code>
                         </button>
                       </td>
                       <td>
-                        <button type="button" className="attendance-toggle-btn" title="Bekor qilish" onClick={() => handleDeleteAssignment(a)}>
+                        <button
+                          type="button"
+                          className="attendance-toggle-btn"
+                          title="Bekor qilish"
+                          onClick={(e) => { e.stopPropagation(); handleDeleteAssignment(a); }}
+                        >
                           <Trash2 size={15} strokeWidth={2.25} />
                         </button>
                       </td>
@@ -1036,6 +1068,68 @@ export function OnboardingPage() {
               )}
             </div>
           </>
+        )}
+      </Modal>
+
+      {/* View submissions modal — Progress jadvalida xodim ustiga bosilganda */}
+      <Modal
+        isOpen={isViewOpen}
+        onClose={() => setIsViewOpen(false)}
+        title="Topshirilgan vazifalar"
+        size="md"
+        footer={
+          <Button variant="primary" onClick={() => setIsViewOpen(false)} style={{ width: '100%' }}>
+            Yopish
+          </Button>
+        }
+      >
+        {isLoadingView ? (
+          <div style={{ padding: '1.5rem' }}><LoadingSpinner /></div>
+        ) : viewAssignment && (
+          <div className="onboarding-view-submissions">
+            <div className="onboarding-view-header">
+              <strong>{viewAssignment.employeeName}</strong>
+              <span>{viewAssignment.planName}</span>
+            </div>
+            {viewAssignment.steps.map((step, idx) => (
+              <div key={step.id} className="onboarding-view-step-group">
+                <div className="onboarding-view-step-title">{idx + 1}-bosqich</div>
+                {step.tasks.map((task) => {
+                  const completion = viewAssignment.completions.find((c) => c.taskId === task.id);
+                  const TaskIcon = TASK_TYPES.find((t) => t.value === task.type)?.icon || Zap;
+                  return (
+                    <div key={task.id} className="onboarding-view-task">
+                      <div className="onboarding-view-task-header">
+                        <span className="onboarding-view-task-icon"><TaskIcon size={14} strokeWidth={2.25} /></span>
+                        <span className="onboarding-view-task-title">{task.title}</span>
+                        <Badge variant={completion ? 'success' : 'warning'}>
+                          {completion ? 'Topshirilgan' : 'Kutilmoqda'}
+                        </Badge>
+                      </div>
+                      {completion && (
+                        <div className="onboarding-view-task-submission">
+                          {completion.submissionType === 'text' && <p>{completion.submissionText}</p>}
+                          {completion.submissionType === 'link' && (
+                            <a href={completion.submissionLink} target="_blank" rel="noreferrer">
+                              <Link2 size={13} strokeWidth={2.25} /> {completion.submissionLink}
+                            </a>
+                          )}
+                          {completion.submissionType === 'file' && (
+                            <a href={onboardingService.getDocumentUrl(completion.submissionFileUrl)} target="_blank" rel="noreferrer">
+                              <FileText size={13} strokeWidth={2.25} /> {completion.submissionFileName || 'Fayl'}
+                            </a>
+                          )}
+                          <span className="onboarding-view-task-date">
+                            <Clock size={11} strokeWidth={2.25} /> {new Date(completion.completedAt).toLocaleString('uz-UZ')}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
         )}
       </Modal>
 

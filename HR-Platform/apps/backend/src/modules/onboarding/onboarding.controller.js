@@ -85,6 +85,16 @@ export async function getStats(req, res) {
   }
 }
 
+export async function getAssignmentDetail(req, res) {
+  try {
+    const assignment = await onboardingService.getAssignmentById(req.params.id);
+    return successResponse(res, assignment, 'Biriktirish tafsilotlari olindi');
+  } catch (error) {
+    console.error('Get onboarding assignment detail error:', error);
+    return errorResponse(res, error.message || 'Tafsilotlarni olishda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+  }
+}
+
 export async function getAssignments(req, res) {
   try {
     const assignments = await onboardingService.listAssignments();
@@ -127,16 +137,22 @@ export async function getPublicAssignment(req, res) {
   }
 }
 
-export async function toggleStep(req, res) {
+export async function submitTask(req, res) {
   try {
-    const assignment = await onboardingService.toggleStepCompletion(
-      req.params.token,
-      req.params.taskId,
-      req.body.completed
-    );
-    return successResponse(res, assignment, 'Vazifa yangilandi');
+    const { type, text, link } = req.body;
+    if (type === 'file' && !req.file) {
+      return errorResponse(res, 'Fayl tanlanmadi', HTTP_STATUS.BAD_REQUEST);
+    }
+    const submission = {
+      type,
+      text: text || '',
+      link: link || '',
+      file: req.file ? { url: `/uploads/onboarding/submissions/${req.file.filename}`, name: req.file.originalname } : null,
+    };
+    const assignment = await onboardingService.submitTask(req.params.token, req.params.taskId, submission);
+    return successResponse(res, assignment, 'Vazifa topshirildi');
   } catch (error) {
-    console.error('Toggle onboarding task error:', error);
-    return errorResponse(res, error.message || 'Vazifani yangilashda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    console.error('Submit onboarding task error:', error);
+    return errorResponse(res, error.message || 'Vazifani topshirishda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }
