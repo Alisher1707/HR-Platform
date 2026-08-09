@@ -80,7 +80,7 @@ export async function getAttendanceReport({ startDate, endDate, branches, depart
   const result = await query(
     `WITH employee_schedule AS (
        SELECT DISTINCT ON (wse.employee_id)
-         wse.employee_id, ws.start_time, ws.end_time
+         wse.employee_id, wse.schedule_id, ws.start_date, GREATEST(ws.cycle_days, 1) AS cycle_days
        FROM work_schedule_employees wse
        JOIN work_schedules ws ON ws.id = wse.schedule_id
        ORDER BY wse.employee_id, wse.created_at DESC
@@ -96,6 +96,21 @@ export async function getAttendanceReport({ startDate, endDate, branches, depart
        FROM attendance_records ar
        WHERE ar.recorded_at::date BETWEEN $1 AND $2
        GROUP BY ar.employee_id, ar.recorded_at::date
+     ),
+     -- Har bir kun o'zining sikl ichidagi kuni (Kun 1, Kun 2, ...) bo'yicha
+     -- work_schedule_days'dan mos ish vaqtini oladi — bitta doimiy
+     -- start_time/end_time endi mavjud emas (030-migratsiya), sikl davomida
+     -- kunlar turlicha bo'lishi mumkin.
+     daily_with_schedule AS (
+       SELECT
+         d.*,
+         wsd.start_time AS sched_start_time,
+         wsd.end_time AS sched_end_time
+       FROM daily d
+       LEFT JOIN employee_schedule es ON es.employee_id = d.employee_id
+       LEFT JOIN work_schedule_days wsd
+         ON wsd.schedule_id = es.schedule_id
+         AND wsd.day_number = (((d.day - es.start_date) % es.cycle_days + es.cycle_days) % es.cycle_days) + 1
      )
      SELECT
        e.id AS employee_id, e.first_name, e.last_name, e.branch, e.department, e.position,
@@ -108,15 +123,14 @@ export async function getAttendanceReport({ startDate, endDate, branches, depart
        COALESCE(SUM(
          GREATEST(0,
            EXTRACT(EPOCH FROM (d.last_ketdi - d.first_keldi)) / 3600.0
-           - EXTRACT(EPOCH FROM (es.end_time - es.start_time)) / 3600.0
+           - EXTRACT(EPOCH FROM (d.sched_end_time - d.sched_start_time)) / 3600.0
          )
        ) FILTER (
          WHERE d.first_keldi IS NOT NULL AND d.last_ketdi IS NOT NULL AND d.last_ketdi > d.first_keldi
-           AND es.start_time IS NOT NULL AND es.end_time IS NOT NULL
+           AND d.sched_start_time IS NOT NULL AND d.sched_end_time IS NOT NULL
        ), 0) AS overtime_hours
      FROM employees e
-     JOIN daily d ON d.employee_id = e.id
-     LEFT JOIN employee_schedule es ON es.employee_id = e.id
+     JOIN daily_with_schedule d ON d.employee_id = e.id
      WHERE 1=1 ${where}
      GROUP BY e.id, e.first_name, e.last_name, e.branch, e.department, e.position
      ORDER BY e.first_name, e.last_name`,
