@@ -5,6 +5,7 @@ import { query } from '../../config/database.js';
 import { computeLateness, computeEarlyLeave, computeShiftLimit } from '../schedules/schedules.service.js';
 import { recomputeEmployeePresence } from '../attendance/attendance.service.js';
 import { generateRandomString } from '../../shared/utils/crypto.js';
+import { businessDayStart } from '../../shared/utils/timezone.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const eventsDir = path.join(__dirname, '../../../uploads/device-events');
@@ -186,8 +187,10 @@ async function logDeviceEvent(deviceToken, eventType, personId, employeeId) {
  * duplicates — Hikvision terminals fire repeatedly while a face stays in frame.
  */
 async function recordAttendance(employeeId, deviceToken, rawPersonId, explicitType) {
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  // "Today" means the Tashkent calendar day, not the server's own (UTC) —
+  // otherwise a scan between 00:00-05:00 Tashkent time gets bucketed into
+  // the wrong day, breaking the "first scan today = keldi" toggle.
+  const todayStart = businessDayStart(new Date());
 
   const { rows } = await query(
     `SELECT type, recorded_at FROM attendance_records

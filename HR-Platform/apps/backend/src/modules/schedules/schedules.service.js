@@ -1,5 +1,6 @@
 import { query, getClient } from '../../config/database.js';
 import { HTTP_STATUS } from '../../config/constants.js';
+import { businessMinutesSinceMidnight, businessDateOnly, businessDayStart } from '../../shared/utils/timezone.js';
 
 /**
  * Work Schedules Service
@@ -311,10 +312,12 @@ export async function getActiveScheduleForEmployee(employeeId) {
  * well-defined day-in-cycle) rather than going negative.
  */
 function getDayNumberForDate(schedule, date) {
+  // start_date is a plain DATE column — node-postgres already hands it back
+  // as a UTC-midnight Date, so it needs no further conversion. `date` (a
+  // scan's recorded_at) is a real timestamp though, and must be reduced to
+  // "which calendar day is this in Tashkent", not the server's own TZ.
   const start = new Date(schedule.start_date);
-  start.setHours(0, 0, 0, 0);
-  const target = new Date(date);
-  target.setHours(0, 0, 0, 0);
+  const target = businessDateOnly(date);
 
   const cycle = schedule.cycle_days || 1;
   const diffDays = Math.round((target - start) / (1000 * 60 * 60 * 24));
@@ -338,10 +341,6 @@ async function getScheduleDay(scheduleId, dayNumber) {
 // day's own time always wins over this once one exists.
 const DEFAULT_START_TIME = '09:00';
 const DEFAULT_END_TIME = '18:00';
-
-function minutesSinceMidnight(date) {
-  return date.getHours() * 60 + date.getMinutes();
-}
 
 function timeStringToMinutes(timeStr) {
   const [hour, minute] = timeStr.split(':').map(Number);
@@ -379,7 +378,7 @@ export async function computeLateness(employeeId, recordedAt) {
     return { isLate: null, isAfterHours: null, scheduleId: schedule.id };
   }
 
-  const scanMinutes = minutesSinceMidnight(scanDate);
+  const scanMinutes = businessMinutesSinceMidnight(scanDate);
   const startMinutes = timeStringToMinutes(day?.start_time || DEFAULT_START_TIME);
   const endMinutes = timeStringToMinutes(day?.end_time || DEFAULT_END_TIME);
 
@@ -409,7 +408,7 @@ export async function computeEarlyLeave(employeeId, recordedAt) {
     return { isEarly: null, scheduleId: schedule.id };
   }
 
-  const scanMinutes = minutesSinceMidnight(scanDate);
+  const scanMinutes = businessMinutesSinceMidnight(scanDate);
   const scheduleMinutes = timeStringToMinutes(day?.end_time || DEFAULT_END_TIME);
 
   return { isEarly: scanMinutes < scheduleMinutes, scheduleId: schedule ? schedule.id : null };
@@ -430,8 +429,7 @@ export async function computeShiftLimit(employeeId, recordedAt) {
   }
 
   const scanDate = new Date(recordedAt);
-  const dayStart = new Date(scanDate);
-  dayStart.setHours(0, 0, 0, 0);
+  const dayStart = businessDayStart(scanDate);
 
   const result = await query(
     `SELECT recorded_at FROM attendance_records
