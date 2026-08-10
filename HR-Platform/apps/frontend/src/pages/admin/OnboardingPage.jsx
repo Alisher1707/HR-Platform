@@ -28,6 +28,8 @@ import {
   Eye,
   Link2,
   Clock,
+  ThumbsUp,
+  Undo2,
 } from 'lucide-react';
 import onboardingService from '../../services/onboardingService';
 import employeeService from '../../services/employeeService';
@@ -78,6 +80,12 @@ function emptyPlanForm() {
 function getPublicLink(token) {
   return `${window.location.origin}/onboarding/public/${token}`;
 }
+
+const REVIEW_STATUS_CONFIG = {
+  pending: { label: "Ko'rib chiqilmoqda", variant: 'info', icon: Clock },
+  approved: { label: 'Qabul qilindi', variant: 'success', icon: CheckCircle2 },
+  rejected: { label: 'Qaytarildi', variant: 'error', icon: AlertCircle },
+};
 
 const TASK_TYPES = [
   { value: 'video', label: 'Video', icon: Video },
@@ -557,6 +565,57 @@ export function OnboardingPage() {
       setIsViewOpen(false);
     } finally {
       setIsLoadingView(false);
+    }
+  };
+
+  // Vazifani qabul qilish/qaytarish — rad javobi uchun sabab kiritish
+  // maydoni shu vazifa kartasi ichida ochiladi (rejectingTaskId shu
+  // vazifani belgilaydi).
+  const [rejectingTaskId, setRejectingTaskId] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [isReviewing, setIsReviewing] = useState(false);
+
+  const applyReviewedAssignment = (updated) => {
+    setViewAssignments((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+    refreshAssignments();
+    refreshStats();
+  };
+
+  const handleApproveTask = async (assignment, task) => {
+    setIsReviewing(true);
+    try {
+      const updated = await onboardingService.reviewTask(assignment.id, task.id, 'approved');
+      applyReviewedAssignment(updated);
+      toast.success('Vazifa qabul qilindi');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Vazifani qabul qilishda xatolik');
+    } finally {
+      setIsReviewing(false);
+    }
+  };
+
+  const openRejectReason = (taskId) => {
+    setRejectingTaskId(taskId);
+    setRejectReason('');
+  };
+
+  const cancelRejectReason = () => {
+    setRejectingTaskId(null);
+    setRejectReason('');
+  };
+
+  const handleRejectTask = async (assignment, task) => {
+    setIsReviewing(true);
+    try {
+      const updated = await onboardingService.reviewTask(assignment.id, task.id, 'rejected', rejectReason.trim());
+      applyReviewedAssignment(updated);
+      toast.success('Vazifa qaytarildi');
+      setRejectingTaskId(null);
+      setRejectReason('');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Vazifani qaytarishda xatolik');
+    } finally {
+      setIsReviewing(false);
     }
   };
 
@@ -1154,13 +1213,17 @@ export function OnboardingPage() {
                     {step.tasks.map((task) => {
                       const completion = assignment.completions.find((c) => c.taskId === task.id);
                       const TaskIcon = TASK_TYPES.find((t) => t.value === task.type)?.icon || Zap;
+                      const reviewCfg = completion ? REVIEW_STATUS_CONFIG[completion.reviewStatus] : null;
+                      const ReviewIcon = reviewCfg?.icon;
+                      const isRejectingThis = rejectingTaskId === task.id;
                       return (
-                        <div key={task.id} className="onboarding-view-task">
+                        <div key={task.id} className={`onboarding-view-task ${completion ? `review-${completion.reviewStatus}` : ''}`}>
                           <div className="onboarding-view-task-header">
                             <span className="onboarding-view-task-icon"><TaskIcon size={14} strokeWidth={2.25} /></span>
                             <span className="onboarding-view-task-title">{task.title}</span>
-                            <Badge variant={completion ? 'success' : 'warning'}>
-                              {completion ? 'Topshirilgan' : 'Kutilmoqda'}
+                            <Badge variant={completion ? reviewCfg.variant : 'warning'}>
+                              {ReviewIcon && <ReviewIcon size={11} strokeWidth={2.25} />}
+                              {completion ? reviewCfg.label : 'Topshirilmagan'}
                             </Badge>
                           </div>
                           {completion && (
@@ -1177,8 +1240,77 @@ export function OnboardingPage() {
                                 </a>
                               )}
                               <span className="onboarding-view-task-date">
-                                <Clock size={11} strokeWidth={2.25} /> {new Date(completion.completedAt).toLocaleString('uz-UZ')}
+                                <Clock size={11} strokeWidth={2.25} /> Topshirilgan: {new Date(completion.completedAt).toLocaleString('uz-UZ')}
                               </span>
+
+                              {completion.reviewStatus === 'pending' && !isRejectingThis && (
+                                <div className="onboarding-review-actions">
+                                  <button
+                                    type="button"
+                                    className="onboarding-review-btn approve"
+                                    disabled={isReviewing}
+                                    onClick={() => handleApproveTask(assignment, task)}
+                                  >
+                                    <ThumbsUp size={13} strokeWidth={2.25} /> Qabul qildim
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="onboarding-review-btn reject"
+                                    disabled={isReviewing}
+                                    onClick={() => openRejectReason(task.id)}
+                                  >
+                                    <Undo2 size={13} strokeWidth={2.25} /> Qaytarish
+                                  </button>
+                                </div>
+                              )}
+
+                              {isRejectingThis && (
+                                <div className="onboarding-reject-reason">
+                                  <textarea
+                                    className="form-textarea"
+                                    rows={2}
+                                    placeholder="Qaytarish sababi (ixtiyoriy)..."
+                                    value={rejectReason}
+                                    onChange={(e) => setRejectReason(e.target.value)}
+                                    autoFocus
+                                  />
+                                  <div className="onboarding-review-actions">
+                                    <button
+                                      type="button"
+                                      className="onboarding-review-btn reject"
+                                      disabled={isReviewing}
+                                      onClick={() => handleRejectTask(assignment, task)}
+                                    >
+                                      <Undo2 size={13} strokeWidth={2.25} /> Qaytarishni tasdiqlash
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="onboarding-review-btn cancel"
+                                      disabled={isReviewing}
+                                      onClick={cancelRejectReason}
+                                    >
+                                      Bekor qilish
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
+                              {completion.reviewStatus === 'rejected' && (
+                                <div className="onboarding-review-note rejected">
+                                  <AlertCircle size={13} strokeWidth={2.25} />
+                                  <span>
+                                    {completion.reviewComment ? `Sabab: ${completion.reviewComment}` : 'Qaytarildi — xodim qayta topshirishi kerak'}
+                                    {completion.reviewedAt && ` · ${new Date(completion.reviewedAt).toLocaleString('uz-UZ')}`}
+                                  </span>
+                                </div>
+                              )}
+
+                              {completion.reviewStatus === 'approved' && completion.reviewedAt && (
+                                <div className="onboarding-review-note approved">
+                                  <CheckCircle2 size={13} strokeWidth={2.25} />
+                                  <span>Qabul qilingan: {new Date(completion.reviewedAt).toLocaleString('uz-UZ')}</span>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>

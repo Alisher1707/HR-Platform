@@ -72,6 +72,11 @@ export const onboardingService = {
     return response.data.data;
   },
 
+  async reviewTask(assignmentId, taskId, decision, comment) {
+    const response = await api.post(`/onboarding/assignments/${assignmentId}/tasks/${taskId}/review`, { decision, comment });
+    return response.data.data;
+  },
+
   async uploadDocument(file) {
     const formData = new FormData();
     formData.append('document', file);

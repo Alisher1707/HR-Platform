@@ -95,6 +95,27 @@ export async function getAssignmentDetail(req, res) {
   }
 }
 
+export async function reviewTask(req, res) {
+  try {
+    const { decision, comment } = req.body;
+    const assignment = await onboardingService.reviewTaskSubmission(
+      req.params.id,
+      req.params.taskId,
+      decision,
+      req.user.id,
+      comment
+    );
+    return successResponse(
+      res,
+      assignment,
+      decision === 'approved' ? 'Vazifa qabul qilindi' : 'Vazifa qaytarildi'
+    );
+  } catch (error) {
+    console.error('Review onboarding task error:', error);
+    return errorResponse(res, error.message || 'Vazifani ko\'rib chiqishda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+  }
+}
+
 export async function getAssignments(req, res) {
   try {
     const assignments = await onboardingService.listAssignments();

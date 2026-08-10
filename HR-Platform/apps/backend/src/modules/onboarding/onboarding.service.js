@@ -38,6 +38,9 @@ function mapCompletion(row) {
     submissionFileUrl: row.submission_file_url,
     submissionFileName: row.submission_file_name,
     submissionLink: row.submission_link,
+    reviewStatus: row.review_status,
+    reviewedAt: row.reviewed_at,
+    reviewComment: row.review_comment,
   };
 }
 
@@ -211,6 +214,7 @@ function mapAssignment(row) {
     completedAt: row.completed_at,
     totalSteps: totalTasks,
     completedSteps: completedTasks,
+    pendingReviewSteps: Number(row.pending_review_tasks) || 0,
     progress: totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0,
     currentStepTitle: row.current_task_title || null,
     status: row.completed_at ? 'completed' : 'in_progress',
@@ -227,13 +231,23 @@ const SELECT_ASSIGNMENTS = `
       JOIN onboarding_plan_steps s ON s.id = t.step_id
       WHERE s.plan_id = a.plan_id
     ) AS total_tasks,
-    (SELECT COUNT(*) FROM onboarding_step_completions WHERE assignment_id = a.id) AS completed_tasks,
+    -- Faqat HR tomonidan qabul qilingan ("approved") vazifalar "bajarildi"
+    -- hisoblanadi — shunchaki topshirilgani hali yetarli emas.
+    (
+      SELECT COUNT(*) FROM onboarding_step_completions
+      WHERE assignment_id = a.id AND review_status = 'approved'
+    ) AS completed_tasks,
+    (
+      SELECT COUNT(*) FROM onboarding_step_completions
+      WHERE assignment_id = a.id AND review_status = 'pending'
+    ) AS pending_review_tasks,
     (
       SELECT t.title FROM onboarding_step_tasks t
       JOIN onboarding_plan_steps s ON s.id = t.step_id
       WHERE s.plan_id = a.plan_id
         AND t.id NOT IN (
-          SELECT task_id FROM onboarding_step_completions WHERE assignment_id = a.id
+          SELECT task_id FROM onboarding_step_completions
+          WHERE assignment_id = a.id AND review_status = 'approved'
         )
       ORDER BY s.order_index, t.order_index
       LIMIT 1
@@ -386,7 +400,7 @@ async function recomputeAssignmentCompletion(assignmentId) {
        (SELECT COUNT(*) FROM onboarding_step_tasks t
           JOIN onboarding_plan_steps s ON s.id = t.step_id
           JOIN onboarding_assignments a ON a.plan_id = s.plan_id WHERE a.id = $1) AS total,
-       (SELECT COUNT(*) FROM onboarding_step_completions WHERE assignment_id = $1) AS done`,
+       (SELECT COUNT(*) FROM onboarding_step_completions WHERE assignment_id = $1 AND review_status = 'approved') AS done`,
     [assignmentId]
   );
   const { total, done } = result.rows[0];
@@ -426,17 +440,26 @@ export async function submitTask(token, taskId, submission) {
     throw error;
   }
 
+  // Har bir (qayta) topshiriq HR uchun yangidan ko'rib chiqishni talab
+  // qiladi — avval rad etilgan yoki qabul qilingan bo'lsa ham, yangi
+  // topshiriq review_status'ni "pending"ga qaytarib, eski HR izohini
+  // tozalaydi.
   await query(
     `INSERT INTO onboarding_step_completions
-       (assignment_id, task_id, completed_at, submission_type, submission_text, submission_file_url, submission_file_name, submission_link)
-     VALUES ($1, $2, NOW(), $3, $4, $5, $6, $7)
+       (assignment_id, task_id, completed_at, submission_type, submission_text, submission_file_url, submission_file_name, submission_link,
+        review_status, reviewed_by, reviewed_at, review_comment)
+     VALUES ($1, $2, NOW(), $3, $4, $5, $6, $7, 'pending', NULL, NULL, NULL)
      ON CONFLICT (assignment_id, task_id) DO UPDATE SET
        completed_at = NOW(),
        submission_type = EXCLUDED.submission_type,
        submission_text = EXCLUDED.submission_text,
        submission_file_url = EXCLUDED.submission_file_url,
        submission_file_name = EXCLUDED.submission_file_name,
-       submission_link = EXCLUDED.submission_link`,
+       submission_link = EXCLUDED.submission_link,
+       review_status = 'pending',
+       reviewed_by = NULL,
+       reviewed_at = NULL,
+       review_comment = NULL`,
     [
       assignment.id,
       taskId,
@@ -450,4 +473,35 @@ export async function submitTask(token, taskId, submission) {
 
   await recomputeAssignmentCompletion(assignment.id);
   return getAssignmentByToken(token);
+}
+
+/**
+ * HR vazifa topshirig'ini ko'rib chiqadi — qabul qiladi yoki qaytaradi.
+ * Faqat allaqachon topshirilgan (onboarding_step_completions qatori bor)
+ * vazifa uchun ishlaydi. Rad etilgan vazifa progress foiziga kirmaydi —
+ * xodim uni public sahifada ko'rib, qayta topshirishi kerak bo'ladi.
+ */
+export async function reviewTaskSubmission(assignmentId, taskId, decision, reviewedBy, comment) {
+  const assignmentCheck = await query('SELECT id FROM onboarding_assignments WHERE id = $1', [assignmentId]);
+  if (assignmentCheck.rows.length === 0) {
+    const error = new Error('Biriktirilgan reja topilmadi');
+    error.statusCode = HTTP_STATUS.NOT_FOUND;
+    throw error;
+  }
+
+  const result = await query(
+    `UPDATE onboarding_step_completions
+     SET review_status = $1, reviewed_by = $2, reviewed_at = NOW(), review_comment = $3
+     WHERE assignment_id = $4 AND task_id = $5
+     RETURNING id`,
+    [decision, reviewedBy, comment || null, assignmentId, taskId]
+  );
+  if (result.rows.length === 0) {
+    const error = new Error('Bu vazifa hali topshirilmagan');
+    error.statusCode = HTTP_STATUS.NOT_FOUND;
+    throw error;
+  }
+
+  await recomputeAssignmentCompletion(assignmentId);
+  return getAssignmentById(assignmentId);
 }

@@ -14,6 +14,8 @@ import {
   Upload,
   Link2,
   AlertCircle,
+  Clock,
+  Undo2,
 } from 'lucide-react';
 import onboardingService from '../../services/onboardingService';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
@@ -68,8 +70,12 @@ export function OnboardingPublicPage() {
 
   const openSubmitModal = (task) => {
     const existing = getCompletion(task.id);
+    // Qaytarilgan vazifa to'g'ridan-to'g'ri tahrirlash rejimida ochiladi
+    // (avvalgi javob bilan to'ldirilgan holda) — xodim sababni ko'rib,
+    // darhol tuzatib qayta topshirsin, alohida "Ko'rish" bosqichisiz.
+    const shouldEdit = !existing || existing.reviewStatus === 'rejected';
     setModalTask(task);
-    setModalMode(existing ? 'view' : 'edit');
+    setModalMode(shouldEdit ? 'edit' : 'view');
     setSubType(existing?.submissionType || 'text');
     setSubText(existing?.submissionType === 'text' ? existing.submissionText || '' : '');
     setSubLink(existing?.submissionType === 'link' ? existing.submissionLink || '' : '');
@@ -174,7 +180,8 @@ export function OnboardingPublicPage() {
               <div className="onboarding-public-step-group-title">{stepIdx + 1}-bosqich</div>
 
               {step.tasks.map((task) => {
-                const done = assignment.completedStepIds.includes(task.id);
+                const completion = getCompletion(task.id);
+                const reviewStatus = completion?.reviewStatus || null; // null | pending | approved | rejected
                 const youtubeId = task.type === 'video' ? extractYouTubeId(task.videoUrl) : null;
                 return (
                   <div key={task.id} className="onboarding-public-task">
@@ -200,20 +207,33 @@ export function OnboardingPublicPage() {
                         <Download size={14} strokeWidth={2.25} />
                       </a>
                     )}
-                    <div className={`onboarding-public-step ${done ? 'done' : ''}`}>
+                    <div className={`onboarding-public-step ${reviewStatus ? `review-${reviewStatus}` : ''}`}>
                       <span className="onboarding-public-step-check">
-                        {done ? <CheckCircle2 size={22} strokeWidth={2} /> : <Circle size={22} strokeWidth={1.75} />}
+                        {reviewStatus === 'approved' && <CheckCircle2 size={22} strokeWidth={2} />}
+                        {reviewStatus === 'pending' && <Clock size={22} strokeWidth={1.75} />}
+                        {reviewStatus === 'rejected' && <AlertCircle size={22} strokeWidth={1.75} />}
+                        {!reviewStatus && <Circle size={22} strokeWidth={1.75} />}
                       </span>
                       <span className="onboarding-public-step-text">
                         <span className="onboarding-public-step-title">{task.title}</span>
                         {task.description && <span className="onboarding-public-step-desc">{task.description}</span>}
+                        {reviewStatus === 'pending' && (
+                          <span className="onboarding-public-step-status pending">HR ko'rib chiqmoqda</span>
+                        )}
+                        {reviewStatus === 'rejected' && (
+                          <span className="onboarding-public-step-status rejected">
+                            {completion.reviewComment ? `Qaytarildi: ${completion.reviewComment}` : "Qaytarildi — qayta topshiring"}
+                          </span>
+                        )}
                       </span>
                       <button
                         type="button"
-                        className={`onboarding-public-submit-btn ${done ? 'done' : ''}`}
+                        className={`onboarding-public-submit-btn ${reviewStatus ? `status-${reviewStatus}` : ''}`}
                         onClick={() => openSubmitModal(task)}
                       >
-                        {done ? <><Eye size={14} strokeWidth={2.25} /> Ko'rish</> : <><Send size={14} strokeWidth={2.25} /> Topshirish</>}
+                        {!reviewStatus && <><Send size={14} strokeWidth={2.25} /> Topshirish</>}
+                        {(reviewStatus === 'pending' || reviewStatus === 'approved') && <><Eye size={14} strokeWidth={2.25} /> Ko'rish</>}
+                        {reviewStatus === 'rejected' && <><Undo2 size={14} strokeWidth={2.25} /> Qayta topshirish</>}
                       </button>
                     </div>
                   </div>
@@ -253,9 +273,14 @@ export function OnboardingPublicPage() {
 
             {modalMode === 'view' && existingCompletion ? (
               <div className="onboarding-submission-view">
-                <div className="onboarding-submission-view-meta">
-                  <CheckCircle2 size={15} strokeWidth={2.25} />
-                  {new Date(existingCompletion.completedAt).toLocaleString('uz-UZ')} da topshirilgan
+                <div className={`onboarding-submission-view-meta status-${existingCompletion.reviewStatus}`}>
+                  {existingCompletion.reviewStatus === 'approved' && <CheckCircle2 size={15} strokeWidth={2.25} />}
+                  {existingCompletion.reviewStatus === 'pending' && <Clock size={15} strokeWidth={2.25} />}
+                  {existingCompletion.reviewStatus === 'approved' && 'HR tomonidan qabul qilindi'}
+                  {existingCompletion.reviewStatus === 'pending' && "HR ko'rib chiqmoqda"}
+                </div>
+                <div className="onboarding-submission-view-date">
+                  <Clock size={12} strokeWidth={2.25} /> Topshirilgan: {new Date(existingCompletion.completedAt).toLocaleString('uz-UZ')}
                 </div>
                 {existingCompletion.submissionType === 'text' && (
                   <p className="onboarding-submission-text">{existingCompletion.submissionText}</p>
@@ -286,6 +311,16 @@ export function OnboardingPublicPage() {
               </div>
             ) : (
               <>
+                {existingCompletion?.reviewStatus === 'rejected' && (
+                  <div className="onboarding-reject-banner">
+                    <AlertCircle size={15} strokeWidth={2.25} />
+                    <span>
+                      {existingCompletion.reviewComment
+                        ? `HR qaytardi: ${existingCompletion.reviewComment}`
+                        : 'HR bu vazifani qaytardi — tuzatib qayta topshiring'}
+                    </span>
+                  </div>
+                )}
                 <div className="onboarding-submit-type-tabs">
                   {SUBMISSION_TYPES.map((t) => (
                     <button

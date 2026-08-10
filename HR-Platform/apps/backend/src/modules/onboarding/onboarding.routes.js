@@ -55,7 +55,13 @@ const submissionSchema = Joi.object({
   }),
 });
 
+const reviewSchema = Joi.object({
+  decision: Joi.string().valid('approved', 'rejected').required(),
+  comment: Joi.string().trim().max(1000).allow('', null),
+});
+
 const uuidParamSchema = Joi.object({ id: commonSchemas.uuid });
+const assignmentTaskParamSchema = Joi.object({ id: commonSchemas.uuid, taskId: commonSchemas.uuid });
 const canManage = authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.HR);
 
 // Hujjat yuklash (admin/HR) - "Hujjat" turidagi vazifalar uchun
@@ -101,6 +107,14 @@ router.get(
   onboardingController.getAssignmentDetail
 );
 router.post('/assignments', authenticate, canManage, validate(assignmentSchema), onboardingController.createAssignment);
+router.post(
+  '/assignments/:id/tasks/:taskId/review',
+  authenticate,
+  canManage,
+  validateParams(assignmentTaskParamSchema),
+  validate(reviewSchema),
+  onboardingController.reviewTask
+);
 router.delete(
   '/assignments/:id',
   authenticate,
