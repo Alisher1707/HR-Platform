@@ -181,10 +181,14 @@ async function logDeviceEvent(deviceToken, eventType, personId, employeeId) {
 
 /**
  * When the camera reports its own attendanceStatus (checkIn/checkOut),
- * that's used directly. Otherwise falls back to: first scan of the day =
- * keldi, next = ketdi, anything after that keeps refreshing ketdi. Scans
- * within 60s of the previous one for the same employee are ignored as
- * duplicates — Hikvision terminals fire repeatedly while a face stays in frame.
+ * that's used directly. Otherwise it alternates off the employee's own
+ * most recent scan today: no scan yet (or last one was ketdi) = keldi,
+ * last one was keldi = ketdi — a real in/out toggle, so someone who steps
+ * out and comes back (lunch, errands, ...) gets correctly recorded each
+ * time, not permanently stuck on "ketdi" after their first departure.
+ * Scans within 60s of the previous one for the same employee are ignored
+ * as duplicates — Hikvision terminals fire repeatedly while a face stays
+ * in frame.
  */
 async function recordAttendance(employeeId, deviceToken, rawPersonId, explicitType) {
   // "Today" means the Tashkent calendar day, not the server's own (UTC) —
@@ -206,8 +210,8 @@ async function recordAttendance(employeeId, deviceToken, rawPersonId, explicitTy
     }
   }
 
-  const hasKeldi = rows.some((r) => r.type === 'keldi');
-  const type = explicitType || (!hasKeldi ? 'keldi' : 'ketdi');
+  const lastType = rows.length > 0 ? rows[0].type : null;
+  const type = explicitType || (lastType === 'keldi' ? 'ketdi' : 'keldi');
 
   const recordedAt = new Date();
   const { isLate, isAfterHours, isEarly, isOverShiftLimit, scheduleId } = type === 'keldi'
