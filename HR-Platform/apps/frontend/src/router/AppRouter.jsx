@@ -248,6 +248,14 @@ export function AppRouter() {
             }
           />
           <Route
+            path="/hr/onboarding"
+            element={
+              <ProtectedRoute allowedRoles={['HR']}>
+                <OnboardingPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/hr/organization"
             element={
               <ProtectedRoute allowedRoles={['HR']}>

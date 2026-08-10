@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import onboardingService from '../../services/onboardingService';
 import employeeService from '../../services/employeeService';
+import { useAuthStore } from '../../store/authStore';
 import { isValidYouTubeInput } from '../../utils/youtube';
 import useToast from '../../hooks/useToast';
 import useConfirm from '../../hooks/useConfirm';
@@ -167,6 +168,11 @@ function TaskTypeSelect({ value, onChange }) {
 export function OnboardingPage() {
   const { toast } = useToast();
   const { confirm, confirmProps } = useConfirm();
+  const { user } = useAuthStore();
+  // Rejani butunlay o'chirish faqat Admin/Super Admin uchun (backend ham
+  // shunday cheklaydi) — HR kunlik ishni (yaratish/tahrirlash/biriktirish/
+  // ko'rib chiqish) to'liq qila oladi, faqat shablonni o'chira olmaydi.
+  const canDeletePlan = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
 
   const [activeTab, setActiveTab] = useState('rejalar');
   const [plans, setPlans] = useState([]);
@@ -946,9 +952,11 @@ export function OnboardingPage() {
                   <button type="button" className="attendance-toggle-btn" title="Tahrirlash" onClick={() => openEditPlan(plan)}>
                     <Pencil size={15} strokeWidth={2.25} />
                   </button>
-                  <button type="button" className="attendance-toggle-btn" title="O'chirish" onClick={() => handleDeletePlan(plan)}>
-                    <Trash2 size={15} strokeWidth={2.25} />
-                  </button>
+                  {canDeletePlan && (
+                    <button type="button" className="attendance-toggle-btn" title="O'chirish" onClick={() => handleDeletePlan(plan)}>
+                      <Trash2 size={15} strokeWidth={2.25} />
+                    </button>
+                  )}
                 </div>
               </Card>
             ))}
