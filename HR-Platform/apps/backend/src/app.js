@@ -18,6 +18,9 @@ import applicationsRoutes from './modules/applications/applications.routes.js';
 import ejmRoutes from './modules/ejm/ejm.routes.js';
 import devicesRoutes from './modules/devices/devices.routes.js';
 import attendanceRoutes from './modules/attendance/attendance.routes.js';
+import schedulesRoutes from './modules/schedules/schedules.routes.js';
+import finesRoutes from './modules/fines/fines.routes.js';
+import onboardingRoutes from './modules/onboarding/onboarding.routes.js';
 
 /**
  * Initialize Express Application
@@ -104,6 +107,18 @@ app.use(
 );
 
 /**
+ * Static Files - Onboarding task documents
+ */
+app.use(
+  '/uploads/onboarding',
+  express.static(path.join(__dirname, '../uploads/onboarding'), {
+    setHeaders: (res) => {
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    },
+  })
+);
+
+/**
  * Rate Limiting
  */
 app.use(generalLimiter);
@@ -132,6 +147,9 @@ app.use(`${API_PREFIX}/applications`, applicationsRoutes);
 app.use(`${API_PREFIX}/ejm`, ejmRoutes);
 app.use(`${API_PREFIX}/devices`, devicesRoutes);
 app.use(`${API_PREFIX}/attendance`, attendanceRoutes);
+app.use(`${API_PREFIX}/schedules`, schedulesRoutes);
+app.use(`${API_PREFIX}/fines`, finesRoutes);
+app.use(`${API_PREFIX}/onboarding`, onboardingRoutes);
 
 /**
  * API Documentation Root
@@ -149,6 +167,7 @@ app.get(API_PREFIX, (req, res) => {
       ejm: `${API_PREFIX}/ejm`,
       devices: `${API_PREFIX}/devices`,
       attendance: `${API_PREFIX}/attendance`,
+      schedules: `${API_PREFIX}/schedules`,
     },
     documentation: 'See README.md for API documentation',
   });

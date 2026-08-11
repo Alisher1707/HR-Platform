@@ -15,10 +15,11 @@ import AttendancePage from '../pages/admin/AttendancePage';
 import OrganizationPage from '../pages/admin/OrganizationPage';
 import MonitoringPage from '../pages/admin/MonitoringPage';
 import IshJadvallariPage from '../pages/admin/IshJadvallariPage';
-import DevicesPage from '../pages/admin/DevicesPage';
 import EmployeeEJMPage from '../pages/admin/EmployeeEJMPage';
 import HRDashboard from '../pages/hr/HRDashboard';
 import KanbanPage from '../pages/hr/KanbanPage';
+import OnboardingPage from '../pages/admin/OnboardingPage';
+import OnboardingPublicPage from '../pages/public/OnboardingPublicPage';
 
 /**
  * ProtectedRoute Component
@@ -97,6 +98,7 @@ export function AppRouter() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/apply" element={<RegisterPage />} />
+        <Route path="/onboarding/public/:token" element={<OnboardingPublicPage />} />
 
         {/* Authenticated Layout Routes */}
         <Route
@@ -180,18 +182,18 @@ export function AppRouter() {
             }
           />
           <Route
-            path="/admin/devices"
-            element={
-              <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
-                <DevicesPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
             path="/admin/employees/:employeeId/ejm"
             element={
               <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
                 <EmployeeEJMPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/onboarding"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
+                <OnboardingPage />
               </ProtectedRoute>
             }
           />
@@ -242,6 +244,14 @@ export function AppRouter() {
             element={
               <ProtectedRoute allowedRoles={['HR']}>
                 <AttendancePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/onboarding"
+            element={
+              <ProtectedRoute allowedRoles={['HR']}>
+                <OnboardingPage />
               </ProtectedRoute>
             }
           />

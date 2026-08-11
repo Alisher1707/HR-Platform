@@ -13,7 +13,18 @@ const router = express.Router();
 
 const attendanceQuerySchema = Joi.object({
   date: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  startDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  endDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).optional(),
   employeeId: commonSchemas.uuid.optional(),
+});
+
+const attendanceReportQuerySchema = Joi.object({
+  startDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
+  endDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
+  branches: Joi.string().allow('').optional(),
+  departments: Joi.string().allow('').optional(),
+  positions: Joi.string().allow('').optional(),
+  employeeId: Joi.string().uuid().allow('').optional(),
 });
 
 const createAttendanceSchema = Joi.object({
@@ -38,6 +49,15 @@ router.get(
   authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.HR),
   validateQuery(attendanceQuerySchema),
   attendanceController.getAttendance
+);
+
+// GET /api/v1/attendance/report - Per-employee attendance summary (ADMIN, SUPER_ADMIN, HR)
+router.get(
+  '/report',
+  authenticate,
+  authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.HR),
+  validateQuery(attendanceReportQuerySchema),
+  attendanceController.getAttendanceReport
 );
 
 // POST /api/v1/attendance - Create manual attendance record (ADMIN, SUPER_ADMIN, HR)

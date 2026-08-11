@@ -43,3 +43,6 @@ coverage/
 
 # Docker
 .docker/
+
+# Local scratch files (may contain credentials, never commit)
+scratchpad/

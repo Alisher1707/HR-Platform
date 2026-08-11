@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import AppRouter from './router/AppRouter';
 import ToastContainer from './components/ui/Toast';
+import DemoBadge from './components/ui/DemoBadge';
 import { useThemeStore } from './store/themeStore';
 
 /**
@@ -18,6 +19,7 @@ function App() {
     <>
       <AppRouter />
       <ToastContainer />
+      <DemoBadge />
     </>
   );
 }

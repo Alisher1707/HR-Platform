@@ -57,11 +57,20 @@ import {
   X,
   LogOut,
   DoorClosed,
+  DoorOpen,
   CalendarOff,
   Paperclip,
+  Copy,
+  Check,
+  KeyRound,
+  LogIn,
+  Pencil,
 } from 'lucide-react';
 import employeeService from '../../services/employeeService';
 import attendanceService from '../../services/attendanceService';
+import devicesService from '../../services/devicesService';
+import fineService from '../../services/fineService';
+import { exportAttendanceReportToExcel } from '../../utils/exportExcel';
 import useToast from '../../hooks/useToast';
 import { useAuthStore } from '../../store/authStore';
 import Card from '../../components/ui/Card';
@@ -75,6 +84,8 @@ import Textarea from '../../components/ui/Textarea';
 import Input from '../../components/ui/Input';
 import SidePanel from '../../components/ui/SidePanel';
 import Modal from '../../components/ui/Modal';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import useConfirm from '../../hooks/useConfirm';
 
 const UZ_MONTHS = [
   'Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'Iyun',
@@ -85,6 +96,75 @@ const UZ_WEEKDAYS = ['Du', 'Se', 'Cho', 'Pa', 'Ju', 'Sha', 'Ya'];
 
 function formatUzDate(date) {
   return `${UZ_MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+}
+
+/**
+ * Colors a Davomat "Izohlar" note by what it says happened — keyword match
+ * against the free-text notes managers type on manual entries, since the
+ * field itself carries no structured status.
+ */
+function getNoteBadgeVariant(notes) {
+  if (!notes) return null;
+  const text = notes.toLowerCase();
+  if (text.includes('kech')) return 'warning'; // kech keldi
+  if (text.includes('kelmadi') || text.includes('kelmagan')) return 'error'; // ishga kelmadi
+  if (text.includes('ketib') || text.includes('ketdi')) return 'left'; // ketib qoldi
+  if (text.includes('keld')) return 'success'; // keldi (o'z vaqtida)
+  return 'notes';
+}
+
+/**
+ * Renders a Monitoring > Hisobotlar result set (per-employee attendance
+ * summary) — shared by both "Davomat hisoboti" and "Davr bo'yicha hisobot",
+ * which return the same row shape from attendanceService.getReport().
+ * `results` is null before the first generate click, [] after a generate
+ * that matched nobody, or a populated array.
+ */
+function AttendanceReportTable({ results, fields, isLoading }) {
+  if (isLoading) {
+    return <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>Yuklanmoqda...</div>;
+  }
+  if (!results) return null;
+  if (results.length === 0) {
+    return (
+      <EmptyState
+        icon="📊"
+        title="Bu davr uchun ma'lumot topilmadi"
+        text="Filtrlarni o'zgartirib qayta urinib ko'ring."
+      />
+    );
+  }
+
+  return (
+    <div className="table-container" style={{ marginTop: '1rem' }}>
+      <table className="table">
+        <thead>
+          <tr>
+            <th>Xodim</th>
+            <th>Bo'lim</th>
+            <th>Kelgan kunlar</th>
+            {fields.includes('kechikishlar') && <th>Kechikishlar</th>}
+            {fields.includes('erta_ketishlar') && <th>Erta ketishlar</th>}
+            {fields.includes('qoshimcha_soatlar') && <th>Qo'shimcha soatlar</th>}
+            {fields.includes('umumiy_soatlar') && <th>Umumiy soatlar</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {results.map((row) => (
+            <tr key={row.employeeId}>
+              <td className="font-semibold">{row.firstName} {row.lastName}</td>
+              <td>{row.department || '-'}</td>
+              <td>{row.daysPresent}</td>
+              {fields.includes('kechikishlar') && <td>{row.daysLate}</td>}
+              {fields.includes('erta_ketishlar') && <td>{row.daysEarlyLeave}</td>}
+              {fields.includes('qoshimcha_soatlar') && <td>{row.overtimeHours} soat</td>}
+              {fields.includes('umumiy_soatlar') && <td>{row.totalHours} soat</td>}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function formatTerminalClock(date) {
@@ -110,6 +190,15 @@ const FINE_TEMPLATE_TYPES = [
 ];
 
 const CUSTOM_FINE_TYPE_COLOR = '#6366f1';
+
+// Har bir "Jazo turi" (fine_types) elementiga barqaror, alohida rang beradi —
+// yaratilish tartibi bo'yicha shu palitradan aylanma tanlanadi (id o'zgarmas
+// bo'lgani uchun rang ham doim bir xil qoladi).
+const FINE_TYPE_COLOR_PALETTE = ['#6366f1', '#f43f5e', '#f97316', '#0ea5e9', '#10b981', '#a855f7', '#ec4899', '#eab308'];
+function getFineTypeColor(id, fineTypes) {
+  const idx = fineTypes.findIndex((t) => t.id === id);
+  return idx >= 0 ? FINE_TYPE_COLOR_PALETTE[idx % FINE_TYPE_COLOR_PALETTE.length] : CUSTOM_FINE_TYPE_COLOR;
+}
 
 const FINE_TIME_LIMIT_OPTIONS = ['00:05', '00:10', '00:15', '00:20', '00:30', '00:45', '01:00']
   .map((v) => ({ value: v, label: v }));
@@ -412,11 +501,19 @@ function SearchableSelect({
   const [search, setSearch] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [newName, setNewName] = useState('');
+  const [popupPos, setPopupPos] = useState({ top: 0, left: 0, width: 240, maxHeight: 320 });
   const wrapperRef = useRef(null);
+  const popupRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+      // DatePicker'lar kabi o'z ichidagi elementlar ham document.body'ga
+      // alohida portal qilib ochilishi mumkin (masalan "Yangi qo'shish"
+      // shakli ichida) — shu sabab wrapper VA panel ikkalasi ham tekshiriladi.
+      if (
+        wrapperRef.current && !wrapperRef.current.contains(e.target) &&
+        popupRef.current && !popupRef.current.contains(e.target)
+      ) {
         setIsOpen(false);
         setIsCreating(false);
       }
@@ -424,6 +521,57 @@ function SearchableSelect({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Panel endi document.body'ga portal qilinadi (Card'lar orasidagi z-index/
+  // stacking-context ziddiyati sabab pastdagi kartaning orqasida ko'rinib
+  // qolmasligi uchun) — shu sabab ochilishdan oldin ekrandagi joyi hisoblanadi.
+  // Trigger oyna (modal) pastiga yaqin bo'lsa, pastda joy yetarli bo'lmasligi
+  // mumkin — shu holatda panel yuqoriga ochiladi (aks holda ko'rinmas joyga
+  // chiqib, tanlov ro'yxati "bo'sh" ko'rinib qolar edi).
+  const toggleOpen = () => {
+    if (!isOpen && wrapperRef.current) {
+      const rect = wrapperRef.current.getBoundingClientRect();
+      const margin = 8;
+      const minNeeded = 220;
+
+      // Pastda qancha bo'sh joy borligi butun oyna balandligi emas, balki
+      // eng yaqin scroll qiluvchi ajdod (masalan Modal'ning .modal-content'i)
+      // chegarasi bo'yicha hisoblanadi — aks holda trigger shu ajdodning
+      // pastki qismiga yaqin bo'lganda, panel uning chegarasidan tashqariga
+      // (qorong'i fon ustiga) chiqib "yo'qolib" qolar edi. Shu holatda panel
+      // kartaning ustiga — yuqoriga ochiladi.
+      let scrollAncestor = wrapperRef.current.parentElement;
+      while (scrollAncestor && scrollAncestor !== document.body) {
+        const overflowY = window.getComputedStyle(scrollAncestor).overflowY;
+        if (overflowY === 'auto' || overflowY === 'scroll') break;
+        scrollAncestor = scrollAncestor.parentElement;
+      }
+      const bounds = scrollAncestor && scrollAncestor !== document.body
+        ? scrollAncestor.getBoundingClientRect()
+        : { top: 0, bottom: window.innerHeight };
+
+      const spaceBelow = bounds.bottom - rect.bottom - margin;
+      const spaceAbove = rect.top - bounds.top - margin;
+      const openAbove = spaceBelow < minNeeded && spaceAbove > spaceBelow;
+
+      // MUHIM: top/bottom "auto" deb ANIQ belgilanadi, undefined emas —
+      // React undefined qiymatli style xususiyatini butunlay tashlab
+      // yuboradi (inline'da qo'ymaydi), shu sabab .attendance-schedule-panel
+      // klassidagi fallback "top: calc(100% + 0.5rem)" o'chmay, inline
+      // "bottom" bilan bir vaqtda ishlab ketardi — natijada fixed element
+      // ham top'dan, ham bottom'dan cheklanib, balandligi deyarli 0'ga
+      // tushib, panel butunlay ko'rinmay qolar edi (aynan "yuqoriga ochilish"
+      // kerak bo'lgan holatlarda, masalan konteynerning oxirgi maydoni
+      // bo'lgan "Jazo turi"da). "auto" esa CSS klassidagi qiymatni haqiqatan
+      // ham inline ravishda bekor qiladi.
+      setPopupPos(
+        openAbove
+          ? { bottom: window.innerHeight - rect.top + margin, top: 'auto', left: rect.left, width: rect.width, maxHeight: spaceAbove }
+          : { top: rect.bottom + margin, bottom: 'auto', left: rect.left, width: rect.width, maxHeight: spaceBelow }
+      );
+    }
+    setIsOpen((prev) => !prev);
+  };
 
   const selectedValues = multiple ? selected : (selected ? [selected] : []);
 
@@ -470,7 +618,7 @@ function SearchableSelect({
             ? `attendance-pill ${isOpen ? 'active' : ''}`
             : `attendance-schedule-trigger ${isOpen ? 'open' : ''}`
         }
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={toggleOpen}
       >
         {TriggerIcon && (
           <TriggerIcon size={variant === 'pill' ? 15 : 16} style={triggerIconMeta ? { color: triggerIconMeta.color } : undefined} />
@@ -481,8 +629,21 @@ function SearchableSelect({
         <ChevronDown size={variant === 'pill' ? 14 : 16} />
       </button>
 
-      {isOpen && (
-        <div className="attendance-schedule-panel">
+      {isOpen && ReactDOM.createPortal(
+        <div
+          ref={popupRef}
+          className="attendance-schedule-panel"
+          style={{
+            position: 'fixed',
+            top: popupPos.top,
+            bottom: popupPos.bottom,
+            left: popupPos.left,
+            right: 'auto',
+            width: popupPos.width,
+            maxHeight: popupPos.maxHeight,
+            overflowY: 'auto',
+          }}
+        >
           {isCreating ? (
             <div className="fine-type-select-create">
               <input
@@ -569,7 +730,8 @@ function SearchableSelect({
               )}
             </>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -577,15 +739,13 @@ function SearchableSelect({
 
 /**
  * FineTypeCreateButton
- * Toolbar'dagi ixcham "Jazo yaratish" tugmasi — bosilganda nomi va amal qilish
- * muddatini (boshlanish — tugash sanasi) so'raydigan professional popover-card
- * ochadi (jazo turlari katalogini kengaytirish uchun).
+ * Toolbar'dagi ixcham "Jazo yaratish" tugmasi — bosilganda nomini so'raydigan
+ * professional popover-card ochadi (jazo turlari katalogini kengaytirish uchun).
  */
 function FineTypeCreateButton({ onCreate }) {
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState('');
-  const [startDate, setStartDate] = useState(new Date());
-  const [endDate, setEndDate] = useState(new Date());
+  const [isSaving, setIsSaving] = useState(false);
   const [popupPos, setPopupPos] = useState({ top: 0, left: 0 });
   const wrapperRef = useRef(null);
   const popupRef = useRef(null);
@@ -617,14 +777,17 @@ function FineTypeCreateButton({ onCreate }) {
     setIsOpen((prev) => !prev);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const trimmed = name.trim();
-    if (!trimmed) return;
-    onCreate(trimmed, { startDate, endDate });
-    setName('');
-    setStartDate(new Date());
-    setEndDate(new Date());
-    setIsOpen(false);
+    if (!trimmed || isSaving) return;
+    setIsSaving(true);
+    try {
+      await onCreate(trimmed);
+      setName('');
+      setIsOpen(false);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -672,23 +835,13 @@ function FineTypeCreateButton({ onCreate }) {
             />
           </div>
 
-          <div className="fine-type-create-field">
-            <label>Boshlanish sanasi</label>
-            <DatePicker trigger="field" value={startDate} onChange={setStartDate} />
-          </div>
-
-          <div className="fine-type-create-field">
-            <label>Tugash sanasi</label>
-            <DatePicker trigger="field" value={endDate} onChange={setEndDate} />
-          </div>
-
           <button
             type="button"
             className="fine-type-select-create-save fine-type-create-popover-submit"
-            disabled={!name.trim()}
+            disabled={!name.trim() || isSaving}
             onClick={handleSubmit}
           >
-            <Plus size={14} strokeWidth={2.25} /> Qo'shish
+            <Plus size={14} strokeWidth={2.25} /> {isSaving ? 'Saqlanmoqda...' : "Qo'shish"}
           </button>
         </div>,
         document.body
@@ -902,6 +1055,7 @@ const TREND_SERIES = [
 const ANALYTICS_RANKINGS = [
   { key: 'late', title: 'Kech qolish', subtitle: 'Ishga kech qolgan xodimlar reytingi', tone: 'warning' },
   { key: 'absence', title: 'Ishga kelmaslik', subtitle: "Sabab ko'rsatmaganlar reytingi", tone: 'error' },
+  { key: 'earlyLeave', title: 'Erta ketish', subtitle: 'Ishdan erta ketgan xodimlar reytingi', tone: 'info' },
   { key: 'onTime', title: "O'z vaqtida kelish", subtitle: 'Intizomli xodimlar reytingi', tone: 'success' },
 ];
 
@@ -1139,11 +1293,13 @@ export function AttendancePage() {
   const [financePanel, setFinancePanel] = useState(null); // { employeeId, type: 'bonus' | 'fine' | 'payment' }
   const [financeForm, setFinanceForm] = useState({ amount: '', note: '' });
   const [reportForm, setReportForm] = useState(getDefaultReportForm());
-  const [isReportGenerated, setIsReportGenerated] = useState(false);
+  const [reportResults, setReportResults] = useState(null); // null = not generated yet, [] = generated, no data
+  const [isReportLoading, setIsReportLoading] = useState(false);
   const [payrollForm, setPayrollForm] = useState(getDefaultPayrollReportForm());
   const [isPayrollReportGenerated, setIsPayrollReportGenerated] = useState(false);
   const [periodReportForm, setPeriodReportForm] = useState(getDefaultPeriodReportForm());
-  const [isPeriodReportGenerated, setIsPeriodReportGenerated] = useState(false);
+  const [periodReportResults, setPeriodReportResults] = useState(null);
+  const [isPeriodReportLoading, setIsPeriodReportLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [filters, setFilters] = useState({
@@ -1173,6 +1329,7 @@ export function AttendancePage() {
   const taskFileInputRef = useRef(null);
   const [isTaskDropzoneActive, setIsTaskDropzoneActive] = useState(false);
   const { toast } = useToast();
+  const { confirm, confirmProps } = useConfirm();
   const { user } = useAuthStore();
   const canDeleteAttendance = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
 
@@ -1216,18 +1373,110 @@ export function AttendancePage() {
     UZ_MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))
   ), []);
 
-  // No attendance backend yet — trend starts at zero for every day; the
-  // chart is fully wired and will plot real counts once that data exists.
+  // Real last-30-days attendance data for the Analitika tab — fetched only
+  // while that tab is actually open, since it's a separate range query from
+  // the single-day records the rest of the page uses.
+  const [analyticsRecords, setAnalyticsRecords] = useState([]);
+  const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(false);
+
+  useEffect(() => {
+    if (activeSection !== 'monitoring' || monitoringTab !== 'analitika') return;
+    let cancelled = false;
+
+    (async () => {
+      setIsAnalyticsLoading(true);
+      try {
+        const end = new Date();
+        const start = subDays(end, 29);
+        const records = await attendanceService.getAttendance({
+          startDate: format(start, 'yyyy-MM-dd'),
+          endDate: format(end, 'yyyy-MM-dd'),
+        });
+        if (!cancelled) setAnalyticsRecords(records);
+      } catch (err) {
+        if (!cancelled) toast.error("Analitika ma'lumotlarini yuklashda xatolik");
+      } finally {
+        if (!cancelled) setIsAnalyticsLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSection, monitoringTab]);
+
   const trendData = useMemo(() => {
     const end = new Date();
-    const start = subDays(end, 30);
-    return eachDayOfInterval({ start, end }).map((date) => ({
-      label: format(date, "'M'MM d"),
-      kechQolish: 0,
-      kelmaslik: 0,
-      kelgan: 0,
-    }));
-  }, []);
+    const start = subDays(end, 29);
+    const recordsByDay = {};
+    analyticsRecords.forEach((r) => {
+      const key = format(new Date(r.recorded_at), 'yyyy-MM-dd');
+      (recordsByDay[key] ||= []).push(r);
+    });
+
+    const totalEmployees = employees.length;
+
+    return eachDayOfInterval({ start, end }).map((date) => {
+      const dayRecords = recordsByDay[format(date, 'yyyy-MM-dd')] || [];
+      const keldiToday = new Set(dayRecords.filter((r) => r.type === 'keldi').map((r) => r.employee_id));
+      const kechQolish = dayRecords.filter((r) => r.type === 'keldi' && r.is_late === true).length;
+
+      return {
+        label: format(date, "'M'MM d"),
+        kechQolish,
+        kelmaslik: Math.max(0, totalEmployees - keldiToday.size),
+        kelgan: keldiToday.size,
+      };
+    });
+  }, [analyticsRecords, employees]);
+
+  const rankingsData = useMemo(() => {
+    const employeeInfo = (e) => ({
+      employeeId: e.id,
+      name: `${e.first_name} ${e.last_name}`,
+      position: e.position || '',
+      photoUrl: e.photo_url || null,
+    });
+    const employeeById = Object.fromEntries(employees.map((e) => [e.id, employeeInfo(e)]));
+
+    const late = {};
+    const onTime = {};
+    const earlyLeave = {};
+    const daysPresent = {};
+
+    analyticsRecords.forEach((r) => {
+      const key = r.employee_id;
+      const info = employeeById[key] || {
+        employeeId: key, name: `${r.first_name} ${r.last_name}`, position: r.position || '', photoUrl: r.photo_url || null,
+      };
+
+      if (r.type === 'keldi') {
+        const day = format(new Date(r.recorded_at), 'yyyy-MM-dd');
+        (daysPresent[key] ||= { ...info, days: new Set() }).days.add(day);
+        if (r.is_late === true) (late[key] ||= { ...info, count: 0 }).count += 1;
+        if (r.is_late === false) (onTime[key] ||= { ...info, count: 0 }).count += 1;
+      } else if (r.type === 'ketdi' && r.is_early_leave === true) {
+        (earlyLeave[key] ||= { ...info, count: 0 }).count += 1;
+      }
+    });
+
+    const totalDays = eachDayOfInterval({ start: subDays(new Date(), 29), end: new Date() }).length;
+    const absence = {};
+    employees.forEach((e) => {
+      const present = daysPresent[e.id]?.days.size || 0;
+      absence[e.id] = { ...employeeInfo(e), count: totalDays - present };
+    });
+
+    const toRanked = (obj) => Object.values(obj).filter((v) => v.count > 0).sort((a, b) => b.count - a.count).slice(0, 10);
+
+    return {
+      late: toRanked(late),
+      absence: toRanked(absence),
+      earlyLeave: toRanked(earlyLeave),
+      onTime: toRanked(onTime),
+    };
+  }, [analyticsRecords, employees]);
+
+  const [expandedRankings, setExpandedRankings] = useState({ late: false, absence: false, earlyLeave: false, onTime: false });
 
   const getFinanceKey = (employeeId) => `${employeeId}:${format(moliyaMonth, 'yyyy-MM')}`;
 
@@ -1352,44 +1601,95 @@ export function AttendancePage() {
   const [isAddFineOpen, setIsAddFineOpen] = useState(false);
   const getDefaultFineForm = () => ({ name: '', enabled: true, templates: [] });
   const [fineForm, setFineForm] = useState(getDefaultFineForm());
+  const [editingFinePolicyId, setEditingFinePolicyId] = useState(null);
+  const [isSavingFinePolicy, setIsSavingFinePolicy] = useState(false);
   const [isAssignedFinesOpen, setIsAssignedFinesOpen] = useState(false);
   const [assignedFinesEmployeeFilter, setAssignedFinesEmployeeFilter] = useState('');
 
-  // Foydalanuvchi "Jazo yaratish" orqali qo'shgan turlar — FINE_TEMPLATE_TYPES'dagi
-  // 4 ta tayyor turga ustama, doskaning umumiy jazo turlari katalogi sifatida saqlanadi.
-  const [customFineTypes, setCustomFineTypes] = useState([]);
-
-  const allFineTypes = useMemo(() => [...FINE_TEMPLATE_TYPES, ...customFineTypes], [customFineTypes]);
-  const allFineTypeOptions = useMemo(
-    () => allFineTypes.map((t) => ({ value: t.value, label: t.label })),
-    [allFineTypes]
+  // "Turi" — jarima sababi (Kech kelish/Erta ketish/Chiqish yo'q/Kelmagan kun).
+  // Doim FINE_TEMPLATE_TYPES'dagi 4 ta belgilangan tur — foydalanuvchi
+  // tomonidan yaratilmaydi.
+  const violationTypeOptions = useMemo(
+    () => FINE_TEMPLATE_TYPES.map((t) => ({ value: t.value, label: t.label })),
+    []
   );
-  const getFineTypeOptionIcon = (opt) => {
-    const type = allFineTypes.find((t) => t.value === opt.value);
+  const getViolationTypeIcon = (opt) => {
+    const type = FINE_TEMPLATE_TYPES.find((t) => t.value === opt.value);
     return type ? { Icon: type.icon, color: type.color } : null;
   };
 
-  // Yangi jazo turini katalogga qo'shadi va yaratilgan turning value'sini qaytaradi —
-  // chaqiruvchi (toolbar select yoki shablon-kartadagi "Jazo turi" select) buni o'zining
-  // joriy tanlovi sifatida belgilash-belgilamasligiga o'zi qaror qiladi.
-  const handleCreateFineType = (name, period = {}) => {
+  // "Jazo turi" — sababga nisbatan qo'llanadigan chora (masalan "Ogohlantirish").
+  // Backenddagi fine_types jadvalidan yuklanadi va "Jazo yaratish" orqali
+  // to'ldiriladi — sahifa yangilansa ham saqlanib qoladi.
+  const [fineTypes, setFineTypes] = useState([]);
+  const punishmentTypeOptions = useMemo(
+    () => fineTypes.map((t) => ({ value: t.id, label: t.name })),
+    [fineTypes]
+  );
+  const getPunishmentTypeIcon = (opt) => ({ Icon: AlertTriangle, color: getFineTypeColor(opt.value, fineTypes) });
+
+  const [finePolicies, setFinePolicies] = useState([]);
+  const [isLoadingFinePolicies, setIsLoadingFinePolicies] = useState(false);
+
+  const refreshFineTypes = async () => {
+    try {
+      const data = await fineService.getFineTypes();
+      setFineTypes(data);
+    } catch (err) {
+      toast.error('Jazo turlarini yuklashda xatolik');
+    }
+  };
+
+  const refreshFinePolicies = async () => {
+    setIsLoadingFinePolicies(true);
+    try {
+      const data = await fineService.getFinePolicies();
+      setFinePolicies(data);
+    } catch (err) {
+      toast.error('Jarima siyosatlarini yuklashda xatolik');
+    } finally {
+      setIsLoadingFinePolicies(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSection !== 'moliya' || moliyaTab !== 'jarimalar') return;
+    refreshFineTypes();
+    refreshFinePolicies();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSection, moliyaTab]);
+
+  // Yangi jazo turini backendga saqlaydi va yaratilgan (yoki nomi mos keluvchi
+  // mavjud) turning id'sini qaytaradi — chaqiruvchi (toolbar tugmasi yoki
+  // shablon-kartadagi "Jazo turi" select) buni o'zining joriy tanlovi
+  // sifatida belgilash-belgilamasligiga o'zi qaror qiladi.
+  const handleCreateFineType = async (name) => {
     const trimmed = name.trim();
     if (!trimmed) return null;
-    const existing = allFineTypes.find((t) => t.label.toLowerCase() === trimmed.toLowerCase());
-    if (existing) return existing.value;
-    const value = `custom_${Date.now()}`;
-    setCustomFineTypes((prev) => [
-      ...prev,
-      {
-        value,
-        label: trimmed,
-        color: CUSTOM_FINE_TYPE_COLOR,
-        icon: AlertTriangle,
-        startDate: period.startDate || null,
-        endDate: period.endDate || null,
-      },
-    ]);
-    return value;
+    try {
+      const created = await fineService.createFineType(trimmed);
+      setFineTypes((prev) => (prev.some((t) => t.id === created.id) ? prev : [...prev, created]));
+      toast.success(`"${created.name}" jazo turi qo'shildi`);
+      return created.id;
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Jazo turi yaratishda xatolik');
+      return null;
+    }
+  };
+
+  const handleDeleteFineType = async (type) => {
+    const ok = await confirm({
+      title: 'Jazo turini o\'chirish',
+      message: `"${type.name}" jazo turini o'chirmoqchimisiz?`,
+    });
+    if (!ok) return;
+    try {
+      await fineService.deleteFineType(type.id);
+      setFineTypes((prev) => prev.filter((t) => t.id !== type.id));
+      toast.success(`"${type.name}" jazo turi o'chirildi`);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Jazo turini o'chirishda xatolik");
+    }
   };
 
   const assignedFinesFiltered = useMemo(
@@ -1399,7 +1699,39 @@ export function AttendancePage() {
 
   const handleOpenAddFine = () => {
     setFineForm(getDefaultFineForm());
+    setEditingFinePolicyId(null);
     setIsAddFineOpen(true);
+  };
+
+  const handleEditFinePolicy = (policy) => {
+    setFineForm({
+      name: policy.name,
+      enabled: policy.enabled,
+      templates: policy.templates.map((t) => ({
+        id: t.id,
+        type: t.violationType,
+        timeLimit: t.timeLimit || '00:15',
+        amount: t.amount != null ? String(t.amount) : '',
+        jazoType: t.fineTypeId || '',
+      })),
+    });
+    setEditingFinePolicyId(policy.id);
+    setIsAddFineOpen(true);
+  };
+
+  const handleDeleteFinePolicy = async (policy) => {
+    const ok = await confirm({
+      title: 'Jarima siyosatini o\'chirish',
+      message: `"${policy.name}" jarima siyosatini o'chirmoqchimisiz?`,
+    });
+    if (!ok) return;
+    try {
+      await fineService.deleteFinePolicy(policy.id);
+      toast.success('Jarima siyosati o\'chirildi');
+      refreshFinePolicies();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Jarima siyosatini o'chirishda xatolik");
+    }
   };
 
   const addFineTemplate = (type) => {
@@ -1423,10 +1755,34 @@ export function AttendancePage() {
     setFineForm((prev) => ({ ...prev, templates: prev.templates.filter((t) => t.id !== id) }));
   };
 
-  const handleFineNextStep = () => {
-    // Step 2 (shablon detallari) hali loyihalashtirilmagan — hozircha
-    // "Keyingisi" step 1'ni yakunlab panelni yopadi.
-    setIsAddFineOpen(false);
+  const handleFineNextStep = async () => {
+    if (!fineForm.name.trim() || isSavingFinePolicy) return;
+    setIsSavingFinePolicy(true);
+    const payload = {
+      name: fineForm.name.trim(),
+      enabled: fineForm.enabled,
+      templates: fineForm.templates.map((t) => ({
+        violationType: t.type,
+        timeLimit: t.timeLimit || null,
+        amount: Number(t.amount) || 0,
+        fineTypeId: t.jazoType || null,
+      })),
+    };
+    try {
+      if (editingFinePolicyId) {
+        await fineService.updateFinePolicy(editingFinePolicyId, payload);
+        toast.success('Jarima siyosati yangilandi');
+      } else {
+        await fineService.createFinePolicy(payload);
+        toast.success('Jarima siyosati yaratildi');
+      }
+      setIsAddFineOpen(false);
+      refreshFinePolicies();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Jarima siyosatini saqlashda xatolik');
+    } finally {
+      setIsSavingFinePolicy(false);
+    }
   };
 
   const toggleReportField = (value) => {
@@ -1438,8 +1794,27 @@ export function AttendancePage() {
     }));
   };
 
-  const handleGenerateReport = () => {
-    setIsReportGenerated(true);
+  const handleGenerateReport = async () => {
+    setIsReportLoading(true);
+    try {
+      const monthDate = new Date(Number(reportForm.year), Number(reportForm.month) - 1, 1);
+      const rows = await attendanceService.getReport({
+        startDate: format(startOfMonth(monthDate), 'yyyy-MM-dd'),
+        endDate: format(endOfMonth(monthDate), 'yyyy-MM-dd'),
+        branches: reportForm.branches,
+        departments: reportForm.departments,
+        positions: reportForm.positions,
+        employeeId: reportForm.employeeId,
+      });
+      setReportResults(rows);
+      if (rows.length > 0) {
+        exportAttendanceReportToExcel(rows, `davomat-hisoboti-${reportForm.year}-${String(reportForm.month).padStart(2, '0')}.xlsx`);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Hisobotni tayyorlashda xatolik');
+    } finally {
+      setIsReportLoading(false);
+    }
   };
 
   const handleGeneratePayrollReport = () => {
@@ -1455,8 +1830,28 @@ export function AttendancePage() {
     }));
   };
 
-  const handleGeneratePeriodReport = () => {
-    setIsPeriodReportGenerated(true);
+  const handleGeneratePeriodReport = async () => {
+    setIsPeriodReportLoading(true);
+    try {
+      const rows = await attendanceService.getReport({
+        startDate: format(periodReportForm.startDate, 'yyyy-MM-dd'),
+        endDate: format(periodReportForm.endDate, 'yyyy-MM-dd'),
+        branches: periodReportForm.branches,
+        departments: periodReportForm.departments,
+        positions: periodReportForm.positions,
+        employeeId: periodReportForm.employeeId,
+      });
+      setPeriodReportResults(rows);
+      if (rows.length > 0) {
+        const startLabel = format(periodReportForm.startDate, 'yyyy-MM-dd');
+        const endLabel = format(periodReportForm.endDate, 'yyyy-MM-dd');
+        exportAttendanceReportToExcel(rows, `davomat-hisoboti-${startLabel}_${endLabel}.xlsx`);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Hisobotni tayyorlashda xatolik');
+    } finally {
+      setIsPeriodReportLoading(false);
+    }
   };
 
   const handleOpenFilter = () => {
@@ -1554,11 +1949,6 @@ export function AttendancePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSection, selectedDateKey]);
 
-  // Standard ish boshlanish vaqti — "kech kelgan" hisoblash uchun (Ish
-  // Jadvallari bo'limidagi standart smena bilan bir xil, hali filialga
-  // qarab moslashtirilmagan).
-  const WORK_START_TIME = '09:00';
-
   const recordsByEmployee = useMemo(() => {
     const map = {};
     attendanceRecords.forEach((r) => {
@@ -1587,7 +1977,9 @@ export function AttendancePage() {
 
     const hasKeldi = Boolean(firstKeldi);
     const hasKetdi = Boolean(lastKetdi);
-    const isLate = hasKeldi && format(new Date(firstKeldi.recorded_at), 'HH:mm') > WORK_START_TIME;
+    // Ish jadvallari bo'limida xodimga biriktirilgan jadval asosida backend
+    // hisoblab beradi (null — xodimga hali jadval biriktirilmagan).
+    const isLate = hasKeldi && firstKeldi.is_late === true;
 
     // done: keldi+ketdi ikkalasi ham bor (ish kuni yakunlangan)
     // present: keldi bor, ketdi yo'q (hozir ishda)
@@ -1656,6 +2048,87 @@ export function AttendancePage() {
     const id = setInterval(() => setTerminalClock(new Date()), 1000);
     return () => clearInterval(id);
   }, [activeSection, monitoringTab]);
+
+  const [terminals, setTerminals] = useState([]);
+  const [isTerminalsLoading, setIsTerminalsLoading] = useState(false);
+
+  const refreshTerminals = async () => {
+    setIsTerminalsLoading(true);
+    try {
+      const data = await devicesService.getTerminals();
+      setTerminals(data);
+    } catch (err) {
+      toast.error("Terminallar ro'yxatini yuklashda xatolik");
+    } finally {
+      setIsTerminalsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSection !== 'monitoring' || monitoringTab !== 'terminallar') return;
+    refreshTerminals();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSection, monitoringTab]);
+
+  // "Qurilma yaratish" paneli — nomi kiritilib yaratiladi, backend token
+  // generatsiya qilib qaytaradi, keyin shu token nusxalab olish uchun
+  // ko'rsatiladi (kameraga kiritish uchun kerak bo'ladi).
+  const [isCreateDeviceOpen, setIsCreateDeviceOpen] = useState(false);
+  const [newDeviceName, setNewDeviceName] = useState('');
+  const [isCreatingDevice, setIsCreatingDevice] = useState(false);
+  const [createdDevice, setCreatedDevice] = useState(null);
+  const [isTokenCopied, setIsTokenCopied] = useState(false);
+
+  const openCreateDevicePanel = () => {
+    setNewDeviceName('');
+    setCreatedDevice(null);
+    setIsTokenCopied(false);
+    setIsCreateDeviceOpen(true);
+  };
+
+  const closeCreateDevicePanel = () => setIsCreateDeviceOpen(false);
+
+  const handleCreateDevice = async () => {
+    if (!newDeviceName.trim()) {
+      toast.error('Qurilma nomini kiriting');
+      return;
+    }
+    setIsCreatingDevice(true);
+    try {
+      const device = await devicesService.createDevice(newDeviceName.trim());
+      setCreatedDevice(device);
+      refreshTerminals();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Qurilma yaratishda xatolik');
+    } finally {
+      setIsCreatingDevice(false);
+    }
+  };
+
+  const handleCopyToken = async (token) => {
+    try {
+      await navigator.clipboard.writeText(token);
+      setIsTokenCopied(true);
+      setTimeout(() => setIsTokenCopied(false), 2000);
+    } catch (err) {
+      toast.error('Nusxalashda xatolik — tokenni qo\'lda belgilab oling');
+    }
+  };
+
+  const handleDeleteDevice = async (device) => {
+    const ok = await confirm({
+      title: 'Qurilmani o\'chirish',
+      message: `"${device.name}" qurilmasini o'chirmoqchimisiz? Kamera bu tokendan foydalanishni to'xtatadi.`,
+    });
+    if (!ok) return;
+    try {
+      await devicesService.deleteDevice(device.id);
+      toast.success("Qurilma o'chirildi");
+      refreshTerminals();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Qurilmani o'chirishda xatolik");
+    }
+  };
 
   return (
     <div className="animate-fade-in">
@@ -1756,6 +2229,14 @@ export function AttendancePage() {
                   <div>
                     <div className="attendance-detail-title">
                       {detailEmployee.first_name} {detailEmployee.last_name}
+                      {detailEmployee.current_presence && (
+                        <span className={`attendance-presence-badge ${detailEmployee.current_presence === 'ichkarida' ? 'inside' : 'outside'}`}>
+                          {detailEmployee.current_presence === 'ichkarida'
+                            ? <DoorOpen size={13} strokeWidth={2.25} />
+                            : <DoorClosed size={13} strokeWidth={2.25} />}
+                          {detailEmployee.current_presence === 'ichkarida' ? 'Ichkarida' : 'Tashqarida'}
+                        </span>
+                      )}
                     </div>
                     <div className="attendance-detail-subtitle">
                       {format(selectedDate, 'yyyy-MM-dd')} ga tegishli belgilar
@@ -1778,20 +2259,57 @@ export function AttendancePage() {
                     {(recordsByEmployee[detailEmployee.id] || []).length > 0 && (
                       <tbody>
                         {(recordsByEmployee[detailEmployee.id] || []).map((record) => {
-                          const isLateRecord = record.type === 'keldi'
-                            && format(new Date(record.recorded_at), 'HH:mm') > WORK_START_TIME;
                           return (
                             <tr key={record.id}>
                               <td>{format(new Date(record.recorded_at), 'HH:mm')}</td>
                               <td>{record.type === 'keldi' ? 'Keldi' : 'Ketdi'}</td>
                               <td>
                                 {record.type === 'keldi' ? (
-                                  <Badge variant={isLateRecord ? 'warning' : 'success'}>
-                                    {isLateRecord ? 'Kech' : 'Vaqtida'}
-                                  </Badge>
+                                  record.is_late === null || record.is_late === undefined ? (
+                                    record.schedule_type === 'gibrid' || record.schedule_type === 'erkin' ? (
+                                      <Badge variant="info" title="Bu jadvalda qat'iy boshlanish vaqti yo'q — smena limiti asosida ishlaydi">
+                                        <Zap size={12} strokeWidth={2.25} /> Erkin jadval
+                                      </Badge>
+                                    ) : (
+                                      <Badge variant="info" title="Xodimning biriktirilgan jadvali bu kunni dam olish kuni deb belgilagan">
+                                        <CalendarOff size={12} strokeWidth={2.25} /> Dam olish kuni
+                                      </Badge>
+                                    )
+                                  ) : record.is_late && record.is_after_hours ? (
+                                    <Badge variant="afterhours" title="Ish kuni allaqachon tugagandan keyin kelgan">
+                                      <LogIn size={12} strokeWidth={2.25} /> Ishdan keyin keldi
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant={record.is_late ? 'warning' : 'success'}>
+                                      <LogIn size={12} strokeWidth={2.25} /> {record.is_late ? 'Kech keldi' : 'Vaqtida keldi'}
+                                    </Badge>
+                                  )
+                                ) : (
+                                  record.is_early_leave === null || record.is_early_leave === undefined ? (
+                                    record.is_over_shift_limit === null || record.is_over_shift_limit === undefined ? (
+                                      <Badge variant="info" title="Xodimning biriktirilgan jadvali bu kunni dam olish kuni deb belgilagan">
+                                        <CalendarOff size={12} strokeWidth={2.25} /> Dam olish kuni
+                                      </Badge>
+                                    ) : (
+                                      <Badge
+                                        variant={record.is_over_shift_limit ? 'warning' : 'success'}
+                                        title="Smenaning umumiy davomiyligi jadvaldagi 'Smena limit soatlari' bilan solishtirilgan"
+                                      >
+                                        <Clock size={12} strokeWidth={2.25} /> {record.is_over_shift_limit ? 'Smena limitidan oshdi' : 'Smena limitida'}
+                                      </Badge>
+                                    )
+                                  ) : (
+                                    <Badge variant={record.is_early_leave ? 'warning' : 'success'}>
+                                      <LogOut size={12} strokeWidth={2.25} /> {record.is_early_leave ? 'Erta ketdi' : 'Vaqtida ketdi'}
+                                    </Badge>
+                                  )
+                                )}
+                              </td>
+                              <td>
+                                {record.notes ? (
+                                  <Badge variant={getNoteBadgeVariant(record.notes)}>{record.notes}</Badge>
                                 ) : '-'}
                               </td>
-                              <td>{record.notes || '-'}</td>
                               <td>
                                 <Badge variant="info">
                                   {record.source === 'manual' ? "Qo'lda" : 'Qurilma'}
@@ -2068,9 +2586,17 @@ export function AttendancePage() {
                   <span className="attendance-terminal-clock-text">
                     {formatTerminalClock(terminalClock)}
                   </span>
-                  <button type="button" className="attendance-pill">
+                  <button type="button" className="attendance-pill" onClick={refreshTerminals} disabled={isTerminalsLoading}>
                     <RefreshCw size={15} strokeWidth={2.25} /> Ro'yxatni yangilash
                   </button>
+                  <Button
+                    variant="primary"
+                    className="attendance-primary-btn"
+                    icon={<Plus size={16} strokeWidth={2.5} />}
+                    onClick={openCreateDevicePanel}
+                  >
+                    Qurilma yaratish
+                  </Button>
                 </div>
               )}
             </div>
@@ -2191,18 +2717,13 @@ export function AttendancePage() {
                   className="attendance-primary-btn"
                   icon={<FileText size={16} strokeWidth={2.5} />}
                   onClick={handleGenerateReport}
+                  disabled={isReportLoading}
                 >
-                  Hisobotni ko'rish
+                  {isReportLoading ? 'Tayyorlanmoqda...' : "Hisobotni ko'rish"}
                 </Button>
               </div>
 
-              {isReportGenerated && (
-                <EmptyState
-                  icon="📊"
-                  title="Bu davr uchun ma'lumot topilmadi"
-                  text="Filtrlarni o'zgartirib qayta urinib ko'ring."
-                />
-              )}
+              <AttendanceReportTable results={reportResults} fields={reportForm.fields} isLoading={isReportLoading} />
               </Card>
 
               <Card>
@@ -2422,18 +2943,13 @@ export function AttendancePage() {
                     className="attendance-primary-btn"
                     icon={<Download size={16} strokeWidth={2.5} />}
                     onClick={handleGeneratePeriodReport}
+                    disabled={isPeriodReportLoading}
                   >
-                    Hisobotni yuklash
+                    {isPeriodReportLoading ? 'Tayyorlanmoqda...' : 'Hisobotni yuklash'}
                   </Button>
                 </div>
 
-                {isPeriodReportGenerated && (
-                  <EmptyState
-                    icon="📊"
-                    title="Bu davr uchun ma'lumot topilmadi"
-                    text="Filtrlarni o'zgartirib qayta urinib ko'ring."
-                  />
-                )}
+                <AttendanceReportTable results={periodReportResults} fields={periodReportForm.fields} isLoading={isPeriodReportLoading} />
               </Card>
             </div>
           )}
@@ -2465,7 +2981,52 @@ export function AttendancePage() {
                       </div>
                     </div>
                     <div className="attendance-ranking-body">
-                      <p className="attendance-muted-center">Ma'lumot yo'q</p>
+                      {rankingsData[ranking.key].length === 0 ? (
+                        <p className="attendance-muted-center">
+                          {isAnalyticsLoading ? 'Yuklanmoqda...' : "Ma'lumot yo'q"}
+                        </p>
+                      ) : (
+                        <>
+                          <div className="attendance-ranking-list">
+                            {(expandedRankings[ranking.key]
+                              ? rankingsData[ranking.key]
+                              : rankingsData[ranking.key].slice(0, 3)
+                            ).map((item, idx) => (
+                              <div className="attendance-ranking-row" key={`${ranking.key}-${item.employeeId}-${idx}`}>
+                                {item.photoUrl ? (
+                                  <img
+                                    className="attendance-ranking-avatar"
+                                    src={employeeService.getPhotoUrl(item.photoUrl)}
+                                    alt={item.name}
+                                  />
+                                ) : (
+                                  <div className="attendance-ranking-avatar-fallback">
+                                    {item.name.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()}
+                                  </div>
+                                )}
+                                <div className="attendance-ranking-row-info">
+                                  <div className="attendance-ranking-row-name">{item.name}</div>
+                                  {item.position && <div className="attendance-ranking-row-position">{item.position}</div>}
+                                </div>
+                                <Badge variant={ranking.tone === 'success' ? 'success' : ranking.tone === 'warning' ? 'warning' : ranking.tone === 'info' ? 'info' : 'error'}>
+                                  {item.count} marta
+                                </Badge>
+                              </div>
+                            ))}
+                          </div>
+
+                          {rankingsData[ranking.key].length > 3 && (
+                            <button
+                              type="button"
+                              className="attendance-ranking-more"
+                              onClick={() => setExpandedRankings((prev) => ({ ...prev, [ranking.key]: !prev[ranking.key] }))}
+                            >
+                              {expandedRankings[ranking.key] ? 'Kamroq ko\'rsatish' : "Ko'proq ko'rsatish"}
+                              <ChevronRight size={14} strokeWidth={2.5} />
+                            </button>
+                          )}
+                        </>
+                      )}
                     </div>
                   </Card>
                 ))}
@@ -2478,22 +3039,89 @@ export function AttendancePage() {
               <div className="attendance-section-header">
                 <div className="attendance-section-header-title">
                   <h3>Terminallar</h3>
+                  <p className="attendance-analytics-subtitle">
+                    Kameradan haqiqatda kelgan so'rovlar asosida — qo'shimcha sozlash shart emas.
+                  </p>
                 </div>
               </div>
 
-              <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Nomi</th>
-                      <th>Holati</th>
-                      <th>Sinxronlashtirish</th>
-                    </tr>
-                  </thead>
-                </table>
-              </div>
-
-              <EmptyState icon="📦" title="Ma'lumot yo'q" text="" />
+              {isTerminalsLoading ? (
+                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Yuklanmoqda...</div>
+              ) : terminals.length === 0 ? (
+                <EmptyState
+                  icon={<Smartphone size={44} strokeWidth={1.5} />}
+                  title="Hali qurilma yo'q"
+                  text={'"Qurilma yaratish" tugmasi orqali yangi terminal qo\'shing — token avtomatik generatsiya qilinadi.'}
+                />
+              ) : (
+                <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Nomi</th>
+                        <th>Qurilma tokeni</th>
+                        <th>Holati</th>
+                        <th>Oxirgi faollik</th>
+                        <th>Hodisalar (30 kun)</th>
+                        <th>Tanilgan xodimlar</th>
+                        <th style={{ textAlign: 'right' }}>Amallar</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {terminals.map((t) => (
+                        <tr key={t.deviceToken}>
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                              <div className="attendance-device-icon">
+                                <Smartphone size={16} strokeWidth={2} />
+                              </div>
+                              {t.name ? (
+                                <span className="font-semibold">{t.name}</span>
+                              ) : (
+                                <Badge variant="info" title="Bu token 'Qurilma yaratish' orqali ro'yxatdan o'tmagan, kameradan avtomatik aniqlangan">
+                                  Ro'yxatdan o'tmagan
+                                </Badge>
+                              )}
+                            </div>
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              className="attendance-token-chip"
+                              onClick={() => handleCopyToken(t.deviceToken)}
+                              title="Nusxalash"
+                            >
+                              <code>{t.deviceToken}</code>
+                              <Copy size={13} strokeWidth={2.25} />
+                            </button>
+                          </td>
+                          <td>
+                            {!t.lastSeen ? (
+                              <Badge variant="warning">Kutilmoqda</Badge>
+                            ) : (
+                              <Badge variant={t.isOnline ? 'success' : 'error'}>
+                                {t.isOnline ? 'Faol' : 'Nofaol'}
+                              </Badge>
+                            )}
+                          </td>
+                          <td>{t.lastSeen ? format(new Date(t.lastSeen), 'yyyy-MM-dd HH:mm:ss') : '-'}</td>
+                          <td>{t.events30d} ({t.accessEvents30d} tanilgan)</td>
+                          <td>{t.matchedEmployees}</td>
+                          <td>
+                            <div className="table-actions" style={{ justifyContent: 'flex-end' }}>
+                              {t.id ? (
+                                <Button variant="ghost" size="sm" className="btn-icon" onClick={() => handleDeleteDevice(t)} title="O'chirish">
+                                  <Trash2 size={16} strokeWidth={2} />
+                                </Button>
+                              ) : '-'}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
               <div className="attendance-table-footer">
                 <button type="button" className="attendance-toggle-btn" title="Ustunlar sozlamasi">
@@ -2883,76 +3511,133 @@ export function AttendancePage() {
           )}
 
           {moliyaTab === 'jarimalar' && !isAssignedFinesOpen && (
+            <Card className="mb-6">
+              <div className="attendance-section-header-title" style={{ marginBottom: '0.75rem' }}>
+                <h3>Jazo turlari</h3>
+              </div>
+              {fineTypes.length > 0 ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  {fineTypes.map((t) => {
+                    const color = getFineTypeColor(t.id, fineTypes);
+                    return (
+                      <span key={t.id} className="fine-type-pill-wrap">
+                        <span
+                          className="fine-template-type-pill"
+                          style={{ '--fine-pill-color': color, cursor: 'default' }}
+                        >
+                          <AlertTriangle size={13} strokeWidth={2.25} />
+                          {t.name}
+                        </span>
+                        <button
+                          type="button"
+                          className="fine-type-pill-delete"
+                          title="O'chirish"
+                          aria-label={`"${t.name}" ni o'chirish`}
+                          onClick={() => handleDeleteFineType(t)}
+                        >
+                          <X size={12} strokeWidth={2.5} />
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', margin: 0 }}>
+                  Hali jazo turi yaratilmagan — yuqoridagi "Jazo yaratish" tugmasi orqali qo'shing.
+                </p>
+              )}
+            </Card>
+          )}
+
+          {moliyaTab === 'jarimalar' && !isAssignedFinesOpen && (
             <Card style={{ padding: 0 }}>
               <div className="attendance-section-header">
                 <div className="attendance-section-header-title">
-                  <h3>Jarimalar</h3>
+                  <h3>Jarima siyosatlari</h3>
                 </div>
               </div>
-              <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Jarima nomi</th>
-                      <th>Holat</th>
-                      <th>Kompaniya</th>
-                      <th>Jarima turlari</th>
-                      <th>Yangilangan</th>
-                    </tr>
-                  </thead>
-                  {allFines.length > 0 && (
-                    <tbody>
-                      {allFines.map((f) => (
-                        <tr key={f.id}>
-                          <td>
-                            <div className="attendance-employee-cell">
-                              {f.emp.photo_url ? (
-                                <img
-                                  className="attendance-avatar"
-                                  src={employeeService.getPhotoUrl(f.emp.photo_url)}
-                                  alt={f.empName}
-                                />
-                              ) : (
-                                <div className="attendance-avatar-fallback">
-                                  {(f.emp.first_name?.[0] || '') + (f.emp.last_name?.[0] || '')}
-                                </div>
-                              )}
-                              <div>
-                                <div className="attendance-employee-name">{f.note || f.empName}</div>
-                                <div className="attendance-employee-role">{f.empName}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td>
-                            <Badge variant="warning">Faol</Badge>
-                          </td>
-                          <td>{f.emp.branch || '-'}</td>
-                          <td>
-                            <Badge variant="error">{formatUZS(f.amount)}</Badge>
-                          </td>
-                          <td>
-                            <span className="finance-payment-time">
-                              <Clock size={13} strokeWidth={2.25} /> {format(f.date, 'dd.MM.yyyy HH:mm')}
-                            </span>
-                          </td>
+              {isLoadingFinePolicies ? (
+                <div style={{ padding: '2rem' }}><LoadingSpinner /></div>
+              ) : (
+                <>
+                  <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Jarima nomi</th>
+                          <th>Holat</th>
+                          <th>Shablonlar</th>
+                          <th>Jarima turlari</th>
+                          <th>Yangilangan</th>
+                          <th></th>
                         </tr>
-                      ))}
-                    </tbody>
+                      </thead>
+                      {finePolicies.length > 0 && (
+                        <tbody>
+                          {finePolicies.map((policy) => {
+                            const uniqueViolationLabels = [...new Set(policy.templates.map((t) => t.violationType))]
+                              .map((v) => FINE_TEMPLATE_TYPES.find((ft) => ft.value === v)?.label || v);
+                            return (
+                              <tr key={policy.id}>
+                                <td>
+                                  <div className="attendance-employee-name">{policy.name}</div>
+                                </td>
+                                <td>
+                                  <Badge variant={policy.enabled ? 'success' : 'info'}>
+                                    {policy.enabled ? 'Faol' : "O'chirilgan"}
+                                  </Badge>
+                                </td>
+                                <td>{policy.templates.length}</td>
+                                <td>
+                                  {uniqueViolationLabels.length > 0 ? (
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                                      {uniqueViolationLabels.map((label) => (
+                                        <Badge key={label} variant="error">{label}</Badge>
+                                      ))}
+                                    </div>
+                                  ) : '-'}
+                                </td>
+                                <td>
+                                  <span className="finance-payment-time">
+                                    <Clock size={13} strokeWidth={2.25} /> {format(new Date(policy.updatedAt), 'dd.MM.yyyy HH:mm')}
+                                  </span>
+                                </td>
+                                <td>
+                                  <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'flex-end' }}>
+                                    <button
+                                      type="button"
+                                      className="attendance-toggle-btn"
+                                      title="Tahrirlash"
+                                      onClick={() => handleEditFinePolicy(policy)}
+                                    >
+                                      <Pencil size={15} strokeWidth={2.25} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="attendance-toggle-btn"
+                                      title="O'chirish"
+                                      onClick={() => handleDeleteFinePolicy(policy)}
+                                    >
+                                      <Trash2 size={15} strokeWidth={2.25} />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      )}
+                    </table>
+                  </div>
+                  {finePolicies.length === 0 && (
+                    <EmptyState
+                      icon={<PackageX size={56} strokeWidth={1.25} />}
+                      title="Jarima siyosatlari topilmadi"
+                      text=""
+                    />
                   )}
-                </table>
-              </div>
-              {allFines.length === 0 && (
-                <EmptyState
-                  icon={<PackageX size={56} strokeWidth={1.25} />}
-                  title="Jarimalar topilmadi"
-                  text=""
-                />
+                </>
               )}
-              <div className="attendance-table-footer">
-                <button type="button" className="attendance-toggle-btn" title="Ustunlar sozlamasi">
-                  <Settings size={15} />
-                </button>
-              </div>
             </Card>
           )}
 
@@ -3675,7 +4360,7 @@ export function AttendancePage() {
       <Modal
         isOpen={isAddFineOpen}
         onClose={() => setIsAddFineOpen(false)}
-        title={<>Jarima yaratish <span className="fine-modal-step-label">Qadam 1/2</span></>}
+        title={<>{editingFinePolicyId ? 'Jarima siyosatini tahrirlash' : 'Jarima yaratish'} <span className="fine-modal-step-label">Qadam 1/2</span></>}
         size="lg"
         footer={
           <>
@@ -3684,10 +4369,10 @@ export function AttendancePage() {
             </Button>
             <Button
               variant="primary"
-              disabled={!fineForm.name.trim()}
+              disabled={!fineForm.name.trim() || isSavingFinePolicy}
               onClick={handleFineNextStep}
             >
-              Keyingisi
+              {isSavingFinePolicy ? 'Saqlanmoqda...' : editingFinePolicyId ? 'Saqlash' : 'Yaratish'}
             </Button>
           </>
         }
@@ -3726,20 +4411,19 @@ export function AttendancePage() {
             <h4 className="fine-step-title">Jarima shablonlari</h4>
             <p className="fine-step-subtitle">Sozlamoqchi bo'lgan jarima turlarini tanlang</p>
 
-            <div className="fine-template-add-row">
-              <SearchableSelect
-                options={allFineTypeOptions}
-                selected=""
-                onChange={(value) => {
-                  const type = allFineTypes.find((t) => t.value === value);
-                  if (type) addFineTemplate(type);
-                }}
-                getOptionIcon={getFineTypeOptionIcon}
-                icon={AlertTriangle}
-                placeholder="Jazolar"
-                searchPlaceholder="Jazo turini qidirish"
-                variant="pill"
-              />
+            <div className="fine-template-type-pills">
+              {FINE_TEMPLATE_TYPES.map((type) => (
+                <button
+                  key={type.value}
+                  type="button"
+                  className="fine-template-type-pill"
+                  style={{ '--fine-pill-color': type.color }}
+                  onClick={() => addFineTemplate(type)}
+                >
+                  <Plus size={14} strokeWidth={2.5} />
+                  {type.label}
+                </button>
+              ))}
             </div>
 
             {fineForm.templates.length === 0 ? (
@@ -3759,7 +4443,7 @@ export function AttendancePage() {
 
                 <div className="fine-template-list">
                   {fineForm.templates.map((tpl) => {
-                    const typeMeta = allFineTypes.find((t) => t.value === tpl.type);
+                    const typeMeta = FINE_TEMPLATE_TYPES.find((t) => t.value === tpl.type);
                     return (
                       <div key={tpl.id} className="fine-template-card" style={{ '--fine-pill-color': typeMeta.color }}>
                         <span className="fine-template-card-tag">{typeMeta.label}</span>
@@ -3767,10 +4451,10 @@ export function AttendancePage() {
                         <div className="fine-template-card-field">
                           <label>Turi</label>
                           <SearchableSelect
-                            options={allFineTypeOptions}
+                            options={violationTypeOptions}
                             selected={tpl.type}
                             onChange={(type) => updateFineTemplate(tpl.id, { type })}
-                            getOptionIcon={getFineTypeOptionIcon}
+                            getOptionIcon={getViolationTypeIcon}
                             icon={AlertTriangle}
                             placeholder="Turini tanlang"
                           />
@@ -3804,15 +4488,15 @@ export function AttendancePage() {
                         <div className="fine-template-card-field">
                           <label>Jazo turi</label>
                           <SearchableSelect
-                            options={allFineTypeOptions}
+                            options={punishmentTypeOptions}
                             selected={tpl.jazoType}
                             onChange={(jazoType) => updateFineTemplate(tpl.id, { jazoType })}
-                            getOptionIcon={getFineTypeOptionIcon}
+                            getOptionIcon={getPunishmentTypeIcon}
                             icon={AlertTriangle}
                             placeholder="Jazo turi"
                             searchPlaceholder="Jazo turini qidirish"
-                            onCreateNew={(name) => {
-                              const value = handleCreateFineType(name);
+                            onCreateNew={async (name) => {
+                              const value = await handleCreateFineType(name);
                               if (value) updateFineTemplate(tpl.id, { jazoType: value });
                             }}
                             createLabel="Jazo yaratish"
@@ -3836,6 +4520,78 @@ export function AttendancePage() {
           </div>
         </div>
       </Modal>
+
+      <SidePanel
+        isOpen={isCreateDeviceOpen}
+        onClose={closeCreateDevicePanel}
+        title="Qurilma yaratish"
+        footer={
+          createdDevice ? (
+            <Button variant="primary" className="attendance-primary-btn" onClick={closeCreateDevicePanel} style={{ width: '100%' }}>
+              Yopish
+            </Button>
+          ) : (
+            <div style={{ display: 'flex', width: '100%', gap: '0.75rem' }}>
+              <Button variant="outline" onClick={closeCreateDevicePanel} style={{ flex: 1 }}>
+                Bekor qilish
+              </Button>
+              <Button
+                variant="primary"
+                className="attendance-primary-btn"
+                onClick={handleCreateDevice}
+                disabled={isCreatingDevice}
+                style={{ flex: 1 }}
+              >
+                {isCreatingDevice ? 'Yaratilmoqda...' : 'Yaratish'}
+              </Button>
+            </div>
+          )
+        }
+      >
+        {createdDevice ? (
+          <div className="attendance-device-created">
+            <div className="attendance-device-created-icon">
+              <Check size={22} strokeWidth={2.5} />
+            </div>
+            <h3>"{createdDevice.name}" yaratildi</h3>
+            <p>
+              Quyidagi tokenni nusxalab, kameraning HTTP Listening (ISAPI) sozlamalariga kiriting.
+              Bu tokenni faqat shu yerda ko'rasiz — keyinroq kerak bo'lsa, ro'yxatdagi qatordan ham nusxalab olishingiz mumkin.
+            </p>
+            <div className="attendance-device-token-box">
+              <KeyRound size={16} strokeWidth={2} />
+              <code>{createdDevice.token}</code>
+              <button
+                type="button"
+                className="attendance-device-token-copy"
+                onClick={() => handleCopyToken(createdDevice.token)}
+                title="Nusxalash"
+              >
+                {isTokenCopied ? <Check size={15} strokeWidth={2.5} /> : <Copy size={15} strokeWidth={2} />}
+              </button>
+            </div>
+            <p className="attendance-device-endpoint">
+              Hodisa yuborish manzili: <code>/api/v1/devices/{createdDevice.token}/events</code>
+            </p>
+          </div>
+        ) : (
+          <div className="form-group">
+            <Input
+              label="Qurilma nomi"
+              name="deviceName"
+              placeholder="Masalan: Bosh kirish kamerasi"
+              value={newDeviceName}
+              onChange={(e) => setNewDeviceName(e.target.value)}
+              icon={<Smartphone size={15} strokeWidth={2} />}
+            />
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+              Nomi shu qurilmani Terminallar ro'yxatida tanib olish uchun — token avtomatik generatsiya qilinadi, qo'lda kiritilmaydi.
+            </p>
+          </div>
+        )}
+      </SidePanel>
+
+      <ConfirmDialog {...confirmProps} />
     </div>
   );
 }

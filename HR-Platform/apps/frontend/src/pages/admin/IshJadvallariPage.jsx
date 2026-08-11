@@ -34,6 +34,9 @@ import {
   Building2,
   LayoutGrid,
   Network,
+  Users,
+  Trash2,
+  Copy,
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -41,6 +44,8 @@ import Input from '../../components/ui/Input';
 import EmptyState from '../../components/ui/EmptyState';
 import SidePanel from '../../components/ui/SidePanel';
 import useToast from '../../hooks/useToast';
+import workScheduleService from '../../services/workScheduleService';
+import employeeService from '../../services/employeeService';
 
 const SCHEDULE_TABS = [
   { value: 'jadvallar', label: 'Jadvallar', icon: CalendarClock },
@@ -58,6 +63,8 @@ const LIMIT_TYPES = [
   { value: 'haftalik', label: 'Haftalik' },
   { value: 'oylik', label: 'Oylik' },
 ];
+
+const LIMIT_HOURS_MAX = { kunlik: 24, haftalik: 168, oylik: 744 };
 
 // Filiallar/Bo'limlar/Lavozimlar uchun hali alohida backend yo'q — tashkilot
 // bo'limidagi kabi (OrganizationPage), shu sabab faqat kompaniyaning o'zi
@@ -81,19 +88,89 @@ function formatUzDateAlt(date) {
   return `${UZ_MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
 }
 
+function defaultDayConfig(dayNumber) {
+  return { dayNumber, isWorkDay: true, startTime: '09:00', endTime: '18:00', breakStart: '13:00', breakEnd: '14:00' };
+}
+
 function emptyScheduleForm() {
+  const cycle = 7;
   return {
     type: 'moslashuvchan',
     name: '',
     startDate: new Date(),
-    cycle: 7,
+    cycle,
     countOvertime: false,
     deductBreak: false,
     extendedHours: 4,
     limitType: 'kunlik',
     limitHours: 0,
     shiftLimitHours: 1,
-    day: { isWorkDay: true, startTime: '09:00', endTime: '18:00', breakStart: '13:00', breakEnd: '14:00' },
+    days: Array.from({ length: cycle }, (_, idx) => defaultDayConfig(idx + 1)),
+    employeeIds: [],
+  };
+}
+
+/**
+ * Keeps form.days in sync with the "Sikl" (cycle) length — growing it with
+ * fresh default days or trimming it, never dropping days the user already
+ * configured within the new length.
+ */
+function resizeDays(days, cycleLength) {
+  if (days.length === cycleLength) return days;
+  if (days.length > cycleLength) return days.slice(0, cycleLength);
+  const extra = Array.from({ length: cycleLength - days.length }, (_, idx) => defaultDayConfig(days.length + idx + 1));
+  return [...days, ...extra];
+}
+
+/** Converts a backend schedule (camelCase, from workScheduleService) into the form/table shape above. */
+function apiScheduleToItem(s) {
+  const loadedDays = (s.days && s.days.length > 0 ? s.days : [defaultDayConfig(1)]).map((d) => ({
+    dayNumber: d.dayNumber,
+    isWorkDay: d.isWorkDay,
+    startTime: (d.startTime || '09:00').slice(0, 5),
+    endTime: (d.endTime || '18:00').slice(0, 5),
+    breakStart: (d.breakStart || '13:00').slice(0, 5),
+    breakEnd: (d.breakEnd || '14:00').slice(0, 5),
+  }));
+  // Self-heals if a schedule's saved day count ever drifts from its cycle
+  // length (e.g. cycle was edited elsewhere) instead of silently hiding days.
+  const days = resizeDays(loadedDays, s.cycleDays);
+
+  return {
+    id: s.id,
+    type: s.type,
+    name: s.name,
+    startDate: new Date(s.startDate),
+    cycle: s.cycleDays,
+    countOvertime: s.countOvertime,
+    deductBreak: s.deductBreak,
+    extendedHours: s.extendedHours,
+    limitType: s.limitType || 'kunlik',
+    limitHours: s.limitHours ?? 0,
+    shiftLimitHours: s.shiftLimitHours ?? 1,
+    days,
+    employeeIds: s.employeeIds || [],
+    employees: s.employees || [],
+  };
+}
+
+function scheduleToPayload(form) {
+  return {
+    name: form.name.trim(),
+    type: form.type,
+    startDate: form.startDate,
+    cycleDays: form.cycle,
+    countOvertime: form.countOvertime,
+    deductBreak: form.deductBreak,
+    extendedHours: form.extendedHours,
+    limitType: form.limitType,
+    limitHours: form.limitHours,
+    shiftLimitHours: form.shiftLimitHours,
+    // "Gibrid"/"Erkin"da qat'iy kunlik vaqt tushunchasi yo'q (limit-asosli
+    // ishlaydi), shuning uchun mazmunsiz standart 09:00-18:00 qatorlarini
+    // bazaga yubormaymiz.
+    days: form.type === 'moslashuvchan' ? form.days : [],
+    employeeIds: form.employeeIds,
   };
 }
 
@@ -109,14 +186,6 @@ function emptyHolidayForm() {
     scheduleIds: [],
   };
 }
-
-// Jadval boshqaruvi backend'i hali qo'shilmagan — vaqtinchalik namunaviy
-// ma'lumot, backend ulanganda API javobiga almashtiriladi. Har bir yozuv
-// "Yangi jadval" panelidagi to'liq forma shaklida saqlanadi, shunday qilib
-// "Tahrirlash" bosilganda panel xuddi shu ma'lumotlar bilan qayta ochiladi.
-const INITIAL_SCHEDULES = [
-  { id: 1, ...emptyScheduleForm(), name: '8:00 - 18:00', startDate: new Date('2026-07-20') },
-];
 
 /**
  * Inline calendar popover for the "Boshlanish sanasi" field — self-contained
@@ -265,7 +334,7 @@ function SingleSelectDropdown({ value, options, onChange, disabled }) {
  * search box + checkbox list + an explicit "Saqlash" button that closes the
  * panel, so picking several items doesn't close it after every click.
  */
-function MultiSelectDropdown({ options, selected, onChange, icon: Icon, placeholder }) {
+function MultiSelectDropdown({ options, selected, onChange, icon: Icon, placeholder, disabled }) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const wrapperRef = useRef(null);
@@ -293,7 +362,9 @@ function MultiSelectDropdown({ options, selected, onChange, icon: Icon, placehol
       <button
         type="button"
         className={`attendance-schedule-trigger ${isOpen ? 'open' : ''}`}
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={() => !disabled && setIsOpen((prev) => !prev)}
+        disabled={disabled}
+        style={disabled ? { opacity: 0.65, cursor: 'default' } : undefined}
       >
         <span className={selectedLabels ? '' : 'placeholder'}>{selectedLabels || placeholder}</span>
         <ChevronDown size={16} />
@@ -387,8 +458,9 @@ function CheckPill({ checked, onChange, label, spread, disabled }) {
 
 /**
  * IshJadvallariPage
- * Work-schedule management — no shift/schedule backend yet, so created
- * schedules are held in local state until the API is wired up.
+ * Work-schedule management — schedules are created/edited via the
+ * work-schedules API and assigned to one or more employees at once;
+ * Davomat (attendance) recording reads that assignment to flag late scans.
  */
 export function IshJadvallariPage() {
   const { toast } = useToast();
@@ -400,7 +472,10 @@ export function IshJadvallariPage() {
   const [holidays, setHolidays] = useState([]);
   const [isHolidayPanelOpen, setIsHolidayPanelOpen] = useState(false);
   const [holidayForm, setHolidayForm] = useState(emptyHolidayForm);
-  const [schedules, setSchedules] = useState(INITIAL_SCHEDULES);
+  const [schedules, setSchedules] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [panelMode, setPanelMode] = useState('create'); // 'create' | 'edit' | 'view'
   const [activeId, setActiveId] = useState(null);
@@ -409,6 +484,67 @@ export function IshJadvallariPage() {
   const notReady = () => toast.info("Bu imkoniyat tez orada qo'shiladi");
 
   const typeLabelOf = (value) => SCHEDULE_TYPES.find((t) => t.value === value)?.label || value;
+
+  // Bitta xodim faqat bitta jadvalga tegishli bo'lgani uchun (migration 038),
+  // bitta jadvalni saqlash boshqa bir jadvalning xodimlar ro'yxatini ham
+  // o'zgartirib qo'yishi mumkin (ko'chirish orqali) — shu sabab saqlashdan
+  // keyin faqat o'sha bitta jadvalni emas, hammasini qayta yuklaymiz, aks
+  // holda boshqa jadval eskirgan "xodimlar soni" bilan qolib ketardi.
+  const refreshSchedules = async () => {
+    const scheduleList = await workScheduleService.getSchedules();
+    setSchedules(scheduleList.map(apiScheduleToItem));
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const [scheduleList, employeeResp] = await Promise.all([
+          workScheduleService.getSchedules(),
+          employeeService.getEmployees({ limit: 100 }),
+        ]);
+        if (cancelled) return;
+        setSchedules(scheduleList.map(apiScheduleToItem));
+        setEmployees(employeeResp.data || []);
+      } catch (err) {
+        if (!cancelled) toast.error("Jadvallarni yuklashda xatolik yuz berdi");
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Xodim faqat bitta jadvalga tegishli bo'ladi — agar u boshqa jadvalda
+  // bo'lsa (hozir tahrirlanayotgan jadvaldan farqli), shuni tanlashdan
+  // oldinoq ko'rsatamiz, saqlangandan keyin kutilmagan "ko'chirish"
+  // bo'lib qolmasin.
+  const employeeScheduleMap = useMemo(() => {
+    const map = {};
+    schedules.forEach((s) => {
+      (s.employees || []).forEach((e) => {
+        map[e.id] = { scheduleId: s.id, scheduleName: s.name };
+      });
+    });
+    return map;
+  }, [schedules]);
+
+  const employeeOptions = useMemo(
+    () => employees.map((e) => {
+      const current = employeeScheduleMap[e.id];
+      const isOnOtherSchedule = current && current.scheduleId !== activeId;
+      return {
+        value: e.id,
+        label: isOnOtherSchedule
+          ? `${e.first_name} ${e.last_name} — hozir: "${current.scheduleName}"`
+          : `${e.first_name} ${e.last_name}`,
+      };
+    }),
+    [employees, employeeScheduleMap, activeId]
+  );
 
   const filteredSchedules = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -443,24 +579,75 @@ export function IshJadvallariPage() {
 
   const closePanel = () => setIsPanelOpen(false);
 
-  const updateDay = (field, value) => {
-    setForm((f) => ({ ...f, day: { ...f.day, [field]: value } }));
+  const updateDay = (dayNumber, field, value) => {
+    setForm((f) => ({
+      ...f,
+      days: f.days.map((d) => (d.dayNumber === dayNumber ? { ...d, [field]: value } : d)),
+    }));
   };
 
-  const handleSave = () => {
+  const updateCycle = (newCycle) => {
+    setForm((f) => ({ ...f, cycle: newCycle, days: resizeDays(f.days, newCycle) }));
+  };
+
+  const handleSave = async () => {
     if (!form.name.trim()) {
       toast.error('Jadval nomini kiriting');
+      const nameField = document.getElementById('scheduleName');
+      nameField?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      nameField?.focus();
+      return;
+    }
+    if (form.employeeIds.length === 0) {
+      toast.error('Kamida bitta xodim tanlang — jadval xodimga biriktirilishi shart');
       return;
     }
 
-    if (panelMode === 'edit') {
-      setSchedules((prev) => prev.map((s) => (s.id === activeId ? { id: activeId, ...form, name: form.name.trim() } : s)));
-      toast.success('Jadval yangilandi');
-    } else {
-      setSchedules((prev) => [{ id: Date.now(), ...form, name: form.name.trim() }, ...prev]);
-      toast.success("Yangi jadval qo'shildi");
+    setIsSaving(true);
+    try {
+      const payload = scheduleToPayload(form);
+
+      let movedFrom = [];
+      if (panelMode === 'edit') {
+        const updated = await workScheduleService.updateSchedule(activeId, payload);
+        movedFrom = updated.movedFromOtherSchedule || [];
+        toast.success('Jadval yangilandi');
+      } else {
+        const created = await workScheduleService.createSchedule(payload);
+        movedFrom = created.movedFromOtherSchedule || [];
+        toast.success("Yangi jadval qo'shildi");
+      }
+
+      // Bitta jadvalni saqlash boshqa jadval(lar)ning xodimlar ro'yxatini
+      // ham o'zgartirgan bo'lishi mumkin (ko'chirish orqali) — shu sabab
+      // faqat shu jadvalni emas, hammasini qayta yuklaymiz.
+      await refreshSchedules();
+
+      // Bir xodim faqat bitta jadvalga tegishli bo'ladi — agar shu saqlash
+      // paytida kimdir boshqa jadvaldan bu yerga ko'chirilgan bo'lsa, buni
+      // ochiq-oydin bildiramiz (jimgina, sezdirmasdan bo'lib qolmasin).
+      if (movedFrom.length > 0) {
+        const names = movedFrom.map((m) => `${m.employeeName} ("${m.previousScheduleName}"dan)`).join(', ');
+        toast.warning(`Ko'chirildi: ${names}`);
+      }
+
+      setIsPanelOpen(false);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Jadvalni saqlashda xatolik yuz berdi');
+    } finally {
+      setIsSaving(false);
     }
-    setIsPanelOpen(false);
+  };
+
+  const handleDeleteSchedule = async (schedule) => {
+    if (!window.confirm(`"${schedule.name}" jadvalini o'chirmoqchimisiz?`)) return;
+    try {
+      await workScheduleService.deleteSchedule(schedule.id);
+      setSchedules((prev) => prev.filter((s) => s.id !== schedule.id));
+      toast.success("Jadval o'chirildi");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Jadvalni o'chirishda xatolik yuz berdi");
+    }
   };
 
   const isReadOnly = panelMode === 'view';
@@ -586,11 +773,17 @@ export function IshJadvallariPage() {
             </div>
           </div>
 
-          {filteredSchedules.length === 0 ? (
+          {isLoading ? (
+            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Yuklanmoqda...</div>
+          ) : filteredSchedules.length === 0 ? (
             <EmptyState
               icon={<SearchX size={44} strokeWidth={1.5} />}
               title="Jadvallar topilmadi"
-              text={`"${search}" so'rovi bo'yicha hech qanday jadval topilmadi.`}
+              text={
+                search
+                  ? `"${search}" so'rovi bo'yicha hech qanday jadval topilmadi.`
+                  : "Hali jadval yaratilmagan. \"Yangi jadval\" tugmasi orqali xodimga jadval biriktiring."
+              }
             />
           ) : (
             <div className="table-container">
@@ -601,6 +794,7 @@ export function IshJadvallariPage() {
                     <th>Turi</th>
                     <th>Boshlanish sanasi</th>
                     <th>Sikl</th>
+                    <th>Xodimlar</th>
                     <th style={{ textAlign: 'right' }}>Amallar</th>
                   </tr>
                 </thead>
@@ -636,12 +830,24 @@ export function IshJadvallariPage() {
                         </span>
                       </td>
                       <td>
+                        <span
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.375rem', color: 'var(--text-secondary)' }}
+                          title={schedule.employees.map((e) => `${e.firstName} ${e.lastName}`).join(', ')}
+                        >
+                          <Users size={14} strokeWidth={2} />
+                          {schedule.employees.length} xodim
+                        </span>
+                      </td>
+                      <td>
                         <div className="table-actions" style={{ justifyContent: 'flex-end' }}>
                           <Button variant="ghost" size="sm" className="btn-icon" onClick={() => openViewPanel(schedule)} title="Ko'rish">
                             <Eye size={16} strokeWidth={2} />
                           </Button>
                           <Button variant="ghost" size="sm" className="btn-icon" onClick={() => openEditPanel(schedule)} title="Tahrirlash">
                             <Pencil size={16} strokeWidth={2} />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="btn-icon" onClick={() => handleDeleteSchedule(schedule)} title="O'chirish">
+                            <Trash2 size={16} strokeWidth={2} />
                           </Button>
                         </div>
                       </td>
@@ -729,8 +935,8 @@ export function IshJadvallariPage() {
               <Button variant="outline" onClick={closePanel} style={{ flex: 1 }}>
                 Bekor qilish
               </Button>
-              <Button variant="primary" className="attendance-primary-btn" onClick={handleSave} style={{ flex: 1 }}>
-                Saqlash
+              <Button variant="primary" className="attendance-primary-btn" onClick={handleSave} disabled={isSaving} style={{ flex: 1 }}>
+                {isSaving ? 'Saqlanmoqda...' : 'Saqlash'}
               </Button>
             </div>
           )
@@ -782,11 +988,27 @@ export function IshJadvallariPage() {
           <Input
             label="Nomi"
             name="scheduleName"
-            placeholder="Jadval nomini kiriting"
+            placeholder="Masalan: Ertalabki smena"
+            required
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             disabled={isReadOnly}
           />
+
+          <div className="form-group">
+            <label className="form-label">Xodim(lar)</label>
+            <MultiSelectDropdown
+              options={employeeOptions}
+              selected={form.employeeIds}
+              onChange={(v) => setForm((f) => ({ ...f, employeeIds: v }))}
+              icon={Users}
+              placeholder="Xodimlarni tanlang"
+              disabled={isReadOnly}
+            />
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.375rem' }}>
+              Bu jadval tanlangan xodim(lar)ning Davomat hisobiga ta'sir qiladi (kech qolishni aniqlash uchun).
+            </p>
+          </div>
 
           {form.type === 'gibrid' ? (
             <>
@@ -811,7 +1033,13 @@ export function IshJadvallariPage() {
 
               <div className="form-group">
                 <label className="form-label">Limit soatlar</label>
-                <Stepper value={form.limitHours} onChange={(v) => setForm((f) => ({ ...f, limitHours: v }))} min={0} max={24} disabled={isReadOnly} />
+                <Stepper
+                  value={form.limitHours}
+                  onChange={(v) => setForm((f) => ({ ...f, limitHours: v }))}
+                  min={0}
+                  max={LIMIT_HOURS_MAX[form.limitType] || 24}
+                  disabled={isReadOnly}
+                />
               </div>
 
               <div className="form-group">
@@ -848,7 +1076,7 @@ export function IshJadvallariPage() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Sikl</label>
-                  <Stepper value={form.cycle} onChange={(v) => setForm((f) => ({ ...f, cycle: v }))} min={1} max={31} disabled={isReadOnly} />
+                  <Stepper value={form.cycle} onChange={updateCycle} min={1} max={31} disabled={isReadOnly} />
                 </div>
               </div>
 
@@ -874,69 +1102,94 @@ export function IshJadvallariPage() {
               </div>
 
               <div>
-                <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, marginBottom: '0.875rem', color: 'var(--text-primary)' }}>
-                  {selectedTypeLabel} jadval tafsilotlari
-                </h3>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
+                  <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {selectedTypeLabel} jadval tafsilotlari
+                  </h3>
+                  {!isReadOnly && form.days.length > 1 && (
+                    <button
+                      type="button"
+                      className="schedule-copy-day1-btn"
+                      title="Kun 1 sozlamalarini barcha kunlarga nusxalash"
+                      onClick={() => {
+                        const template = form.days[0];
+                        setForm((f) => ({
+                          ...f,
+                          days: f.days.map((d) => (d.dayNumber === 1 ? d : { ...template, dayNumber: d.dayNumber })),
+                        }));
+                      }}
+                    >
+                      <Copy size={13} strokeWidth={2.25} /> Kun 1 ni hammasiga qo'llash
+                    </button>
+                  )}
+                </div>
 
-                <div
-                  style={{
-                    background: 'var(--bg-secondary)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 'var(--radius-lg)',
-                    padding: '1.125rem',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '1rem',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontWeight: 700 }}>Kun 1</span>
-                    <CheckPill
-                      label="Ish kuni"
-                      checked={form.day.isWorkDay}
-                      onChange={(v) => updateDay('isWorkDay', v)}
-                      disabled={isReadOnly}
-                    />
-                  </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+                  {form.days.map((day) => (
+                    <div
+                      key={day.dayNumber}
+                      style={{
+                        background: 'var(--bg-secondary)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 'var(--radius-lg)',
+                        padding: '1.125rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '1rem',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ fontWeight: 700 }}>Kun {day.dayNumber}</span>
+                        <CheckPill
+                          label="Ish kuni"
+                          checked={day.isWorkDay}
+                          onChange={(v) => updateDay(day.dayNumber, 'isWorkDay', v)}
+                          disabled={isReadOnly}
+                        />
+                      </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                    <Input
-                      label="Boshlanish vaqti"
-                      type="time"
-                      name="dayStartTime"
-                      icon={<Clock size={15} strokeWidth={2} />}
-                      value={form.day.startTime}
-                      onChange={(e) => updateDay('startTime', e.target.value)}
-                      disabled={!form.day.isWorkDay || isReadOnly}
-                    />
-                    <Input
-                      label="Tugash vaqti"
-                      type="time"
-                      name="dayEndTime"
-                      icon={<Clock size={15} strokeWidth={2} />}
-                      value={form.day.endTime}
-                      onChange={(e) => updateDay('endTime', e.target.value)}
-                      disabled={!form.day.isWorkDay || isReadOnly}
-                    />
-                    <Input
-                      label="Tanaffus boshlanishi"
-                      type="time"
-                      name="dayBreakStart"
-                      icon={<Clock size={15} strokeWidth={2} />}
-                      value={form.day.breakStart}
-                      onChange={(e) => updateDay('breakStart', e.target.value)}
-                      disabled={!form.day.isWorkDay || isReadOnly}
-                    />
-                    <Input
-                      label="Tanaffus tugashi"
-                      type="time"
-                      name="dayBreakEnd"
-                      icon={<Clock size={15} strokeWidth={2} />}
-                      value={form.day.breakEnd}
-                      onChange={(e) => updateDay('breakEnd', e.target.value)}
-                      disabled={!form.day.isWorkDay || isReadOnly}
-                    />
-                  </div>
+                      {day.isWorkDay && (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                          <Input
+                            label="Boshlanish vaqti"
+                            type="time"
+                            name={`dayStartTime-${day.dayNumber}`}
+                            icon={<Clock size={15} strokeWidth={2} />}
+                            value={day.startTime}
+                            onChange={(e) => updateDay(day.dayNumber, 'startTime', e.target.value)}
+                            disabled={isReadOnly}
+                          />
+                          <Input
+                            label="Tugash vaqti"
+                            type="time"
+                            name={`dayEndTime-${day.dayNumber}`}
+                            icon={<Clock size={15} strokeWidth={2} />}
+                            value={day.endTime}
+                            onChange={(e) => updateDay(day.dayNumber, 'endTime', e.target.value)}
+                            disabled={isReadOnly}
+                          />
+                          <Input
+                            label="Tanaffus boshlanishi"
+                            type="time"
+                            name={`dayBreakStart-${day.dayNumber}`}
+                            icon={<Clock size={15} strokeWidth={2} />}
+                            value={day.breakStart}
+                            onChange={(e) => updateDay(day.dayNumber, 'breakStart', e.target.value)}
+                            disabled={isReadOnly}
+                          />
+                          <Input
+                            label="Tanaffus tugashi"
+                            type="time"
+                            name={`dayBreakEnd-${day.dayNumber}`}
+                            icon={<Clock size={15} strokeWidth={2} />}
+                            value={day.breakEnd}
+                            onChange={(e) => updateDay(day.dayNumber, 'breakEnd', e.target.value)}
+                            disabled={isReadOnly}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             </>

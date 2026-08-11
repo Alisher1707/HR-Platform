@@ -11,7 +11,6 @@ import {
   Briefcase,
   Building2,
   Camera,
-  CalendarDays,
   LayoutGrid,
   Network,
   Search,
@@ -23,14 +22,12 @@ import Input from '../../components/ui/Input';
 import SidePanel from '../../components/ui/SidePanel';
 import useToast from '../../hooks/useToast';
 import employeeService from '../../services/employeeService';
-import ScheduleFormPanel from './ScheduleFormPanel';
 import { BranchLocationPicker } from './OrganizationPage';
 import { CheckCircle2, Circle } from 'lucide-react';
 
 // Sarlavha + tagliq (X) + footer bilan har bir qo'shimcha jonli-qo'shish
-// paneli (Filial/Bo'lim/Lavozim) uchun bir xil "docked card" qobig'i —
-// ScheduleFormPanel'ning o'zi ishlatadigan .qa-schedule-panel-* klasslari
-// bilan bir xil ko'rinish, shunda barchasi bir-biriga mos qatorda ochiladi.
+// paneli (Filial/Bo'lim/Lavozim) uchun bir xil "docked card" qobig'i,
+// shunda barchasi bir-biriga mos qatorda ochiladi.
 function DockedFormCard({ title, onClose, onSave, saveLabel = 'Saqlash', children }) {
   return (
     <div className="qa-schedule-panel" onClick={(e) => e.stopPropagation()}>
@@ -53,9 +50,9 @@ function DockedFormCard({ title, onClose, onSave, saveLabel = 'Saqlash', childre
   );
 }
 
-// Filiallar/Bo'lim/Lavozim/Jadval uchun bitta umumiy qidiruv+belgilash
-// popover — har biri o'z sarlavhasi, ikonasi va ro'yxati bilan shu orqali
-// chiziladi, shunda barcha to'rttasi bir xil ko'rinishda ishlaydi.
+// Filiallar/Bo'lim/Lavozim uchun bitta umumiy qidiruv+belgilash popover —
+// har biri o'z sarlavhasi, ikonasi va ro'yxati bilan shu orqali chiziladi,
+// shunda barcha uchtasi bir xil ko'rinishda ishlaydi.
 function FieldPicker({ title, icon, options, search, onSearchChange, isSelected, onToggle, onClose, emptyText }) {
   return (
     <div className="qa-filial-picker" onClick={(e) => e.stopPropagation()}>
@@ -94,20 +91,16 @@ function FieldPicker({ title, icon, options, search, onSearchChange, isSelected,
   );
 }
 
-// Ish jadvallari backend'i hali qo'shilmagan (IshJadvallariPage'dagi
-// MOCK_SCHEDULES bilan bir xil namunaviy qiymat), shuning uchun bu yerda
-// ham vaqtinchalik ro'yxat sifatida qoladi.
-const DEFAULT_SCHEDULES = ['8:00 - 18:00'];
-
 /**
  * EmployeeQuickAddPanel
  * "Tashkilot tuzilmasi -> Xodimlar" tabidagi "Xodim qo'shish" tugmasi uchun
  * dizaynga mos qisqa forma — chap tomondan sirg'alib chiqadigan panel.
  * Shared Modal/SidePanel'dan mustaqil (o'lchami boshqacha bo'lgani uchun),
  * shuning uchun o'zining portal/overlay'ini o'zi boshqaradi.
- * Hozircha faqat UI: submit qilinganda "tez orada" xabari chiqadi, backend
- * bilan bog'lanmagan (Otasining ismi, Foydalanuvchi nomi, bir nechta Filial
- * va Jadval maydonlarining bazada joyi yo'q).
+ * Ism/familiya/filial/bo'lim/lavozim/telefon/username real backend'ga
+ * saqlanadi (Otasining ismi va bir nechta Filial hali employees jadvalida
+ * joyi yo'q, shu ikkitasi hozircha yuborilmaydi). Jadval biriktirish bu
+ * yerdan olib tashlangan — endi faqat "Ish jadvallari" bo'limida boshqariladi.
  */
 export function EmployeeQuickAddPanel({
   isOpen,
@@ -192,12 +185,8 @@ export function EmployeeQuickAddPanel({
   const [department, setDepartment] = useState('');
   const [position, setPosition] = useState('');
 
-  const [schedules, setSchedules] = useState(DEFAULT_SCHEDULES);
-  const [schedule, setSchedule] = useState(DEFAULT_SCHEDULES[0]);
-  const [isScheduleAddOpen, setIsScheduleAddOpen] = useState(false);
-
-  // 'filial' | 'bolim' | 'lavozim' | 'jadval' | null — bir vaqtda faqat
-  // bitta qidiruv+belgilash popover ochiladi.
+  // 'filial' | 'bolim' | 'lavozim' | null — bir vaqtda faqat bitta
+  // qidiruv+belgilash popover ochiladi.
   const [openPicker, setOpenPicker] = useState(null);
   const [pickerSearch, setPickerSearch] = useState('');
   const openPickerFor = (key) => {
@@ -237,17 +226,15 @@ export function EmployeeQuickAddPanel({
     setSelectedBranches([]);
     setDepartment('');
     setPosition('');
-    setSchedule(DEFAULT_SCHEDULES[0]);
     setOpenPicker(null);
     setPickerSearch('');
-    setIsScheduleAddOpen(false);
     setIsBranchCreateOpen(false);
     setIsDepartmentCreateOpen(false);
     setIsPositionCreateOpen(false);
   }, [isOpen]);
 
   // Tahrirlash rejimida ochilganda mavjud xodim ma'lumotlari bilan
-  // to'ldiriladi (faqat frontend — hozircha saqlash real API'ga ulanmagan).
+  // to'ldiriladi.
   useEffect(() => {
     if (!isOpen || !employee) return;
     setFirstName(employee.first_name || '');
@@ -298,19 +285,6 @@ export function EmployeeQuickAddPanel({
   const branchOptions = branches.filter((b) => matchesSearch(b.name)).map((b) => ({ id: b.id, name: b.name, extra: b.radius }));
   const departmentOptions = departments.filter((d) => matchesSearch(d.name)).map((d) => ({ id: d.id, name: d.name }));
   const positionOptions = positions.filter((p) => matchesSearch(p.name)).map((p) => ({ id: p.id, name: p.name }));
-  const scheduleOptions = schedules.filter((s) => matchesSearch(s)).map((s) => ({ id: s, name: s }));
-
-  const handleScheduleModalClose = () => {
-    setIsScheduleAddOpen(false);
-  };
-
-  const handleScheduleSave = (scheduleForm) => {
-    const name = scheduleForm.name;
-    if (!name || schedules.includes(name)) return;
-    setSchedules((prev) => [...prev, name]);
-    setSchedule(name);
-    handleScheduleModalClose();
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -322,10 +296,8 @@ export function EmployeeQuickAddPanel({
 
     setSubmitting(true);
     try {
-      // Otasining ismi, foydalanuvchi nomi (schedule bilan bir xil) va bir
-      // nechta filial hozircha bazada joyi yo'q (fayl boshidagi izohda
-      // aytilgan) — shu sabab bu yerda yuborilmaydi, faqat backend'da
-      // haqiqatan mavjud maydonlar jo'natiladi.
+      // Otasining ismi va bir nechta filial hozircha employees jadvalida
+      // joyi yo'q — shu ikkitasi yuborilmaydi.
       const payload = {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
@@ -545,24 +517,6 @@ export function EmployeeQuickAddPanel({
                 </button>
               </div>
             </div>
-
-            <div className="qa-field">
-              <label className="qa-label">Jadval</label>
-              <div className="qa-select-row">
-                <button type="button" className="qa-input qa-select-trigger" onClick={() => openPickerFor('jadval')}>
-                  <span>{schedule || 'Jadval tanlang'}</span>
-                  <ChevronRight size={15} strokeWidth={2.25} />
-                </button>
-                <button
-                  type="button"
-                  className="qa-add-btn"
-                  onClick={() => setIsScheduleAddOpen(true)}
-                  aria-label="Yangi jadval qo'shish"
-                >
-                  <Plus size={16} strokeWidth={2.5} />
-                </button>
-              </div>
-            </div>
           </div>
 
           <Button
@@ -620,27 +574,6 @@ export function EmployeeQuickAddPanel({
           emptyText="Lavozim topilmadi"
         />
       )}
-
-      {openPicker === 'jadval' && (
-        <FieldPicker
-          title="Jadval tanlang"
-          icon={<CalendarDays size={15} strokeWidth={2} />}
-          options={scheduleOptions}
-          search={pickerSearch}
-          onSearchChange={setPickerSearch}
-          isSelected={(opt) => schedule === opt.name}
-          onToggle={(opt) => setSchedule(opt.name)}
-          onClose={closePicker}
-          emptyText="Jadval topilmadi"
-        />
-      )}
-
-      <ScheduleFormPanel
-        isOpen={isScheduleAddOpen}
-        onClose={handleScheduleModalClose}
-        onSave={handleScheduleSave}
-        title="Yangi jadval qo'shish"
-      />
 
       {isBranchCreateOpen && (
         <DockedFormCard

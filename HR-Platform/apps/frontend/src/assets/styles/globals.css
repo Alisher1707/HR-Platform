@@ -66,6 +66,10 @@
   --warning-bg: rgba(245, 158, 11, 0.12);
   --info: #3b82f6;
   --info-bg: rgba(59, 130, 246, 0.12);
+  --notes: #8b5cf6;
+  --notes-bg: rgba(139, 92, 246, 0.12);
+  --left: #0d9488;
+  --left-bg: rgba(13, 148, 136, 0.12);
 
   /* Shadows */
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -150,6 +154,10 @@
   --warning-bg: rgba(251, 191, 36, 0.15);
   --info: #60a5fa;
   --info-bg: rgba(96, 165, 250, 0.15);
+  --notes: #a78bfa;
+  --notes-bg: rgba(167, 139, 250, 0.15);
+  --left: #2dd4bf;
+  --left-bg: rgba(45, 212, 191, 0.15);
 
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -646,6 +654,27 @@ a:hover {
   color: var(--info);
 }
 
+.badge-notes {
+  background: var(--notes-bg);
+  color: var(--notes);
+  border: 1px solid transparent;
+}
+
+.badge-left {
+  background: var(--left-bg);
+  color: var(--left);
+  border: 1px solid transparent;
+}
+
+/* "Ishdan keyin keldi" — ish kuni allaqachon tugagandan keyin kelish,
+   "Vaqtida keldi" (yashil), "Kech keldi" (sariq) va "Dam olish kuni"
+   (ko'k) dan aniq ajralib turishi uchun alohida binafsha rang. */
+.badge-afterhours {
+  background: var(--notes-bg);
+  color: var(--notes);
+  border: 1px solid transparent;
+}
+
 .badge-dot {
   width: 6px;
   height: 6px;
@@ -654,13 +683,45 @@ a:hover {
   animation: dotPulse 2s infinite;
 }
 
+/* ========== DEMO MODE BADGE ========== */
+.demo-mode-badge {
+  position: fixed;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.875rem;
+  border-radius: var(--radius-full);
+  background: var(--warning-bg);
+  color: var(--warning);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.15));
+  pointer-events: none;
+  backdrop-filter: blur(var(--glass-blur));
+}
+
 /* ========== MODAL ========== */
 .modal-overlay {
   position: fixed;
   inset: 0;
   background: var(--bg-overlay);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  /* ESLATMA: backdrop-filter ATAYLAB yo'q. Chrome'da backdrop-filter'li
+     overlay + unga document.body ichida "opa-singil" sifatida portal
+     qilingan position:fixed elementlar (masalan SearchableSelect paneli)
+     birga ishlatilganda, GPU kompozitsiya bosqichida noto'g'ri
+     rasterizatsiya bo'lib, panel zoom darajasiga/DevTools holatiga qarab
+     tasodifiy ko'rinmay qolar edi — bir necha marta turlicha "tuzatish"
+     (z-index, animatsiyasiz qilish, alohida compositing qatlamiga
+     chiqarish) sinab ko'rilgan, hech biri barqaror natija bermagan.
+     backdrop-filter'ni butunlay olib tashlash bu butun bug klassini
+     ildizidan yo'q qiladi — orqa fon shunchaki qorong'ilashadi (blur
+     yo'q), lekin bu ancha xavfsiz kelishuv. */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2024,6 +2085,1531 @@ button.header-pill {
   gap: 0.75rem;
 }
 
+/* ========== ONBOARDING ========== */
+.onboarding-title-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  background: var(--accent-gradient);
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.onboarding-plans-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.25rem;
+}
+
+.onboarding-plan-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  border-radius: var(--radius-lg);
+  border-color: var(--border);
+  transition: var(--transition-fast);
+}
+
+.onboarding-plan-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.onboarding-plan-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.onboarding-plan-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.onboarding-plan-card-header h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.125rem;
+}
+
+.onboarding-plan-card-header p {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.onboarding-plan-stats {
+  display: flex;
+  gap: 1.25rem;
+  padding-top: 0.875rem;
+  border-top: 1px solid var(--border);
+}
+
+.onboarding-plan-stats span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.onboarding-plan-stats svg {
+  color: var(--accent);
+}
+
+.onboarding-plan-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.onboarding-plan-actions > .btn {
+  flex: 1;
+}
+
+.onboarding-btn-wide {
+  padding-left: 1.75rem;
+  padding-right: 1.75rem;
+}
+
+/* Progress tab */
+.onboarding-progress-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-width: 160px;
+}
+
+.onboarding-progress-track {
+  flex: 1;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--bg-secondary);
+  overflow: hidden;
+}
+
+.onboarding-progress-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--accent-gradient);
+  transition: width 0.3s ease;
+}
+
+.onboarding-progress-fill.complete {
+  background: linear-gradient(90deg, var(--success) 0%, #059669 100%);
+}
+
+.onboarding-progress-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.onboarding-current-step {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.onboarding-current-step.complete {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--success);
+  font-weight: 600;
+}
+
+.onboarding-progress-empty {
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.onboarding-progress-row {
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.onboarding-progress-row:hover {
+  background: var(--bg-hover);
+}
+
+.onboarding-plan-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.onboarding-plan-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.625rem;
+  border-radius: var(--radius-full);
+  background: var(--accent-light);
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.onboarding-plan-pill-more {
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+}
+
+.onboarding-progress-view-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.onboarding-progress-row:hover .onboarding-progress-view-hint {
+  color: var(--accent);
+}
+
+/* View submissions modal — xodim ustiga bosilganda */
+.onboarding-view-submissions {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.onboarding-view-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-bottom: 0.875rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.onboarding-view-header strong {
+  display: block;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.onboarding-view-header span {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.onboarding-view-plan-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  padding: 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+}
+
+.onboarding-view-plan-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.onboarding-view-plan-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.onboarding-view-plan-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.onboarding-view-plan-header .attendance-toggle-btn {
+  width: 30px;
+  height: 30px;
+}
+
+.onboarding-view-step-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.onboarding-view-step-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.onboarding-view-task {
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card-solid);
+}
+
+.onboarding-view-task-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.onboarding-view-task-icon {
+  display: inline-flex;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.onboarding-view-task-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.onboarding-view-task-submission {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-top: 0.625rem;
+  padding-top: 0.625rem;
+  border-top: 1px dashed var(--border);
+}
+
+.onboarding-view-task-submission p {
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.onboarding-view-task-submission a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  width: fit-content;
+  max-width: 100%;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.onboarding-view-task-submission a:hover {
+  text-decoration: underline;
+}
+
+.onboarding-view-task-date {
+  display: flex;
+  align-items: center;
+  gap: 0.3125rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Har bir topshiriq kartasining chap chegarasi HR ko'rib chiqish
+   holatini bir qarashda ko'rsatadi — kutilmoqda (ko'k), qabul qilindi
+   (yashil), qaytarildi (qizil). */
+.onboarding-view-task.review-pending {
+  border-left: 3px solid var(--info);
+}
+
+.onboarding-view-task.review-approved {
+  border-left: 3px solid var(--success);
+}
+
+.onboarding-view-task.review-rejected {
+  border-left: 3px solid var(--error);
+}
+
+.onboarding-review-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.onboarding-review-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.4375rem 0.75rem;
+  border-radius: var(--radius-md);
+  border: 1.5px solid transparent;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.onboarding-review-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.onboarding-review-btn.approve {
+  background: var(--success-bg);
+  color: var(--success);
+  border-color: transparent;
+}
+
+.onboarding-review-btn.approve:hover:not(:disabled) {
+  border-color: var(--success);
+}
+
+.onboarding-review-btn.reject {
+  background: var(--error-bg);
+  color: var(--error);
+  border-color: transparent;
+}
+
+.onboarding-review-btn.reject:hover:not(:disabled) {
+  border-color: var(--error);
+}
+
+.onboarding-review-btn.cancel {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border-color: var(--border);
+}
+
+.onboarding-review-btn.cancel:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.onboarding-reject-reason {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.onboarding-review-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4375rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: var(--radius-md);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.onboarding-review-note.rejected {
+  background: var(--error-bg);
+  color: var(--error);
+}
+
+.onboarding-review-note.approved {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.onboarding-review-note svg {
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
+/* Reja create/edit — to'liq sahifa ko'rinishi (overlay emas) */
+.onboarding-form-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.onboarding-form-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+}
+
+.onboarding-back-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-card-solid);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.onboarding-back-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.onboarding-form-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.onboarding-form-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.onboarding-form-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 380px) 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .onboarding-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.onboarding-form-left {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1.5rem;
+  background: var(--bg-card-solid);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.onboarding-form-right {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.onboarding-picker-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.onboarding-picker-section .form-label {
+  margin-bottom: 0;
+}
+
+.onboarding-department-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.onboarding-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.onboarding-checkbox-row:hover {
+  background: var(--bg-hover);
+}
+
+.onboarding-checkbox-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.onboarding-checkbox-row span:first-of-type {
+  flex: 1;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: capitalize;
+}
+
+.onboarding-checkbox-count {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.onboarding-employee-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.375rem;
+}
+
+.onboarding-employee-row {
+  padding: 0.5rem 0.625rem;
+}
+
+.onboarding-employee-row-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.onboarding-employee-row-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.onboarding-employee-row-dept {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  text-transform: capitalize;
+}
+
+.onboarding-employee-list-empty {
+  padding: 1rem;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.onboarding-step-card {
+  background: var(--bg-card-solid);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+}
+
+.onboarding-step-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin-bottom: 1rem;
+}
+
+.onboarding-step-card-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--accent-light);
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.onboarding-step-card-title {
+  flex: 1;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.onboarding-step-card-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.onboarding-step-card-delete:hover {
+  background: var(--error-bg);
+  color: var(--error);
+}
+
+.onboarding-task-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  padding: 0.875rem;
+  margin-bottom: 0.75rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.onboarding-task-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.625rem;
+}
+
+.onboarding-task-field-type {
+  width: 132px;
+  flex-shrink: 0;
+}
+
+.onboarding-task-field-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.onboarding-task-field-type label,
+.onboarding-task-field-name label,
+.onboarding-task-field label {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 0.375rem;
+}
+
+.onboarding-task-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.onboarding-task-field-error {
+  display: flex;
+  align-items: center;
+  gap: 0.3125rem;
+  margin-top: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--error);
+}
+
+/* TaskTypeSelect — kichik maxsus dropdown ("Turi") */
+.onboarding-type-select {
+  position: relative;
+}
+
+.onboarding-type-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-card-solid);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.onboarding-type-trigger span {
+  flex: 1;
+  text-align: left;
+}
+
+.onboarding-type-trigger:hover {
+  border-color: var(--accent);
+}
+
+.onboarding-type-trigger.open {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
+
+.onboarding-type-trigger svg:first-child {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.onboarding-type-trigger svg:last-child {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.onboarding-type-trigger.open svg:last-child {
+  transform: rotate(180deg);
+}
+
+.onboarding-type-panel {
+  z-index: 1100;
+  background: var(--bg-card-solid);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  padding: 0.375rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.onboarding-type-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.onboarding-type-option svg {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.onboarding-type-option:hover {
+  background: var(--bg-hover);
+}
+
+.onboarding-type-option.selected {
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.onboarding-type-option.selected svg {
+  color: var(--accent);
+}
+
+.onboarding-task-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.onboarding-task-remove:hover {
+  background: var(--error-bg);
+  color: var(--error);
+}
+
+.onboarding-task-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.onboarding-task-add:hover {
+  background: var(--accent-light);
+  border-color: var(--accent);
+}
+
+.onboarding-step-add-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.875rem;
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.onboarding-step-add-page:hover {
+  background: var(--accent-light);
+  border-color: var(--accent);
+}
+
+.onboarding-doc-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4375rem;
+  width: fit-content;
+  padding: 0.5625rem 0.875rem;
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.onboarding-doc-upload-btn:hover {
+  background: var(--accent-light);
+  border-color: var(--accent);
+}
+
+.onboarding-doc-upload-btn.uploading {
+  opacity: 0.65;
+  cursor: default;
+  pointer-events: none;
+}
+
+.onboarding-doc-upload-btn.has-file {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--accent-light);
+}
+
+.onboarding-doc-upload-btn input[type='file'] {
+  display: none;
+}
+
+.onboarding-doc-attached {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.625rem 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--accent-light);
+  width: fit-content;
+  max-width: 100%;
+}
+
+.onboarding-doc-attached-name {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.onboarding-doc-attached-name:hover {
+  text-decoration: underline;
+}
+
+.onboarding-doc-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.onboarding-doc-remove:hover {
+  background: var(--error-bg);
+  color: var(--error);
+}
+
+.onboarding-assign-created-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.onboarding-assign-created-row {
+  flex-wrap: wrap;
+}
+
+.onboarding-assign-created-name {
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-right: 0.25rem;
+}
+
+/* ========== ONBOARDING — STATISTIKA ========== */
+.onboarding-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.onboarding-stat-card {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 1.25rem 1.5rem;
+  border-radius: var(--radius-md);
+  background: var(--bg-card-solid);
+  border: 1px solid var(--border);
+  transition: var(--transition-fast);
+}
+
+.onboarding-stat-card:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow);
+}
+
+.onboarding-stat-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: var(--radius);
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.onboarding-stat-value {
+  display: block;
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+.onboarding-stat-label {
+  display: block;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* ========== ONBOARDING — PUBLIC (LOGIN TALAB QILINMAYDI) ========== */
+.onboarding-public-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 3rem 1.25rem;
+  background: var(--bg-primary);
+}
+
+.onboarding-public-card {
+  width: 100%;
+  max-width: 560px;
+  background: var(--bg-card-solid);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  padding: 2rem;
+  animation: scaleIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.onboarding-public-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.onboarding-public-brand-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-gradient);
+  color: #ffffff;
+}
+
+.onboarding-public-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.onboarding-public-header-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  border-radius: var(--radius-lg);
+  background: var(--accent-gradient);
+  color: #ffffff;
+}
+
+.onboarding-public-header h1 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.onboarding-public-header p {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.onboarding-public-progress {
+  margin-bottom: 1.5rem;
+}
+
+.onboarding-public-progress-track {
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--bg-secondary);
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.onboarding-public-progress-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--accent-gradient);
+  transition: width 0.4s ease;
+}
+
+.onboarding-public-progress-fill.complete {
+  background: linear-gradient(90deg, var(--success) 0%, #059669 100%);
+}
+
+.onboarding-public-progress span {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.onboarding-public-complete-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.875rem 1rem;
+  margin-bottom: 1.25rem;
+  border-radius: var(--radius-md);
+  background: var(--success-bg);
+  color: var(--success);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.onboarding-public-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.onboarding-public-step-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.onboarding-public-step-group-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.onboarding-public-task {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.onboarding-public-video {
+  position: relative;
+  width: 100%;
+  padding-top: 56.25%;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: #000;
+}
+
+.onboarding-public-video iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+.onboarding-public-doc {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.75rem 1rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--accent-light);
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: var(--transition-fast);
+}
+
+.onboarding-public-doc:hover {
+  border-color: var(--accent);
+}
+
+.onboarding-public-doc span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.onboarding-public-step {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  width: 100%;
+  padding: 0.875rem 1rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  text-align: left;
+  font-family: inherit;
+  transition: var(--transition-fast);
+}
+
+.onboarding-public-step.review-approved {
+  background: var(--success-bg);
+  border-color: transparent;
+}
+
+.onboarding-public-step.review-pending {
+  background: var(--info-bg);
+  border-color: transparent;
+}
+
+.onboarding-public-step.review-rejected {
+  background: var(--error-bg);
+  border-color: transparent;
+}
+
+.onboarding-public-step-check {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  margin-top: 0.0625rem;
+}
+
+.onboarding-public-step.review-approved .onboarding-public-step-check {
+  color: var(--success);
+}
+
+.onboarding-public-step.review-pending .onboarding-public-step-check {
+  color: var(--info);
+}
+
+.onboarding-public-step.review-rejected .onboarding-public-step-check {
+  color: var(--error);
+}
+
+.onboarding-public-step-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.1875rem;
+  min-width: 0;
+}
+
+.onboarding-public-step-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.onboarding-public-step.review-approved .onboarding-public-step-title {
+  text-decoration: line-through;
+  color: var(--text-secondary);
+}
+
+.onboarding-public-step-desc {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.onboarding-public-step-status {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.onboarding-public-step-status.pending {
+  color: var(--info);
+}
+
+.onboarding-public-step-status.rejected {
+  color: var(--error);
+}
+
+.onboarding-public-submit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-shrink: 0;
+  padding: 0.5rem 0.875rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--accent-gradient);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.onboarding-public-submit-btn:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.onboarding-public-submit-btn.status-approved {
+  background: var(--bg-card-solid);
+  color: var(--success);
+  border: 1.5px solid var(--success);
+}
+
+.onboarding-public-submit-btn.status-approved:hover {
+  background: var(--success-bg);
+  filter: none;
+}
+
+.onboarding-public-submit-btn.status-pending {
+  background: var(--bg-card-solid);
+  color: var(--info);
+  border: 1.5px solid var(--info);
+}
+
+.onboarding-public-submit-btn.status-pending:hover {
+  background: var(--info-bg);
+  filter: none;
+}
+
+.onboarding-public-submit-btn.status-rejected {
+  background: var(--error);
+  color: #fff;
+  border: 1.5px solid transparent;
+}
+
+.onboarding-public-submit-btn.status-rejected:hover {
+  filter: brightness(1.1);
+}
+
+/* Submission modal — turi tanlash (Matn / Fayl / Havola) */
+.onboarding-submit-task-title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.875rem;
+}
+
+.onboarding-submit-type-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 0.875rem;
+}
+
+.onboarding-submit-type-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.75rem 0.5rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.onboarding-submit-type-tab:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.onboarding-submit-type-tab.active {
+  border-color: var(--accent);
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.onboarding-submission-view {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.onboarding-submission-view-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  width: fit-content;
+  padding: 0.375rem 0.75rem;
+  border-radius: var(--radius-full);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.onboarding-submission-view-meta.status-approved {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.onboarding-submission-view-meta.status-pending {
+  background: var(--info-bg);
+  color: var(--info);
+}
+
+.onboarding-submission-view-date {
+  display: flex;
+  align-items: center;
+  gap: 0.3125rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.onboarding-reject-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem 0.875rem;
+  margin-bottom: 0.875rem;
+  border-radius: var(--radius-md);
+  background: var(--error-bg);
+  color: var(--error);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.onboarding-reject-banner svg {
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
+.onboarding-submission-text {
+  padding: 0.875rem 1rem;
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.onboarding-public-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.75rem;
+  padding: 2.5rem 2rem;
+}
+
+.onboarding-public-error-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+}
+
+.onboarding-public-error h2 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.onboarding-public-error p {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
 /* ========== UTILITY CLASSES ========== */
 .flex { display: flex; }
 .flex-col { flex-direction: column; }
@@ -2983,6 +4569,9 @@ button.header-pill {
 }
 
 .attendance-detail-title {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
   font-size: 1rem;
   font-weight: 700;
   color: var(--text-primary);
@@ -2992,6 +4581,28 @@ button.header-pill {
   font-size: 0.8125rem;
   color: var(--text-muted);
   margin-top: 0.125rem;
+}
+
+.attendance-presence-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.attendance-presence-badge.inside {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.attendance-presence-badge.outside {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
 }
 
 .attendance-branch-cell {
@@ -3325,8 +4936,16 @@ button.attendance-pill {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg), 0 0 0 1px rgba(0, 0, 0, 0.02);
   overflow: hidden;
-  z-index: 60;
-  animation: fadeInDown 0.16s ease;
+  /* .modal-overlay (1000) dan yuqoriroq — SearchableSelect Modal ichida
+     ham ishlatilgani uchun (masalan "Jarima yaratish" > Jazo turi), aks
+     holda panel modal foni ortida chizilib, "bo'sh" ko'rinib qolar edi. */
+  z-index: 1100;
+  /* ESLATMA: bu yerda animation ATAYLAB yo'q. transform ishlatuvchi kirish
+     animatsiyasi (masalan fadeInDown) position:fixed + document.body'ga
+     portal qilingan elementda Chrome'da "birinchi frame'da chizilmaydi"
+     degan taniqli bug'ga sabab bo'ladi — DevTools ochilganda (viewport
+     o'lchami o'zgarib, majburiy repaint bo'lgani uchun) ko'rinib, oddiy
+     holatda esa umuman ko'rinmay qolgan edi. */
 }
 
 .attendance-schedule-search {
@@ -4065,6 +5684,73 @@ button.attendance-pill {
   margin-bottom: 1.125rem;
 }
 
+.fine-template-type-pills {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.625rem;
+  margin-bottom: 1.125rem;
+}
+
+.fine-template-type-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.625rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1.5px solid color-mix(in srgb, var(--fine-pill-color) 35%, var(--border));
+  background: color-mix(in srgb, var(--fine-pill-color) 14%, transparent);
+  color: var(--fine-pill-color);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.fine-template-type-pill:hover {
+  background: color-mix(in srgb, var(--fine-pill-color) 24%, transparent);
+  border-color: var(--fine-pill-color);
+  transform: translateY(-1px);
+}
+
+/* "Jazo turlari" katalogidagi pill'lar — hover qilinganda burchakda
+   o'chirish (x) tugmasi chiqadi. */
+.fine-type-pill-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.fine-type-pill-delete {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: var(--bg-card-solid);
+  color: var(--text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.75);
+  transition: var(--transition-fast);
+}
+
+.fine-type-pill-wrap:hover .fine-type-pill-delete {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.fine-type-pill-delete:hover {
+  background: var(--error-bg);
+  border-color: var(--error);
+  color: var(--error);
+}
+
 .fine-type-select-add {
   display: flex;
   align-items: center;
@@ -4541,6 +6227,133 @@ button.attendance-pill {
   white-space: nowrap;
 }
 
+/* ========== TERMINALLAR — QURILMA BOSHQARUVI ========== */
+.attendance-device-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  background: rgba(99, 102, 241, 0.12);
+  color: #6366f1;
+  flex-shrink: 0;
+}
+
+.attendance-token-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  font-family: inherit;
+}
+
+.attendance-token-chip:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.attendance-token-chip code {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.78125rem;
+  letter-spacing: 0.02em;
+}
+
+.attendance-device-created {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0 1rem;
+}
+
+.attendance-device-created-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--success-bg);
+  color: var(--success);
+  margin-bottom: 0.25rem;
+}
+
+.attendance-device-created h3 {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.attendance-device-created p {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.attendance-device-token-box {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  padding: 0.875rem 1rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--accent);
+  background: var(--bg-secondary);
+  color: var(--accent);
+}
+
+.attendance-device-token-box code {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--text-primary);
+}
+
+.attendance-device-token-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--accent-gradient);
+  color: #ffffff;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.attendance-device-token-copy:hover {
+  background: var(--accent-gradient-hover);
+}
+
+.attendance-device-endpoint {
+  font-size: 0.75rem;
+}
+
+.attendance-device-endpoint code {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.125rem 0.375rem;
+  color: var(--text-secondary);
+}
+
 .attendance-priority-pill {
   display: inline-flex;
   align-items: center;
@@ -4874,7 +6687,7 @@ button.attendance-pill {
 
 .attendance-analytics-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 1.25rem;
 }
 
@@ -4898,6 +6711,7 @@ button.attendance-pill {
 .attendance-ranking-icon.warning { background: var(--warning-bg); color: var(--warning); }
 .attendance-ranking-icon.error { background: var(--error-bg); color: var(--error); }
 .attendance-ranking-icon.success { background: var(--success-bg); color: var(--success); }
+.attendance-ranking-icon.info { background: var(--info-bg); color: var(--info); }
 
 .attendance-ranking-title {
   font-size: 0.9375rem;
@@ -4913,9 +6727,104 @@ button.attendance-pill {
 
 .attendance-ranking-body {
   min-height: 120px;
+}
+
+.attendance-ranking-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.attendance-ranking-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.attendance-ranking-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--border);
+  flex-shrink: 0;
+}
+
+.attendance-ranking-avatar-fallback {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  border: 2px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: center;
+  font-weight: 700;
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.attendance-ranking-row-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.attendance-ranking-row-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attendance-ranking-row-position {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-copy-day1-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.3rem 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.schedule-copy-day1-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.attendance-ranking-more {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 1rem;
+  padding-top: 0.875rem;
+  border-top: 1px solid var(--border);
+  width: 100%;
+  background: none;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
 }
 
 @media (max-width: 900px) {
