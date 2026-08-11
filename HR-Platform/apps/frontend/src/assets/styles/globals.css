@@ -683,6 +683,29 @@ a:hover {
   animation: dotPulse 2s infinite;
 }
 
+/* ========== DEMO MODE BADGE ========== */
+.demo-mode-badge {
+  position: fixed;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.875rem;
+  border-radius: var(--radius-full);
+  background: var(--warning-bg);
+  color: var(--warning);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.15));
+  pointer-events: none;
+  backdrop-filter: blur(var(--glass-blur));
+}
+
 /* ========== MODAL ========== */
 .modal-overlay {
   position: fixed;
