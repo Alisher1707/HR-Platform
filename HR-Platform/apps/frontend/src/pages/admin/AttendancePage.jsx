@@ -1963,17 +1963,26 @@ export function AttendancePage() {
     const keldiRecords = records.filter((r) => r.type === 'keldi');
     const ketdiRecords = records.filter((r) => r.type === 'ketdi');
     const firstKeldi = keldiRecords[0] || null;
-    const lastKetdi = ketdiRecords[ketdiRecords.length - 1] || null;
+    const lastRecord = records[records.length - 1] || null;
 
-    let totalLabel = '-';
-    if (firstKeldi && lastKetdi) {
-      const minutes = Math.max(0, Math.round(
-        (new Date(lastKetdi.recorded_at) - new Date(firstKeldi.recorded_at)) / 60000
-      ));
-      const h = Math.floor(minutes / 60);
-      const m = minutes % 60;
-      totalLabel = `${h}s ${m}d`;
+    // Xodim hozir ichkarida bo'lsa (eng so'nggi skaneri "keldi" — masalan
+    // tushlikka chiqib qaytgan bo'lsa), "Chiqish" bo'sh ("-") qoladi — aks
+    // holda o'sha eski tanaffus-ketdisi ko'rsatilib, xodim hali ishlab
+    // turganini yashirib, go'yo kun uchun ketib qolgandek chalg'itardi.
+    const isCurrentlyOut = Boolean(lastRecord && lastRecord.type === 'ketdi');
+    const lastKetdi = isCurrentlyOut ? lastRecord : null;
+
+    // Jami: har bir TO'LIQ keldi→ketdi juftligining yig'indisi (tanaffus
+    // vaqtlari hisobga olinmaydi) — birinchi keldi bilan oxirgi ketdi
+    // orasidagi oddiy farq emas, chunki bu orada bo'lgan tanaffusni ham
+    // "ishlagan vaqt"ga qo'shib yuborardi.
+    const sessionCount = Math.min(keldiRecords.length, ketdiRecords.length);
+    let totalMinutes = 0;
+    for (let i = 0; i < sessionCount; i += 1) {
+      totalMinutes += Math.max(0, (new Date(ketdiRecords[i].recorded_at) - new Date(keldiRecords[i].recorded_at)) / 60000);
     }
+    totalMinutes = Math.round(totalMinutes);
+    const totalLabel = sessionCount > 0 ? `${Math.floor(totalMinutes / 60)}s ${totalMinutes % 60}d` : '-';
 
     const hasKeldi = Boolean(firstKeldi);
     const hasKetdi = Boolean(lastKetdi);
@@ -1981,10 +1990,10 @@ export function AttendancePage() {
     // hisoblab beradi (null — xodimga hali jadval biriktirilmagan).
     const isLate = hasKeldi && firstKeldi.is_late === true;
 
-    // done: keldi+ketdi ikkalasi ham bor (ish kuni yakunlangan)
-    // present: keldi bor, ketdi yo'q (hozir ishda)
-    // none: hech narsa yo'q (kelmagan)
-    const status = hasKeldi && hasKetdi ? 'done' : hasKeldi ? 'present' : 'none';
+    // done: xodim kun uchun chiqib ketgan (eng so'nggi skaneri "ketdi")
+    // present: xodim hozir ishda (eng so'nggi skaneri "keldi")
+    // none: hech qanday belgi yo'q (kelmagan)
+    const status = hasKeldi && isCurrentlyOut ? 'done' : hasKeldi ? 'present' : 'none';
 
     return {
       records,
