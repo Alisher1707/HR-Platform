@@ -4501,6 +4501,29 @@ button.header-pill {
   color: var(--text-primary);
 }
 
+.fine-employees-btn {
+  position: relative;
+}
+
+.fine-employees-count-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: #f97316;
+  color: #ffffff;
+  font-size: 0.625rem;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 0 0 2px var(--bg-card-solid);
+}
+
 .attendance-toggle-btn.accent {
   background: rgba(249, 115, 22, 0.12);
   border-color: rgba(249, 115, 22, 0.25);

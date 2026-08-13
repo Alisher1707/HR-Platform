@@ -1866,7 +1866,9 @@ export function AttendancePage() {
     setIsAddFineOpen(true);
   };
 
-  const handleEditFinePolicy = (policy) => {
+  // startStep=2 — "Xodimlar" tugmasi orqali to'g'ridan-to'g'ri 2-qadamga
+  // (xodim biriktirish) o'tish uchun, 1-qadamni qayta bosmasdan.
+  const handleEditFinePolicy = (policy, startStep = 1) => {
     setFineForm({
       name: policy.name,
       enabled: policy.enabled,
@@ -1880,7 +1882,7 @@ export function AttendancePage() {
       employeeIds: policy.employeeIds || [],
     });
     setEditingFinePolicyId(policy.id);
-    setFineWizardStep(1);
+    setFineWizardStep(startStep);
     setFineEmployeeSearch('');
     setIsAddFineOpen(true);
   };
@@ -3930,6 +3932,17 @@ export function AttendancePage() {
                                       onClick={() => handleEditFinePolicy(policy)}
                                     >
                                       <Pencil size={15} strokeWidth={2.25} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="attendance-toggle-btn fine-employees-btn"
+                                      title={`Xodimlar${policy.employeeIds?.length ? ` (${policy.employeeIds.length})` : ''}`}
+                                      onClick={() => handleEditFinePolicy(policy, 2)}
+                                    >
+                                      <Users size={15} strokeWidth={2.25} />
+                                      {policy.employeeIds?.length > 0 && (
+                                        <span className="fine-employees-count-badge">{policy.employeeIds.length}</span>
+                                      )}
                                     </button>
                                     <button
                                       type="button"
