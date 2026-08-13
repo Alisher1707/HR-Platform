@@ -32,13 +32,14 @@ export async function getAttendance(req, res) {
  */
 export async function getAttendanceReport(req, res) {
   try {
-    const { startDate, endDate, branches, departments, positions, employeeId } = req.query;
+    const { startDate, endDate, branches, departments, positions, scheduleIds, employeeId } = req.query;
     const rows = await attendanceService.getAttendanceReport({
       startDate,
       endDate,
       branches: branches ? branches.split(',').filter(Boolean) : [],
       departments: departments ? departments.split(',').filter(Boolean) : [],
       positions: positions ? positions.split(',').filter(Boolean) : [],
+      scheduleIds: scheduleIds ? scheduleIds.split(',').filter(Boolean) : [],
       employeeId: employeeId || null,
     });
 

@@ -36,7 +36,7 @@ export const attendanceService = {
    * Per-employee attendance summary for a date range — Monitoring > Hisobotlar.
    * branches/departments/positions are arrays; the backend expects comma-joined strings.
    */
-  async getReport({ startDate, endDate, branches, departments, positions, employeeId } = {}) {
+  async getReport({ startDate, endDate, branches, departments, positions, scheduleIds, employeeId } = {}) {
     const response = await api.get('/attendance/report', {
       params: {
         startDate,
@@ -44,6 +44,7 @@ export const attendanceService = {
         branches: branches?.length ? branches.join(',') : undefined,
         departments: departments?.length ? departments.join(',') : undefined,
         positions: positions?.length ? positions.join(',') : undefined,
+        scheduleIds: scheduleIds?.length ? scheduleIds.join(',') : undefined,
         employeeId: employeeId || undefined,
       },
     });

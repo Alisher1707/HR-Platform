@@ -68,6 +68,7 @@ import {
 } from 'lucide-react';
 import employeeService from '../../services/employeeService';
 import attendanceService from '../../services/attendanceService';
+import workScheduleService from '../../services/workScheduleService';
 import devicesService from '../../services/devicesService';
 import fineService from '../../services/fineService';
 import { exportAttendanceReportToExcel } from '../../utils/exportExcel';
@@ -294,7 +295,10 @@ const CAL_POPUP_WIDTH = 300;
 
 function DatePicker({ value, onChange, trigger = 'pill' }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [viewDate, setViewDate] = useState(value);
+  // "Sana oralig'i" kabi ixtiyoriy maydonlar boshida hech qanday sana
+  // tanlanmagan (value=null) holatda boshlanishi mumkin — shu holatda ham
+  // kalendar hozirgi oyni ko'rsatishi kerak, birorta kun tanlangan holda emas.
+  const [viewDate, setViewDate] = useState(value || new Date());
   const [popupPos, setPopupPos] = useState({ top: 0, left: 0 });
   const wrapperRef = useRef(null);
   const popupRef = useRef(null);
@@ -314,7 +318,7 @@ function DatePicker({ value, onChange, trigger = 'pill' }) {
 
   const toggleOpen = () => {
     if (!isOpen) {
-      setViewDate(value);
+      setViewDate(value || new Date());
       const rect = wrapperRef.current.getBoundingClientRect();
       const left = Math.max(
         8,
@@ -336,7 +340,7 @@ function DatePicker({ value, onChange, trigger = 'pill' }) {
         className={trigger === 'field' ? 'attendance-date-field' : 'attendance-pill'}
         onClick={toggleOpen}
       >
-        <CalendarDays size={15} strokeWidth={2.25} /> {formatUzDate(value)}
+        <CalendarDays size={15} strokeWidth={2.25} /> {value ? formatUzDate(value) : 'Sanani tanlang'}
       </button>
 
       {isOpen && ReactDOM.createPortal(
@@ -458,10 +462,6 @@ function MonthPicker({ value, onChange }) {
     </div>
   );
 }
-
-const SCHEDULE_OPTIONS = [
-  { value: '08-18', label: '8:00 - 18:00' },
-];
 
 const DATE_RANGE_PRESETS = [
   { label: "So'nggi 3 kun", days: 3 },
@@ -1230,6 +1230,7 @@ export function AttendancePage() {
   const [employees, setEmployees] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [schedules, setSchedules] = useState([]);
   const [isArizalarOpen, setIsArizalarOpen] = useState(true);
 
   // Kept in the URL (?section=, ?tasksTab=) instead of plain useState so a
@@ -1302,15 +1303,22 @@ export function AttendancePage() {
   const [isPeriodReportLoading, setIsPeriodReportLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [filters, setFilters] = useState({
+  const getDefaultFilters = () => ({
     branch: '',
     department: '',
     schedules: [],
     position: '',
     employeeId: '',
-    startDate: subMonths(new Date(), 1),
-    endDate: new Date(),
+    // Sana oralig'i qasddan bo'sh boshlanadi — foydalanuvchi buni o'zi
+    // tanlamaguncha (yoki tezkor tugmalardan birini bosmaguncha), jadval
+    // hozirgi tanlangan bitta kun ko'rinishida qolaveradi.
+    startDate: null,
+    endDate: null,
   });
+  const [filters, setFilters] = useState(getDefaultFilters());
+  const [isRangeFilterActive, setIsRangeFilterActive] = useState(false);
+  const [rangeReportData, setRangeReportData] = useState([]);
+  const [isRangeReportLoading, setIsRangeReportLoading] = useState(false);
   const presetScrollRef = useRef(null);
   const moliyaPresetScrollRef = useRef(null);
   const [terminalClock, setTerminalClock] = useState(new Date());
@@ -1362,6 +1370,25 @@ export function AttendancePage() {
   const employeeOptions = useMemo(() => (
     employees.map((e) => ({ value: e.id, label: `${e.first_name} ${e.last_name}` }))
   ), [employees]);
+
+  // "Ish jadvallari" bo'limida haqiqatan yaratilgan jadvallar — ilgari bu
+  // yerda faqat bitta soxta "8:00-18:00" varianti bor edi, hech qanday
+  // real jadvalga bog'lanmagan.
+  const scheduleOptions = useMemo(() => (
+    schedules.map((s) => ({ value: s.id, label: s.name }))
+  ), [schedules]);
+
+  // Xodim -> unga biriktirilgan jadval(lar) ID'lari, "Jadvallar" filtrini
+  // joriy kundagi jadvalga qo'llash uchun.
+  const employeeScheduleMap = useMemo(() => {
+    const map = {};
+    schedules.forEach((s) => {
+      (s.employeeIds || []).forEach((employeeId) => {
+        (map[employeeId] ||= []).push(s.id);
+      });
+    });
+    return map;
+  }, [schedules]);
 
   const yearOptions = useMemo(() => {
     const current = new Date().getFullYear();
@@ -1868,6 +1895,48 @@ export function AttendancePage() {
     presetScrollRef.current?.scrollBy({ left: direction * 180, behavior: 'smooth' });
   };
 
+  const clearFilters = () => {
+    setFilters(getDefaultFilters());
+    setIsRangeFilterActive(false);
+    setRangeReportData([]);
+  };
+
+  // "Saqlash" — sana oralig'i haqiqatan tanlangan bo'lsa (ikkala sana ham
+  // bor va ular bir kun emas), jadval Hisobotlar kabi davr xulosasiga
+  // aylanadi. Aks holda, Filial/Bo'lim/Lavozim/Xodim/Jadval mezonlari
+  // joriy kundagi jadvalga to'g'ridan-to'g'ri qo'llanadi (filteredEmployees
+  // orqali) — alohida so'rov yubormasdan.
+  const applyAttendanceFilters = async () => {
+    const hasRange = filters.startDate && filters.endDate && !isSameDay(filters.startDate, filters.endDate);
+
+    if (!hasRange) {
+      setIsRangeFilterActive(false);
+      setRangeReportData([]);
+      setIsFilterOpen(false);
+      return;
+    }
+
+    setIsRangeReportLoading(true);
+    try {
+      const rows = await attendanceService.getReport({
+        startDate: format(filters.startDate, 'yyyy-MM-dd'),
+        endDate: format(filters.endDate, 'yyyy-MM-dd'),
+        branches: filters.branch ? [filters.branch] : [],
+        departments: filters.department ? [filters.department] : [],
+        positions: filters.position ? [filters.position] : [],
+        scheduleIds: filters.schedules?.length ? filters.schedules : [],
+        employeeId: filters.employeeId || undefined,
+      });
+      setRangeReportData(rows);
+      setIsRangeFilterActive(true);
+      setIsFilterOpen(false);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Davr bo'yicha ma'lumotlarni yuklashda xatolik");
+    } finally {
+      setIsRangeReportLoading(false);
+    }
+  };
+
   const applyMoliyaDatePreset = (preset) => {
     const endDate = new Date();
     const startDate = preset.days ? subDays(endDate, preset.days) : subMonths(endDate, preset.months);
@@ -1916,6 +1985,11 @@ export function AttendancePage() {
     };
 
     fetchEmployees();
+
+    // Filtr panelidagi "Jadvallar" ro'yxati va xodim->jadval xaritasi uchun.
+    workScheduleService.getSchedules()
+      .then((data) => setSchedules(data || []))
+      .catch((err) => console.error(err));
   }, []);
 
   const selectedDateKey = format(selectedDate, 'yyyy-MM-dd');
@@ -2007,11 +2081,32 @@ export function AttendancePage() {
     };
   };
 
+  // Filtr panelidagi Filiallar/Bo'limlar/Lavozimlar/Xodimlar/Jadvallar
+  // mezonlariga qarab joriy kundagi jadvalda ko'rinadigan xodimlarni
+  // toraytiradi — bo'sh qoldirilgan mezon e'tiborga olinmaydi.
+  const filteredEmployees = useMemo(() => {
+    return employees.filter((emp) => {
+      if (filters.branch && emp.branch !== filters.branch) return false;
+      if (filters.department && emp.department !== filters.department) return false;
+      if (filters.position && emp.position !== filters.position) return false;
+      if (filters.employeeId && emp.id !== filters.employeeId) return false;
+      if (filters.schedules?.length) {
+        const empSchedules = employeeScheduleMap[emp.id] || [];
+        if (!filters.schedules.some((id) => empSchedules.includes(id))) return false;
+      }
+      return true;
+    });
+  }, [employees, filters.branch, filters.department, filters.position, filters.employeeId, filters.schedules, employeeScheduleMap]);
+
+  const isCategoricalFilterActive = Boolean(
+    filters.branch || filters.department || filters.position || filters.employeeId || filters.schedules?.length
+  );
+
   const attendanceStats = useMemo(() => {
     let ishda = 0;
     let kechKelgan = 0;
     let kelganlar = 0;
-    employees.forEach((emp) => {
+    filteredEmployees.forEach((emp) => {
       const summary = getAttendanceSummary(emp.id);
       if (summary.hasKeldi) kelganlar += 1;
       if (summary.hasKeldi && !summary.hasKetdi) ishda += 1;
@@ -2020,10 +2115,10 @@ export function AttendancePage() {
     return {
       ishda,
       kechKelgan,
-      ishdaEmas: Math.max(0, total - kelganlar),
+      ishdaEmas: Math.max(0, filteredEmployees.length - kelganlar),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [employees, recordsByEmployee, total]);
+  }, [filteredEmployees, recordsByEmployee]);
 
   const handleSaveManualAttendance = async () => {
     if (!manualForm.employeeId) return;
@@ -2163,8 +2258,9 @@ export function AttendancePage() {
           {activeSection === 'davomat' && (
             <>
               <DatePicker value={selectedDate} onChange={setSelectedDate} />
-              <button type="button" className="attendance-pill" onClick={handleOpenFilter}>
+              <button type="button" className="attendance-pill attendance-filter-pill" onClick={handleOpenFilter}>
                 <Filter size={15} strokeWidth={2.25} /> Filtr
+                {(isCategoricalFilterActive || isRangeFilterActive) && <span className="attendance-filter-dot" />}
               </button>
               <Button
                 variant="primary"
@@ -2193,7 +2289,7 @@ export function AttendancePage() {
         <>
           {/* Stats */}
           <div className="stats-grid attendance-stats-grid mb-6">
-            <StatsCard label="Barchasi" value={total} icon={<Briefcase size={20} strokeWidth={2} />} iconColor="emerald" />
+            <StatsCard label="Barchasi" value={isCategoricalFilterActive ? filteredEmployees.length : total} icon={<Briefcase size={20} strokeWidth={2} />} iconColor="emerald" />
             <StatsCard label="Ishda" value={attendanceStats.ishda} icon={<Briefcase size={20} strokeWidth={2} />} iconColor="blue" />
             <StatsCard label="Kech kelgan" value={attendanceStats.kechKelgan} icon={<Briefcase size={20} strokeWidth={2} />} iconColor="amber" />
             <StatsCard label="Ishda emas" value={attendanceStats.ishdaEmas} icon={<Briefcase size={20} strokeWidth={2} />} iconColor="rose" />
@@ -2367,13 +2463,41 @@ export function AttendancePage() {
                   </div>
                 </div>
 
-            {loading ? (
+            {isRangeFilterActive ? (
+              <>
+                <div className="attendance-range-filter-bar">
+                  <span>
+                    <CalendarDays size={14} strokeWidth={2.25} />
+                    {format(filters.startDate, 'yyyy-MM-dd')} — {format(filters.endDate, 'yyyy-MM-dd')} davri bo'yicha xulosa
+                  </span>
+                  <button type="button" className="attendance-toggle-btn" title="Filtrni tozalash" onClick={clearFilters}>
+                    <X size={14} strokeWidth={2.25} />
+                  </button>
+                </div>
+                <AttendanceReportTable
+                  results={rangeReportData}
+                  fields={['kechikishlar', 'erta_ketishlar', 'qoshimcha_soatlar', 'umumiy_soatlar']}
+                  isLoading={isRangeReportLoading}
+                />
+              </>
+            ) : loading ? (
               <LoadingSpinner text="Yuklanmoqda..." />
             ) : employees.length === 0 ? (
               <EmptyState
                 icon="🗓️"
                 title="Xodimlar topilmadi"
                 text="Davomat ko'rsatish uchun avval xodimlar qo'shing."
+              />
+            ) : filteredEmployees.length === 0 ? (
+              <EmptyState
+                icon="🔍"
+                title="Filtrga mos xodim topilmadi"
+                text="Tanlangan mezonlarga mos keluvchi xodim yo'q — filtrni o'zgartiring yoki tozalang."
+                action={
+                  <Button variant="outline" size="sm" onClick={clearFilters}>
+                    Filtrni tozalash
+                  </Button>
+                }
               />
             ) : (
               <>
@@ -2391,7 +2515,7 @@ export function AttendancePage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {employees.map((emp) => {
+                      {filteredEmployees.map((emp) => {
                         const summary = getAttendanceSummary(emp.id);
                         return (
                         <tr key={emp.id}>
@@ -2663,7 +2787,7 @@ export function AttendancePage() {
                 <div className="form-group">
                   <label className="form-label">Jadvallar</label>
                   <SearchableSelect
-                    options={SCHEDULE_OPTIONS}
+                    options={scheduleOptions}
                     selected={reportForm.schedules}
                     onChange={(schedules) => setReportForm((prev) => ({ ...prev, schedules }))}
                     icon={ShieldAlert}
@@ -2785,7 +2909,7 @@ export function AttendancePage() {
                   <div className="form-group">
                     <label className="form-label">Jadvallar</label>
                     <SearchableSelect
-                      options={SCHEDULE_OPTIONS}
+                      options={scheduleOptions}
                       selected={payrollForm.schedules}
                       onChange={(schedules) => setPayrollForm((prev) => ({ ...prev, schedules }))}
                       icon={ShieldAlert}
@@ -2889,7 +3013,7 @@ export function AttendancePage() {
                   <div className="form-group">
                     <label className="form-label">Jadvallar</label>
                     <SearchableSelect
-                      options={SCHEDULE_OPTIONS}
+                      options={scheduleOptions}
                       selected={periodReportForm.schedules}
                       onChange={(schedules) => setPeriodReportForm((prev) => ({ ...prev, schedules }))}
                       icon={ShieldAlert}
@@ -3757,13 +3881,24 @@ export function AttendancePage() {
         onClose={() => setIsFilterOpen(false)}
         title="Filter"
         footer={
-          <Button
-            variant="primary"
-            className="attendance-primary-btn"
-            onClick={() => setIsFilterOpen(false)}
-          >
-            Saqlash
-          </Button>
+          <>
+            <Button
+              variant="ghost"
+              className="attendance-primary-btn"
+              onClick={clearFilters}
+              disabled={isRangeReportLoading}
+            >
+              Tozalash
+            </Button>
+            <Button
+              variant="primary"
+              className="attendance-primary-btn"
+              onClick={applyAttendanceFilters}
+              disabled={isRangeReportLoading}
+            >
+              {isRangeReportLoading ? 'Yuklanmoqda...' : 'Saqlash'}
+            </Button>
+          </>
         }
       >
         <div className="candidate-form-grid">
@@ -3792,7 +3927,7 @@ export function AttendancePage() {
           <div className="form-group">
             <label className="form-label">Jadvallar</label>
             <SearchableSelect
-              options={SCHEDULE_OPTIONS}
+              options={scheduleOptions}
               selected={filters.schedules}
               onChange={(schedules) => setFilters((prev) => ({ ...prev, schedules }))}
               icon={ShieldAlert}
@@ -4214,7 +4349,7 @@ export function AttendancePage() {
           <div className="form-group">
             <label className="form-label">Jadvallar</label>
             <SearchableSelect
-              options={SCHEDULE_OPTIONS}
+              options={scheduleOptions}
               selected={moliyaFilters.schedules}
               onChange={(schedules) => setMoliyaFilters((prev) => ({ ...prev, schedules }))}
               icon={ShieldAlert}

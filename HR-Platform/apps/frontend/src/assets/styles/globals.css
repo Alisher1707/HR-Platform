@@ -4626,6 +4626,49 @@ button.header-pill {
   padding: 0.75rem 1.25rem 1.25rem;
 }
 
+/* Filtrda sana oralig'i tanlanganda - davr xulosasi rejimi ekanini bildiradi */
+.attendance-range-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 1.25rem 1rem;
+  padding: 0.625rem 0.875rem;
+  border-radius: var(--radius-md);
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.attendance-range-filter-bar span {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.attendance-range-filter-bar .attendance-toggle-btn {
+  color: var(--accent);
+}
+
+.attendance-range-filter-bar .attendance-toggle-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.attendance-filter-pill {
+  position: relative;
+}
+
+.attendance-filter-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 1.5px solid var(--bg-card-solid);
+}
+
 button.attendance-pill {
   cursor: pointer;
   font-family: inherit;

@@ -56,7 +56,7 @@ export async function listAttendance({ date, startDate, endDate, employeeId } = 
  * Hisobotlar's "Davomat hisoboti" and "Davr bo'yicha hisobot" forms.
  * Only employees with at least one attendance record in range appear.
  */
-export async function getAttendanceReport({ startDate, endDate, branches, departments, positions, employeeId } = {}) {
+export async function getAttendanceReport({ startDate, endDate, branches, departments, positions, scheduleIds, employeeId } = {}) {
   const params = [startDate, endDate];
   const conditions = [];
 
@@ -71,6 +71,13 @@ export async function getAttendanceReport({ startDate, endDate, branches, depart
   if (positions && positions.length) {
     params.push(positions);
     conditions.push(`e.position = ANY($${params.length})`);
+  }
+  if (scheduleIds && scheduleIds.length) {
+    params.push(scheduleIds);
+    conditions.push(`EXISTS (
+      SELECT 1 FROM work_schedule_employees wse2
+      WHERE wse2.employee_id = e.id AND wse2.schedule_id = ANY($${params.length})
+    )`);
   }
   if (employeeId) {
     params.push(employeeId);

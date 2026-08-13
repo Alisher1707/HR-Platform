@@ -24,6 +24,7 @@ const attendanceReportQuerySchema = Joi.object({
   branches: Joi.string().allow('').optional(),
   departments: Joi.string().allow('').optional(),
   positions: Joi.string().allow('').optional(),
+  scheduleIds: Joi.string().allow('').optional(),
   employeeId: Joi.string().uuid().allow('').optional(),
 });
 
