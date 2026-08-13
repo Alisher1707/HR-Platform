@@ -21,6 +21,7 @@ import attendanceRoutes from './modules/attendance/attendance.routes.js';
 import schedulesRoutes from './modules/schedules/schedules.routes.js';
 import finesRoutes from './modules/fines/fines.routes.js';
 import onboardingRoutes from './modules/onboarding/onboarding.routes.js';
+import payrollRoutes from './modules/payroll/payroll.routes.js';
 
 /**
  * Initialize Express Application
@@ -150,6 +151,7 @@ app.use(`${API_PREFIX}/attendance`, attendanceRoutes);
 app.use(`${API_PREFIX}/schedules`, schedulesRoutes);
 app.use(`${API_PREFIX}/fines`, finesRoutes);
 app.use(`${API_PREFIX}/onboarding`, onboardingRoutes);
+app.use(`${API_PREFIX}/payroll`, payrollRoutes);
 
 /**
  * API Documentation Root

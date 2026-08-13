@@ -71,6 +71,7 @@ import attendanceService from '../../services/attendanceService';
 import workScheduleService from '../../services/workScheduleService';
 import devicesService from '../../services/devicesService';
 import fineService from '../../services/fineService';
+import payrollService from '../../services/payrollService';
 import { exportAttendanceReportToExcel } from '../../utils/exportExcel';
 import useToast from '../../hooks/useToast';
 import { useAuthStore } from '../../store/authStore';
@@ -1287,12 +1288,22 @@ export function AttendancePage() {
     qarziBor: false,
     search: '',
   });
-  // Payroll/bonus/fine tracking has no backend yet — kept in local state only,
-  // keyed per employee+month so switching months shows genuinely empty data
-  // instead of silently carrying figures over.
+  // Bonus/fine tracking has no backend yet — kept in local state only, keyed
+  // per employee+month so switching months shows genuinely empty data
+  // instead of silently carrying figures over. Payments ("Ish haqi
+  // to'lovlari") ARE backend-backed — see monthlyPayments/filteredPayments.
   const [financeRecords, setFinanceRecords] = useState({});
   const [financePanel, setFinancePanel] = useState(null); // { employeeId, type: 'bonus' | 'fine' | 'payment' }
   const [financeForm, setFinanceForm] = useState({ amount: '', note: '' });
+  const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
+  // This month's payments (all employees) — powers Umumiy's "To'langan"/
+  // "Qoldiq" columns, scoped to moliyaMonth like the rest of that tab.
+  const [monthlyPayments, setMonthlyPayments] = useState([]);
+  const [isMonthlyPaymentsLoading, setIsMonthlyPaymentsLoading] = useState(false);
+  // Flat, Filtr-scoped payment transaction list — powers the Ish haqi
+  // to'lovlari tab table.
+  const [filteredPayments, setFilteredPayments] = useState([]);
+  const [isPaymentsLoading, setIsPaymentsLoading] = useState(false);
   const [reportForm, setReportForm] = useState(getDefaultReportForm());
   const [reportResults, setReportResults] = useState(null); // null = not generated yet, [] = generated, no data
   const [isReportLoading, setIsReportLoading] = useState(false);
@@ -1530,7 +1541,85 @@ export function AttendancePage() {
     });
   };
 
-  const removeFinanceEntry = (employeeId, type, entryId) => {
+  const fetchMonthlyPayments = async () => {
+    setIsMonthlyPaymentsLoading(true);
+    try {
+      const rows = await payrollService.getPayments({
+        month: moliyaMonth.getMonth() + 1,
+        year: moliyaMonth.getFullYear(),
+      });
+      setMonthlyPayments(rows);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "To'lovlarni yuklashda xatolik");
+    } finally {
+      setIsMonthlyPaymentsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMonthlyPayments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moliyaMonth]);
+
+  const fetchFilteredPayments = async () => {
+    setIsPaymentsLoading(true);
+    try {
+      const rows = await payrollService.getPayments({
+        employeeId: moliyaFilters.employeeId || undefined,
+        branches: moliyaFilters.branch ? [moliyaFilters.branch] : [],
+        departments: moliyaFilters.department ? [moliyaFilters.department] : [],
+        positions: moliyaFilters.position ? [moliyaFilters.position] : [],
+        scheduleIds: moliyaFilters.schedules?.length ? moliyaFilters.schedules : [],
+        startDate: moliyaFilters.startDate ? format(moliyaFilters.startDate, 'yyyy-MM-dd') : undefined,
+        endDate: moliyaFilters.endDate ? format(moliyaFilters.endDate, 'yyyy-MM-dd') : undefined,
+      });
+      setFilteredPayments(rows);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "To'lovlarni yuklashda xatolik");
+    } finally {
+      setIsPaymentsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (moliyaTab === 'tolovlar') fetchFilteredPayments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    moliyaTab,
+    moliyaFilters.employeeId,
+    moliyaFilters.branch,
+    moliyaFilters.department,
+    moliyaFilters.position,
+    moliyaFilters.schedules,
+    moliyaFilters.startDate,
+    moliyaFilters.endDate,
+  ]);
+
+  // Payments already saved to the backend — every "to'lov" action (main
+  // modal, per-row quick-add, delete) refreshes both lists afterward so
+  // Umumiy's qoldiq and the Ish haqi to'lovlari table never go stale.
+  const refreshPayments = async () => {
+    await fetchMonthlyPayments();
+    if (moliyaTab === 'tolovlar') await fetchFilteredPayments();
+  };
+
+  const removeFinanceEntry = async (employeeId, type, entryId) => {
+    if (type === 'payment') {
+      const ok = await confirm({
+        title: "To'lovni o'chirish",
+        message: "Bu to'lov yozuvini o'chirmoqchimisiz?",
+      });
+      if (!ok) return;
+      try {
+        await payrollService.deletePayment(entryId);
+        await refreshPayments();
+        toast.success("To'lov o'chirildi");
+      } catch (err) {
+        toast.error(err.response?.data?.message || "To'lovni o'chirishda xatolik");
+      }
+      return;
+    }
+
     const key = getFinanceKey(employeeId);
     const listKey = financeListKeyFor(type);
     setFinanceRecords((prev) => {
@@ -1548,10 +1637,32 @@ export function AttendancePage() {
     setFinancePanel({ employeeId, type });
   };
 
-  const handleAddFinanceEntry = () => {
+  const handleAddFinanceEntry = async () => {
     if (!financePanel) return;
     const amount = Number(financeForm.amount);
     if (!amount || amount <= 0) return;
+
+    if (financePanel.type === 'payment') {
+      setIsSubmittingPayment(true);
+      try {
+        await payrollService.createPayment({
+          employeeId: financePanel.employeeId,
+          amount,
+          month: moliyaMonth.getMonth() + 1,
+          year: moliyaMonth.getFullYear(),
+          note: financeForm.note.trim() || undefined,
+        });
+        await refreshPayments();
+        setFinanceForm({ amount: '', note: '' });
+        toast.success("To'lov qo'shildi");
+      } catch (err) {
+        toast.error(err.response?.data?.message || "To'lov qo'shishda xatolik");
+      } finally {
+        setIsSubmittingPayment(false);
+      }
+      return;
+    }
+
     addFinanceEntry(financePanel.employeeId, financePanel.type, amount, financeForm.note.trim());
     setFinanceForm({ amount: '', note: '' });
   };
@@ -1562,11 +1673,14 @@ export function AttendancePage() {
     const bonusTotal = sumEntries(record.bonuses);
     const fineTotal = sumEntries(record.fines);
     const jami = baseSalary + bonusTotal - fineTotal;
-    const paidTotal = sumEntries(record.payments);
+    const empPayments = monthlyPayments
+      .filter((p) => p.employeeId === emp.id)
+      .map((p) => ({ ...p, date: new Date(p.createdAt) }));
+    const paidTotal = sumEntries(empPayments);
     const qoldiq = jami - paidTotal;
-    return { emp, baseSalary, bonusTotal, fineTotal, jami, paidTotal, qoldiq, record };
+    return { emp, baseSalary, bonusTotal, fineTotal, jami, paidTotal, qoldiq, record: { ...record, payments: empPayments } };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [employees, financeRecords, moliyaMonth]);
+  }), [employees, financeRecords, monthlyPayments, moliyaMonth]);
 
   const filteredFinanceRows = useMemo(() => financeRows.filter(({ emp, qoldiq }) => {
     if (moliyaFilters.department && emp.department !== moliyaFilters.department) return false;
@@ -1590,9 +1704,10 @@ export function AttendancePage() {
     [filteredFinanceRows]
   );
 
-  const allPayments = useMemo(() => filteredFinanceRows
-    .flatMap((r) => r.record.payments.map((p) => ({ ...p, emp: r.emp })))
-    .sort((a, b) => b.date - a.date), [filteredFinanceRows]);
+  // Backend-backed — already scoped by moliyaFilters server-side (fetchFilteredPayments).
+  const allPayments = useMemo(() => filteredPayments
+    .map((p) => ({ ...p, emp: employees.find((e) => e.id === p.employeeId) }))
+    .filter((p) => p.emp), [filteredPayments, employees]);
 
   const allFines = useMemo(() => filteredFinanceRows
     .flatMap((r) => r.record.fines.map((f) => ({ ...f, emp: r.emp, empName: `${r.emp.first_name} ${r.emp.last_name}` })))
@@ -1619,10 +1734,24 @@ export function AttendancePage() {
 
   const addPaymentAmountNum = Number(addPaymentForm.amount);
 
-  const handleSubmitAddPayment = () => {
+  const handleSubmitAddPayment = async () => {
     if (!addPaymentForm.employeeId || !addPaymentAmountNum || addPaymentAmountNum <= 0) return;
-    addFinanceEntry(addPaymentForm.employeeId, 'payment', addPaymentAmountNum, '');
-    setIsAddPaymentOpen(false);
+    setIsSubmittingPayment(true);
+    try {
+      await payrollService.createPayment({
+        employeeId: addPaymentForm.employeeId,
+        amount: addPaymentAmountNum,
+        month: Number(addPaymentForm.month),
+        year: Number(addPaymentForm.year),
+      });
+      toast.success("To'lov qo'shildi");
+      setIsAddPaymentOpen(false);
+      await refreshPayments();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "To'lov qo'shishda xatolik");
+    } finally {
+      setIsSubmittingPayment(false);
+    }
   };
 
   const [isAddFineOpen, setIsAddFineOpen] = useState(false);
@@ -3436,7 +3565,7 @@ export function AttendancePage() {
                   </div>
                 </div>
 
-                {loading ? (
+                {loading || isMonthlyPaymentsLoading ? (
                   <LoadingSpinner text="Yuklanmoqda..." />
                 ) : filteredFinanceRows.length === 0 ? (
                   <EmptyState
@@ -3568,18 +3697,27 @@ export function AttendancePage() {
                   <h3>Ish haqi to'lovlari</h3>
                 </div>
               </div>
-              <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Xodim</th>
-                      <th>Miqdor</th>
-                      <th>Oy</th>
-                      <th>Yil</th>
-                      <th>Yaratilgan vaqt</th>
-                    </tr>
-                  </thead>
-                  {allPayments.length > 0 && (
+              {isPaymentsLoading ? (
+                <LoadingSpinner text="Yuklanmoqda..." />
+              ) : allPayments.length === 0 ? (
+                <EmptyState
+                  icon="📦"
+                  title="Ish haqi to'lovlari topilmadi"
+                  text=""
+                />
+              ) : (
+                <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Xodim</th>
+                        <th>Miqdor</th>
+                        <th>Oy</th>
+                        <th>Yil</th>
+                        <th>Yaratilgan vaqt</th>
+                        <th />
+                      </tr>
+                    </thead>
                     <tbody>
                       {allPayments.map((p) => (
                         <tr key={p.id}>
@@ -3613,27 +3751,30 @@ export function AttendancePage() {
                           </td>
                           <td>
                             <span className="finance-payment-month-pill">
-                              {UZ_MONTHS[moliyaMonth.getMonth()]}
+                              {UZ_MONTHS[p.month - 1]}
                             </span>
                           </td>
-                          <td>{moliyaMonth.getFullYear()}</td>
+                          <td>{p.year}</td>
                           <td>
                             <span className="finance-payment-time">
-                              <Clock size={13} strokeWidth={2.25} /> {format(p.date, 'dd.MM.yyyy HH:mm')}
+                              <Clock size={13} strokeWidth={2.25} /> {format(new Date(p.createdAt), 'dd.MM.yyyy HH:mm')}
                             </span>
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              className="attendance-toggle-btn"
+                              title="O'chirish"
+                              onClick={() => removeFinanceEntry(p.employeeId, 'payment', p.id)}
+                            >
+                              <Trash2 size={14} />
+                            </button>
                           </td>
                         </tr>
                       ))}
                     </tbody>
-                  )}
-                </table>
-              </div>
-              {allPayments.length === 0 && (
-                <EmptyState
-                  icon="📦"
-                  title="Ish haqi to'lovlari topilmadi"
-                  text=""
-                />
+                  </table>
+                </div>
               )}
               <div className="attendance-table-footer">
                 <button type="button" className="attendance-toggle-btn" title="Ustunlar sozlamasi">
@@ -4300,7 +4441,8 @@ export function AttendancePage() {
               variant="primary"
               fullWidth
               className="attendance-primary-btn"
-              disabled={!financeForm.amount || amountNum <= 0}
+              disabled={!financeForm.amount || amountNum <= 0 || isSubmittingPayment}
+              loading={financePanel.type === 'payment' && isSubmittingPayment}
               onClick={handleAddFinanceEntry}
             >
               {meta.addLabel}
@@ -4439,12 +4581,13 @@ export function AttendancePage() {
         title="Ish haqi to'lovini qo'shish."
         footer={
           <>
-            <Button variant="ghost" onClick={() => setIsAddPaymentOpen(false)}>
+            <Button variant="ghost" onClick={() => setIsAddPaymentOpen(false)} disabled={isSubmittingPayment}>
               Bekor qilish
             </Button>
             <Button
               variant="primary"
-              disabled={!addPaymentForm.employeeId || !addPaymentAmountNum || addPaymentAmountNum <= 0}
+              disabled={!addPaymentForm.employeeId || !addPaymentAmountNum || addPaymentAmountNum <= 0 || isSubmittingPayment}
+              loading={isSubmittingPayment}
               onClick={handleSubmitAddPayment}
             >
               Saqlash
