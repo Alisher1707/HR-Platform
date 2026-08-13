@@ -1292,11 +1292,13 @@ export function AttendancePage() {
   // Bonus/fine tracking has no backend yet — kept in local state only, keyed
   // per employee+month so switching months shows genuinely empty data
   // instead of silently carrying figures over. Payments ("Ish haqi
-  // to'lovlari") ARE backend-backed — see monthlyPayments/filteredPayments.
+  // to'lovlari") and fines ("Tayinlangan jarimalar") ARE backend-backed —
+  // see monthlyPayments/filteredPayments and monthlyFines/assignedFines.
   const [financeRecords, setFinanceRecords] = useState({});
   const [financePanel, setFinancePanel] = useState(null); // { employeeId, type: 'bonus' | 'fine' | 'payment' }
-  const [financeForm, setFinanceForm] = useState({ amount: '', note: '' });
+  const [financeForm, setFinanceForm] = useState({ amount: '', note: '', fineTypeId: '', file: null });
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
+  const [isSubmittingFine, setIsSubmittingFine] = useState(false);
   // This month's payments (all employees) — powers Umumiy's "To'langan"/
   // "Qoldiq" columns, scoped to moliyaMonth like the rest of that tab.
   const [monthlyPayments, setMonthlyPayments] = useState([]);
@@ -1305,6 +1307,15 @@ export function AttendancePage() {
   // to'lovlari tab table.
   const [filteredPayments, setFilteredPayments] = useState([]);
   const [isPaymentsLoading, setIsPaymentsLoading] = useState(false);
+  // This month's assigned fines (all employees) — powers Umumiy's
+  // "Jarimalar" column, scoped to moliyaMonth like monthlyPayments.
+  const [monthlyFines, setMonthlyFines] = useState([]);
+  const [isMonthlyFinesLoading, setIsMonthlyFinesLoading] = useState(false);
+  // Flat, Filtr-scoped assigned-fines list — powers "Tayinlangan jarimalar
+  // ro'yxati".
+  const [assignedFines, setAssignedFines] = useState([]);
+  const [isAssignedFinesLoading, setIsAssignedFinesLoading] = useState(false);
+  const [isAssignedFinesOpen, setIsAssignedFinesOpen] = useState(false);
   const [reportForm, setReportForm] = useState(getDefaultReportForm());
   const [reportResults, setReportResults] = useState(null); // null = not generated yet, [] = generated, no data
   const [isReportLoading, setIsReportLoading] = useState(false);
@@ -1604,6 +1615,69 @@ export function AttendancePage() {
     if (moliyaTab === 'tolovlar') await fetchFilteredPayments();
   };
 
+  const fetchMonthlyFines = async () => {
+    setIsMonthlyFinesLoading(true);
+    try {
+      const rows = await fineService.getAssignedFines({
+        startDate: format(startOfMonth(moliyaMonth), 'yyyy-MM-dd'),
+        endDate: format(endOfMonth(moliyaMonth), 'yyyy-MM-dd'),
+      });
+      setMonthlyFines(rows);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Jarimalarni yuklashda xatolik');
+    } finally {
+      setIsMonthlyFinesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMonthlyFines();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moliyaMonth]);
+
+  const fetchAssignedFines = async () => {
+    setIsAssignedFinesLoading(true);
+    try {
+      const rows = await fineService.getAssignedFines({
+        employeeId: moliyaFilters.employeeId || undefined,
+        branches: moliyaFilters.branch ? [moliyaFilters.branch] : [],
+        departments: moliyaFilters.department ? [moliyaFilters.department] : [],
+        positions: moliyaFilters.position ? [moliyaFilters.position] : [],
+        scheduleIds: moliyaFilters.schedules?.length ? moliyaFilters.schedules : [],
+        startDate: moliyaFilters.startDate ? format(moliyaFilters.startDate, 'yyyy-MM-dd') : undefined,
+        endDate: moliyaFilters.endDate ? format(moliyaFilters.endDate, 'yyyy-MM-dd') : undefined,
+      });
+      setAssignedFines(rows);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Tayinlangan jarimalarni yuklashda xatolik');
+    } finally {
+      setIsAssignedFinesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (moliyaTab === 'jarimalar' && isAssignedFinesOpen) fetchAssignedFines();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    moliyaTab,
+    isAssignedFinesOpen,
+    moliyaFilters.employeeId,
+    moliyaFilters.branch,
+    moliyaFilters.department,
+    moliyaFilters.position,
+    moliyaFilters.schedules,
+    moliyaFilters.startDate,
+    moliyaFilters.endDate,
+  ]);
+
+  // Fines already saved to the backend — every fine action (assign, delete)
+  // refreshes both lists afterward so Umumiy's fineTotal and the assigned
+  // fines table never go stale.
+  const refreshFines = async () => {
+    await fetchMonthlyFines();
+    if (moliyaTab === 'jarimalar' && isAssignedFinesOpen) await fetchAssignedFines();
+  };
+
   const removeFinanceEntry = async (employeeId, type, entryId) => {
     if (type === 'payment') {
       const ok = await confirm({
@@ -1621,6 +1695,22 @@ export function AttendancePage() {
       return;
     }
 
+    if (type === 'fine') {
+      const ok = await confirm({
+        title: "Jarimani o'chirish",
+        message: "Bu jarima yozuvini o'chirmoqchimisiz?",
+      });
+      if (!ok) return;
+      try {
+        await fineService.deleteAssignedFine(entryId);
+        await refreshFines();
+        toast.success("Jarima o'chirildi");
+      } catch (err) {
+        toast.error(err.response?.data?.message || "Jarimani o'chirishda xatolik");
+      }
+      return;
+    }
+
     const key = getFinanceKey(employeeId);
     const listKey = financeListKeyFor(type);
     setFinanceRecords((prev) => {
@@ -1634,7 +1724,7 @@ export function AttendancePage() {
   };
 
   const openFinancePanel = (employeeId, type) => {
-    setFinanceForm({ amount: '', note: '' });
+    setFinanceForm({ amount: '', note: '', fineTypeId: '', file: null });
     setFinancePanel({ employeeId, type });
   };
 
@@ -1654,7 +1744,7 @@ export function AttendancePage() {
           note: financeForm.note.trim() || undefined,
         });
         await refreshPayments();
-        setFinanceForm({ amount: '', note: '' });
+        setFinanceForm({ amount: '', note: '', fineTypeId: '', file: null });
         toast.success("To'lov qo'shildi");
       } catch (err) {
         toast.error(err.response?.data?.message || "To'lov qo'shishda xatolik");
@@ -1664,24 +1754,48 @@ export function AttendancePage() {
       return;
     }
 
+    if (financePanel.type === 'fine') {
+      setIsSubmittingFine(true);
+      try {
+        await fineService.createAssignedFine({
+          employeeId: financePanel.employeeId,
+          amount,
+          fineTypeId: financeForm.fineTypeId || undefined,
+          note: financeForm.note.trim() || undefined,
+          file: financeForm.file || undefined,
+        });
+        await refreshFines();
+        setFinanceForm({ amount: '', note: '', fineTypeId: '', file: null });
+        toast.success('Jarima tayinlandi');
+      } catch (err) {
+        toast.error(err.response?.data?.message || 'Jarima tayinlashda xatolik');
+      } finally {
+        setIsSubmittingFine(false);
+      }
+      return;
+    }
+
     addFinanceEntry(financePanel.employeeId, financePanel.type, amount, financeForm.note.trim());
-    setFinanceForm({ amount: '', note: '' });
+    setFinanceForm({ amount: '', note: '', fineTypeId: '', file: null });
   };
 
   const financeRows = useMemo(() => employees.map((emp) => {
     const record = getFinanceRecord(emp.id);
     const baseSalary = emp.salary_amount || 0;
     const bonusTotal = sumEntries(record.bonuses);
-    const fineTotal = sumEntries(record.fines);
+    const empFines = monthlyFines
+      .filter((f) => f.employeeId === emp.id)
+      .map((f) => ({ ...f, note: f.fineTypeName || f.note, date: new Date(f.createdAt) }));
+    const fineTotal = sumEntries(empFines);
     const jami = baseSalary + bonusTotal - fineTotal;
     const empPayments = monthlyPayments
       .filter((p) => p.employeeId === emp.id)
       .map((p) => ({ ...p, date: new Date(p.createdAt) }));
     const paidTotal = sumEntries(empPayments);
     const qoldiq = jami - paidTotal;
-    return { emp, baseSalary, bonusTotal, fineTotal, jami, paidTotal, qoldiq, record: { ...record, payments: empPayments } };
+    return { emp, baseSalary, bonusTotal, fineTotal, jami, paidTotal, qoldiq, record: { ...record, payments: empPayments, fines: empFines } };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [employees, financeRecords, monthlyPayments, moliyaMonth]);
+  }), [employees, financeRecords, monthlyPayments, monthlyFines, moliyaMonth]);
 
   const filteredFinanceRows = useMemo(() => financeRows.filter(({ emp, qoldiq }) => {
     if (moliyaFilters.department && emp.department !== moliyaFilters.department) return false;
@@ -1710,9 +1824,13 @@ export function AttendancePage() {
     .map((p) => ({ ...p, emp: employees.find((e) => e.id === p.employeeId) }))
     .filter((p) => p.emp), [filteredPayments, employees]);
 
-  const allFines = useMemo(() => filteredFinanceRows
-    .flatMap((r) => r.record.fines.map((f) => ({ ...f, emp: r.emp, empName: `${r.emp.first_name} ${r.emp.last_name}` })))
-    .sort((a, b) => b.date - a.date), [filteredFinanceRows]);
+  // Backend-backed — already scoped by moliyaFilters server-side (fetchAssignedFines).
+  const allFines = useMemo(() => assignedFines
+    .map((f) => {
+      const emp = employees.find((e) => e.id === f.employeeId);
+      return emp ? { ...f, emp, empName: `${emp.first_name} ${emp.last_name}`, date: new Date(f.createdAt) } : null;
+    })
+    .filter(Boolean), [assignedFines, employees]);
 
   const financePanelRow = financePanel
     ? financeRows.find((r) => r.emp.id === financePanel.employeeId)
@@ -1764,7 +1882,6 @@ export function AttendancePage() {
   // 2 = xodim biriktirish (fine_policy_employees'ga saqlanadi).
   const [fineWizardStep, setFineWizardStep] = useState(1);
   const [fineEmployeeSearch, setFineEmployeeSearch] = useState('');
-  const [isAssignedFinesOpen, setIsAssignedFinesOpen] = useState(false);
   const [assignedFinesEmployeeFilter, setAssignedFinesEmployeeFilter] = useState('');
 
   // "Turi" — jarima sababi (Kech kelish/Erta ketish/Chiqish yo'q/Kelmagan kun).
@@ -3992,19 +4109,28 @@ export function AttendancePage() {
                 </div>
               </div>
 
-              <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Sana</th>
-                      <th>Xodim</th>
-                      <th>Miqdor</th>
-                      <th>Jarima turi</th>
-                      <th>Tafsilotlar</th>
-                      <th>Fayl</th>
-                    </tr>
-                  </thead>
-                  {assignedFinesFiltered.length > 0 && (
+              {isAssignedFinesLoading ? (
+                <div style={{ padding: '2rem' }}><LoadingSpinner /></div>
+              ) : assignedFinesFiltered.length === 0 ? (
+                <EmptyState
+                  icon={<PackageX size={56} strokeWidth={1.25} />}
+                  title="Tayinlangan jarimalar topilmadi"
+                  text=""
+                />
+              ) : (
+                <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Sana</th>
+                        <th>Xodim</th>
+                        <th>Miqdor</th>
+                        <th>Jarima turi</th>
+                        <th>Tafsilotlar</th>
+                        <th>Fayl</th>
+                        <th />
+                      </tr>
+                    </thead>
                     <tbody>
                       {assignedFinesFiltered.map((f) => (
                         <tr key={f.id}>
@@ -4033,37 +4159,56 @@ export function AttendancePage() {
                             <Badge variant="error">{formatUZS(f.amount)}</Badge>
                           </td>
                           <td>
-                            {f.note ? (
-                              <Badge variant="warning">{f.note}</Badge>
+                            {f.fineTypeName ? (
+                              <Badge variant="warning">{f.fineTypeName}</Badge>
                             ) : (
                               <span style={{ color: 'var(--text-muted)' }}>—</span>
                             )}
                           </td>
                           <td>
-                            <span style={{ color: 'var(--text-muted)' }}>—</span>
+                            {f.note ? (
+                              <span>{f.note}</span>
+                            ) : (
+                              <span style={{ color: 'var(--text-muted)' }}>—</span>
+                            )}
+                          </td>
+                          <td>
+                            {f.fileUrl ? (
+                              <a
+                                className="attendance-toggle-btn"
+                                title={f.fileName || 'Faylni ko\'rish'}
+                                href={fineService.getFileUrl(f.fileUrl)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <Paperclip size={14} strokeWidth={2.25} />
+                              </a>
+                            ) : (
+                              <button
+                                type="button"
+                                className="attendance-toggle-btn"
+                                title="Fayl biriktirilmagan"
+                                disabled
+                              >
+                                <Paperclip size={14} strokeWidth={2.25} />
+                              </button>
+                            )}
                           </td>
                           <td>
                             <button
                               type="button"
                               className="attendance-toggle-btn"
-                              title="Fayl biriktirilmagan"
-                              disabled
+                              title="O'chirish"
+                              onClick={() => removeFinanceEntry(f.employeeId, 'fine', f.id)}
                             >
-                              <Paperclip size={14} strokeWidth={2.25} />
+                              <Trash2 size={14} />
                             </button>
                           </td>
                         </tr>
                       ))}
                     </tbody>
-                  )}
-                </table>
-              </div>
-              {assignedFinesFiltered.length === 0 && (
-                <EmptyState
-                  icon={<PackageX size={56} strokeWidth={1.25} />}
-                  title="Tayinlangan jarimalar topilmadi"
-                  text=""
-                />
+                  </table>
+                </div>
               )}
               <div className="attendance-table-footer">
                 <button type="button" className="attendance-toggle-btn" title="Ustunlar sozlamasi">
@@ -4487,6 +4632,36 @@ export function AttendancePage() {
                 placeholder="0"
               />
             </div>
+            {financePanel.type === 'fine' && (
+              <>
+                <div className="form-group mb-4">
+                  <label className="form-label">Jarima turi (ixtiyoriy)</label>
+                  <SearchableSelect
+                    options={punishmentTypeOptions}
+                    selected={financeForm.fineTypeId}
+                    onChange={(fineTypeId) => setFinanceForm((prev) => ({ ...prev, fineTypeId }))}
+                    getOptionIcon={getPunishmentTypeIcon}
+                    icon={AlertTriangle}
+                    placeholder="Jazo turini tanlang"
+                    searchPlaceholder="Qidiruv"
+                    onCreateNew={async (name) => {
+                      const value = await handleCreateFineType(name);
+                      if (value) setFinanceForm((prev) => ({ ...prev, fineTypeId: value }));
+                    }}
+                    createLabel="Jazo yaratish"
+                  />
+                </div>
+                <div className="form-group mb-4">
+                  <label className="form-label">Fayl (ixtiyoriy)</label>
+                  <input
+                    type="file"
+                    className="finance-fine-file-input"
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
+                    onChange={(e) => setFinanceForm((prev) => ({ ...prev, file: e.target.files?.[0] || null }))}
+                  />
+                </div>
+              </>
+            )}
             <Textarea
               name="financeNote"
               placeholder="Izoh (ixtiyoriy)"
@@ -4499,8 +4674,8 @@ export function AttendancePage() {
               variant="primary"
               fullWidth
               className="attendance-primary-btn"
-              disabled={!financeForm.amount || amountNum <= 0 || isSubmittingPayment}
-              loading={financePanel.type === 'payment' && isSubmittingPayment}
+              disabled={!financeForm.amount || amountNum <= 0 || isSubmittingPayment || isSubmittingFine}
+              loading={(financePanel.type === 'payment' && isSubmittingPayment) || (financePanel.type === 'fine' && isSubmittingFine)}
               onClick={handleAddFinanceEntry}
             >
               {meta.addLabel}

@@ -85,3 +85,55 @@ export async function deleteFinePolicy(req, res) {
     return errorResponse(res, error.message || 'Jarima siyosatini o\'chirishda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }
+
+export async function getAssignedFines(req, res) {
+  try {
+    const { employeeId, branches, departments, positions, scheduleIds, startDate, endDate } = req.query;
+
+    const fines = await finesService.listEmployeeFines({
+      employeeId: employeeId || null,
+      branches: branches ? branches.split(',').filter(Boolean) : [],
+      departments: departments ? departments.split(',').filter(Boolean) : [],
+      positions: positions ? positions.split(',').filter(Boolean) : [],
+      scheduleIds: scheduleIds ? scheduleIds.split(',').filter(Boolean) : [],
+      startDate: startDate || null,
+      endDate: endDate || null,
+    });
+
+    return successResponse(res, fines, 'Tayinlangan jarimalar olindi');
+  } catch (error) {
+    console.error('Get assigned fines error:', error);
+    return errorResponse(res, error.message || 'Tayinlangan jarimalarni olishda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+  }
+}
+
+export async function createAssignedFine(req, res) {
+  try {
+    const { employeeId, amount, fineTypeId, note } = req.body;
+
+    const fine = await finesService.createEmployeeFine({
+      employeeId,
+      amount,
+      fineTypeId: fineTypeId || null,
+      note,
+      fileUrl: req.file ? `/uploads/fines/${req.file.filename}` : null,
+      fileName: req.file ? req.file.originalname : null,
+      createdBy: req.user.id,
+    });
+
+    return successResponse(res, fine, 'Jarima tayinlandi', HTTP_STATUS.CREATED);
+  } catch (error) {
+    console.error('Create assigned fine error:', error);
+    return errorResponse(res, error.message || 'Jarima tayinlashda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+  }
+}
+
+export async function deleteAssignedFine(req, res) {
+  try {
+    const result = await finesService.deleteEmployeeFine(req.params.id);
+    return successResponse(res, result, 'Jarima o\'chirildi');
+  } catch (error) {
+    console.error('Delete assigned fine error:', error);
+    return errorResponse(res, error.message || 'Jarimani o\'chirishda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+  }
+}

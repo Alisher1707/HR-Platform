@@ -120,6 +120,18 @@ app.use(
 );
 
 /**
+ * Static Files - Employee fine evidence files
+ */
+app.use(
+  '/uploads/fines',
+  express.static(path.join(__dirname, '../uploads/fines'), {
+    setHeaders: (res) => {
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    },
+  })
+);
+
+/**
  * Rate Limiting
  */
 app.use(generalLimiter);

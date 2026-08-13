@@ -2,7 +2,8 @@ import express from 'express';
 import Joi from 'joi';
 import * as finesController from './fines.controller.js';
 import { authenticate, authorize } from '../auth/auth.middleware.js';
-import { validate, validateParams, commonSchemas } from '../../shared/middleware/validate.js';
+import { validate, validateQuery, validateParams, commonSchemas } from '../../shared/middleware/validate.js';
+import { uploadFineFile, handleMulterError } from '../../shared/middleware/upload.js';
 import { USER_ROLES } from '../../config/constants.js';
 
 const router = express.Router();
@@ -23,6 +24,23 @@ const policySchema = Joi.object({
   enabled: Joi.boolean().default(true),
   templates: Joi.array().items(templateSchema).default([]),
   employeeIds: Joi.array().items(commonSchemas.uuid).default([]),
+});
+
+const listAssignedFinesQuerySchema = Joi.object({
+  employeeId: Joi.string().uuid().allow('').optional(),
+  branches: Joi.string().allow('').optional(),
+  departments: Joi.string().allow('').optional(),
+  positions: Joi.string().allow('').optional(),
+  scheduleIds: Joi.string().allow('').optional(),
+  startDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).allow('').optional(),
+  endDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).allow('').optional(),
+});
+
+const createAssignedFineSchema = Joi.object({
+  employeeId: commonSchemas.uuid,
+  amount: Joi.number().positive().required(),
+  fineTypeId: Joi.string().uuid().allow('', null),
+  note: Joi.string().max(500).allow('', null),
 });
 
 const uuidParamSchema = Joi.object({ id: commonSchemas.uuid });
@@ -57,6 +75,25 @@ router.delete(
   authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
   validateParams(uuidParamSchema),
   finesController.deleteFinePolicy
+);
+
+// Xodimga tayinlangan (haqiqatan tortilgan) jarimalar
+router.get('/assigned', authenticate, canManage, validateQuery(listAssignedFinesQuerySchema), finesController.getAssignedFines);
+router.post(
+  '/assigned',
+  authenticate,
+  canManage,
+  uploadFineFile,
+  handleMulterError,
+  validate(createAssignedFineSchema),
+  finesController.createAssignedFine
+);
+router.delete(
+  '/assigned/:id',
+  authenticate,
+  authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  validateParams(uuidParamSchema),
+  finesController.deleteAssignedFine
 );
 
 export default router;

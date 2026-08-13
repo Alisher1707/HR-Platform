@@ -7401,6 +7401,16 @@ tr.finance-debt-row td {
   margin-bottom: 0;
 }
 
+.finance-fine-file-input {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  border-radius: var(--radius-lg);
+  border: 1.5px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+}
+
 @media (max-width: 768px) {
   .finance-filters-row {
     flex-direction: column;

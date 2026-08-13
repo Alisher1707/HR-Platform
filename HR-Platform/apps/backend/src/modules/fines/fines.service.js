@@ -198,3 +198,112 @@ export async function deleteFinePolicy(id) {
   await query('DELETE FROM fine_policies WHERE id = $1', [id]);
   return { success: true, id };
 }
+
+/**
+ * Xodimga tayinlangan (haqiqatan tortilgan) jarimalar — "Tayinlangan
+ * jarimalar ro'yxati". fine_types katalogiga va ixtiyoriy isbot fayliga
+ * bog'lanadi; fine_policies (siyosat/shablon katalogi)dan farqli — bu
+ * konkret bir xodimga qo'llangan haqiqiy voqea.
+ */
+function mapEmployeeFine(row) {
+  return {
+    id: row.id,
+    employeeId: row.employee_id,
+    amount: Number(row.amount),
+    fineTypeId: row.fine_type_id,
+    fineTypeName: row.fine_type_name || null,
+    note: row.note,
+    fileUrl: row.file_url,
+    fileName: row.file_name,
+    createdAt: row.created_at,
+  };
+}
+
+export async function listEmployeeFines({
+  employeeId, branches, departments, positions, scheduleIds, startDate, endDate,
+} = {}) {
+  const conditions = [];
+  const params = [];
+
+  if (employeeId) {
+    params.push(employeeId);
+    conditions.push(`ef.employee_id = $${params.length}`);
+  }
+  if (branches && branches.length) {
+    params.push(branches);
+    conditions.push(`e.branch = ANY($${params.length})`);
+  }
+  if (departments && departments.length) {
+    params.push(departments);
+    conditions.push(`e.department = ANY($${params.length})`);
+  }
+  if (positions && positions.length) {
+    params.push(positions);
+    conditions.push(`e.position = ANY($${params.length})`);
+  }
+  if (scheduleIds && scheduleIds.length) {
+    params.push(scheduleIds);
+    conditions.push(`EXISTS (
+      SELECT 1 FROM work_schedule_employees wse
+      WHERE wse.employee_id = ef.employee_id AND wse.schedule_id = ANY($${params.length})
+    )`);
+  }
+  if (startDate) {
+    params.push(startDate);
+    conditions.push(`ef.created_at::date >= $${params.length}`);
+  }
+  if (endDate) {
+    params.push(endDate);
+    conditions.push(`ef.created_at::date <= $${params.length}`);
+  }
+
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const result = await query(
+    `SELECT ef.*, ft.name AS fine_type_name
+     FROM employee_fines ef
+     JOIN employees e ON e.id = ef.employee_id
+     LEFT JOIN fine_types ft ON ft.id = ef.fine_type_id
+     ${where}
+     ORDER BY ef.created_at DESC`,
+    params
+  );
+
+  return result.rows.map(mapEmployeeFine);
+}
+
+export async function createEmployeeFine({ employeeId, amount, fineTypeId, note, fileUrl, fileName, createdBy }) {
+  const employeeCheck = await query('SELECT id FROM employees WHERE id = $1', [employeeId]);
+  if (employeeCheck.rows.length === 0) {
+    const error = new Error('Xodim topilmadi');
+    error.statusCode = HTTP_STATUS.NOT_FOUND;
+    throw error;
+  }
+
+  const result = await query(
+    `INSERT INTO employee_fines (employee_id, amount, fine_type_id, note, file_url, file_name, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     RETURNING *`,
+    [employeeId, amount, fineTypeId || null, note || null, fileUrl || null, fileName || null, createdBy]
+  );
+
+  const [row] = await query(
+    `SELECT ef.*, ft.name AS fine_type_name
+     FROM employee_fines ef
+     LEFT JOIN fine_types ft ON ft.id = ef.fine_type_id
+     WHERE ef.id = $1`,
+    [result.rows[0].id]
+  ).then((r) => r.rows);
+
+  return mapEmployeeFine(row);
+}
+
+export async function deleteEmployeeFine(id) {
+  const result = await query('DELETE FROM employee_fines WHERE id = $1 RETURNING id', [id]);
+  if (result.rows.length === 0) {
+    const error = new Error('Jarima topilmadi');
+    error.statusCode = HTTP_STATUS.NOT_FOUND;
+    throw error;
+  }
+  return { success: true, id };
+}

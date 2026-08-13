@@ -217,6 +217,51 @@ export const uploadOnboardingSubmission = multer({
   }
 }).single('file'); // Field name: 'file'
 
+// =============================================
+// Xodimga tayinlangan jarima uchun isbot fayli (ixtiyoriy)
+// =============================================
+
+const fineFilesDir = path.join(__dirname, '../../../uploads/fines');
+if (!fs.existsSync(fineFilesDir)) {
+  fs.mkdirSync(fineFilesDir, { recursive: true });
+}
+
+const fineFileStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, fineFilesDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `${uniqueSuffix}${ext}`);
+  }
+});
+
+const FINE_FILE_MIME_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+];
+
+const fineFileFilter = (req, file, cb) => {
+  if (FINE_FILE_MIME_TYPES.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Fayl faqat PDF, DOC, DOCX yoki rasm (JPG, PNG, WEBP) formatida bo\'lishi kerak'));
+  }
+};
+
+export const uploadFineFile = multer({
+  storage: fineFileStorage,
+  fileFilter: fineFileFilter,
+  limits: {
+    fileSize: 15 * 1024 * 1024, // 15MB max
+  }
+}).single('file'); // Field name: 'file'
+
 // Error handler middleware
 export function handleMulterError(err, req, res, next) {
   if (err instanceof multer.MulterError) {
