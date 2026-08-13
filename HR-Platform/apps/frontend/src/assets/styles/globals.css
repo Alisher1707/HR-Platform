@@ -5723,6 +5723,265 @@ button.attendance-pill {
   transform: translateX(16px);
 }
 
+/* "Jarima yaratish" wizard — 2-qadam: xodim biriktirish */
+.fine-employee-step {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+.fine-employee-column {
+  min-width: 0;
+}
+
+.fine-employee-column-header {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.875rem;
+  border-radius: var(--radius-lg);
+  margin-bottom: 0.875rem;
+}
+
+.fine-employee-column-header.assigned {
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.18);
+}
+
+.fine-employee-column-header.available {
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.18);
+}
+
+.fine-employee-column-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+
+.fine-employee-column-icon.assigned {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--info);
+}
+
+.fine-employee-column-icon.available {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--success);
+}
+
+.fine-employee-column-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.fine-employee-count-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--success);
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.fine-employee-column-desc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.fine-employee-search {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 0.875rem;
+  margin-bottom: 0.75rem;
+  border-radius: var(--radius-lg);
+  border: 1.5px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-muted);
+}
+
+.fine-employee-search input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.fine-employee-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.fine-employee-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--bg-card-solid);
+}
+
+.fine-employee-row-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fine-employee-row-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fine-employee-row-meta {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.fine-employee-row-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.fine-employee-row-btn.add {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--success);
+}
+
+.fine-employee-row-btn.add:hover {
+  background: rgba(16, 185, 129, 0.22);
+}
+
+.fine-employee-row-btn.remove {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--error);
+}
+
+.fine-employee-row-btn.remove:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.fine-employee-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 2.25rem 1rem;
+  border-radius: var(--radius-lg);
+  border: 1px dashed var(--border);
+}
+
+.fine-employee-empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 0.75rem;
+  border-radius: 50%;
+  background: var(--bg-input);
+  color: var(--text-muted);
+}
+
+.fine-employee-empty p {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  max-width: 220px;
+}
+
+.fine-employee-selected-bar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.875rem 1.125rem;
+  margin-top: 0.25rem;
+  border-radius: var(--radius-lg);
+  background: rgba(249, 115, 22, 0.06);
+  border: 1px solid rgba(249, 115, 22, 0.18);
+}
+
+.fine-employee-selected-bar-info {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  color: #f97316;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.fine-employee-selected-bar-info small {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.fine-employee-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.fine-employee-selected-count {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #f97316;
+  white-space: nowrap;
+}
+
+.fine-employee-progress-track {
+  width: 120px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.fine-employee-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: #f97316;
+  transition: width 0.2s ease;
+}
+
+@media (max-width: 720px) {
+  .fine-employee-step {
+    grid-template-columns: 1fr;
+  }
+}
+
 .fine-template-add-row {
   margin-bottom: 1.125rem;
 }

@@ -22,6 +22,7 @@ const policySchema = Joi.object({
   name: Joi.string().trim().min(1).max(150).required(),
   enabled: Joi.boolean().default(true),
   templates: Joi.array().items(templateSchema).default([]),
+  employeeIds: Joi.array().items(commonSchemas.uuid).default([]),
 });
 
 const uuidParamSchema = Joi.object({ id: commonSchemas.uuid });

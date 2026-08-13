@@ -58,6 +58,8 @@ function mapPolicy(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     templates: row.templates || [],
+    employeeIds: row.employee_ids || [],
+    employees: row.employees || [],
   };
 }
 
@@ -65,7 +67,7 @@ const SELECT_POLICY_WITH_TEMPLATES = `
   SELECT
     fp.*,
     COALESCE(
-      json_agg(
+      (SELECT json_agg(
         json_build_object(
           'id', fpt.id,
           'violationType', fpt.violation_type,
@@ -74,20 +76,30 @@ const SELECT_POLICY_WITH_TEMPLATES = `
           'fineTypeId', fpt.fine_type_id
         )
         ORDER BY fpt.created_at
-      ) FILTER (WHERE fpt.id IS NOT NULL),
+      ) FROM fine_policy_templates fpt WHERE fpt.policy_id = fp.id),
       '[]'
-    ) AS templates
+    ) AS templates,
+    COALESCE(
+      (SELECT json_agg(
+        json_build_object('id', e.id, 'firstName', e.first_name, 'lastName', e.last_name, 'position', e.position, 'phone', e.phone)
+        ORDER BY e.first_name
+      ) FROM fine_policy_employees fpe JOIN employees e ON e.id = fpe.employee_id WHERE fpe.policy_id = fp.id),
+      '[]'
+    ) AS employees,
+    COALESCE(
+      (SELECT array_agg(fpe.employee_id) FROM fine_policy_employees fpe WHERE fpe.policy_id = fp.id),
+      '{}'
+    ) AS employee_ids
   FROM fine_policies fp
-  LEFT JOIN fine_policy_templates fpt ON fpt.policy_id = fp.id
 `;
 
 export async function listFinePolicies() {
-  const result = await query(`${SELECT_POLICY_WITH_TEMPLATES} GROUP BY fp.id ORDER BY fp.created_at DESC`);
+  const result = await query(`${SELECT_POLICY_WITH_TEMPLATES} ORDER BY fp.created_at DESC`);
   return result.rows.map(mapPolicy);
 }
 
 export async function getFinePolicyById(id) {
-  const result = await query(`${SELECT_POLICY_WITH_TEMPLATES} WHERE fp.id = $1 GROUP BY fp.id`, [id]);
+  const result = await query(`${SELECT_POLICY_WITH_TEMPLATES} WHERE fp.id = $1`, [id]);
   if (result.rows.length === 0) {
     const error = new Error('Jarima siyosati topilmadi');
     error.statusCode = HTTP_STATUS.NOT_FOUND;
@@ -115,6 +127,23 @@ async function replaceTemplates(client, policyId, templates) {
   );
 }
 
+async function assignPolicyEmployees(client, policyId, employeeIds) {
+  await client.query('DELETE FROM fine_policy_employees WHERE policy_id = $1', [policyId]);
+
+  if (!employeeIds || employeeIds.length === 0) return;
+
+  const params = [policyId];
+  const valueRows = employeeIds.map((employeeId) => {
+    params.push(employeeId);
+    return `($1, $${params.length})`;
+  });
+
+  await client.query(
+    `INSERT INTO fine_policy_employees (policy_id, employee_id) VALUES ${valueRows.join(', ')}`,
+    params
+  );
+}
+
 export async function createFinePolicy(data, userId) {
   const client = await getClient();
   try {
@@ -127,6 +156,7 @@ export async function createFinePolicy(data, userId) {
 
     const policyId = insertResult.rows[0].id;
     await replaceTemplates(client, policyId, data.templates);
+    await assignPolicyEmployees(client, policyId, data.employeeIds);
 
     await client.query('COMMIT');
     return getFinePolicyById(policyId);
@@ -151,6 +181,7 @@ export async function updateFinePolicy(id, data) {
     );
 
     await replaceTemplates(client, id, data.templates);
+    await assignPolicyEmployees(client, id, data.employeeIds);
 
     await client.query('COMMIT');
     return getFinePolicyById(id);

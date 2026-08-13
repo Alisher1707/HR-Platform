@@ -53,6 +53,7 @@ import {
   RefreshCw,
   Eye,
   UserPlus,
+  UserMinus,
   Folder,
   X,
   LogOut,
@@ -1755,10 +1756,14 @@ export function AttendancePage() {
   };
 
   const [isAddFineOpen, setIsAddFineOpen] = useState(false);
-  const getDefaultFineForm = () => ({ name: '', enabled: true, templates: [] });
+  const getDefaultFineForm = () => ({ name: '', enabled: true, templates: [], employeeIds: [] });
   const [fineForm, setFineForm] = useState(getDefaultFineForm());
   const [editingFinePolicyId, setEditingFinePolicyId] = useState(null);
   const [isSavingFinePolicy, setIsSavingFinePolicy] = useState(false);
+  // "Jarima yaratish" 2-qadamli muzard: 1 = asosiy ma'lumotlar + shablonlar,
+  // 2 = xodim biriktirish (fine_policy_employees'ga saqlanadi).
+  const [fineWizardStep, setFineWizardStep] = useState(1);
+  const [fineEmployeeSearch, setFineEmployeeSearch] = useState('');
   const [isAssignedFinesOpen, setIsAssignedFinesOpen] = useState(false);
   const [assignedFinesEmployeeFilter, setAssignedFinesEmployeeFilter] = useState('');
 
@@ -1856,6 +1861,8 @@ export function AttendancePage() {
   const handleOpenAddFine = () => {
     setFineForm(getDefaultFineForm());
     setEditingFinePolicyId(null);
+    setFineWizardStep(1);
+    setFineEmployeeSearch('');
     setIsAddFineOpen(true);
   };
 
@@ -1870,10 +1877,38 @@ export function AttendancePage() {
         amount: t.amount != null ? String(t.amount) : '',
         jazoType: t.fineTypeId || '',
       })),
+      employeeIds: policy.employeeIds || [],
     });
     setEditingFinePolicyId(policy.id);
+    setFineWizardStep(1);
+    setFineEmployeeSearch('');
     setIsAddFineOpen(true);
   };
+
+  const addFineEmployee = (employeeId) => {
+    setFineForm((prev) => (
+      prev.employeeIds.includes(employeeId) ? prev : { ...prev, employeeIds: [...prev.employeeIds, employeeId] }
+    ));
+  };
+
+  const removeFineEmployee = (employeeId) => {
+    setFineForm((prev) => ({ ...prev, employeeIds: prev.employeeIds.filter((id) => id !== employeeId) }));
+  };
+
+  const fineAssignedEmployees = useMemo(
+    () => employees.filter((e) => fineForm.employeeIds.includes(e.id)),
+    [employees, fineForm.employeeIds]
+  );
+
+  const fineAvailableEmployees = useMemo(() => {
+    const q = fineEmployeeSearch.trim().toLowerCase();
+    return employees.filter((e) => {
+      if (fineForm.employeeIds.includes(e.id)) return false;
+      if (!q) return true;
+      const name = `${e.first_name || ''} ${e.last_name || ''}`.toLowerCase();
+      return name.includes(q) || (e.phone || '').includes(q);
+    });
+  }, [employees, fineForm.employeeIds, fineEmployeeSearch]);
 
   const handleDeleteFinePolicy = async (policy) => {
     const ok = await confirm({
@@ -1913,6 +1948,15 @@ export function AttendancePage() {
 
   const handleFineNextStep = async () => {
     if (!fineForm.name.trim() || isSavingFinePolicy) return;
+
+    // 1-qadam: shu yerda hech narsa saqlanmaydi — faqat 2-qadamga (xodim
+    // biriktirish) o'tadi. Haqiqiy saqlash faqat 2-qadamning yakuniy
+    // tugmasi bosilganda sodir bo'ladi.
+    if (fineWizardStep === 1) {
+      setFineWizardStep(2);
+      return;
+    }
+
     setIsSavingFinePolicy(true);
     const payload = {
       name: fineForm.name.trim(),
@@ -1923,6 +1967,7 @@ export function AttendancePage() {
         amount: Number(t.amount) || 0,
         fineTypeId: t.jazoType || null,
       })),
+      employeeIds: fineForm.employeeIds,
     };
     try {
       if (editingFinePolicyId) {
@@ -4647,23 +4692,35 @@ export function AttendancePage() {
       <Modal
         isOpen={isAddFineOpen}
         onClose={() => setIsAddFineOpen(false)}
-        title={<>{editingFinePolicyId ? 'Jarima siyosatini tahrirlash' : 'Jarima yaratish'} <span className="fine-modal-step-label">Qadam 1/2</span></>}
-        size="lg"
+        title={<>{editingFinePolicyId ? 'Jarima siyosatini tahrirlash' : 'Jarima yaratish'} <span className="fine-modal-step-label">Qadam {fineWizardStep} dan 2</span></>}
+        size={fineWizardStep === 2 ? 'xl' : 'lg'}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setIsAddFineOpen(false)}>
+            <Button variant="ghost" onClick={() => setIsAddFineOpen(false)} disabled={isSavingFinePolicy}>
               Bekor qilish
             </Button>
+            {fineWizardStep === 2 && (
+              <Button variant="ghost" onClick={() => setFineWizardStep(1)} disabled={isSavingFinePolicy}>
+                Oldingisi
+              </Button>
+            )}
             <Button
               variant="primary"
               disabled={!fineForm.name.trim() || isSavingFinePolicy}
+              loading={isSavingFinePolicy}
               onClick={handleFineNextStep}
             >
-              {isSavingFinePolicy ? 'Saqlanmoqda...' : editingFinePolicyId ? 'Saqlash' : 'Yaratish'}
+              {isSavingFinePolicy
+                ? 'Saqlanmoqda...'
+                : fineWizardStep === 1
+                  ? 'Keyingisi'
+                  : editingFinePolicyId ? 'Saqlash' : 'Jarima yaratish'}
             </Button>
           </>
         }
       >
+        {fineWizardStep === 1 ? (
+          <>
         <div className="fine-modal-step">
           <span className="fine-step-badge">1</span>
           <div className="fine-modal-step-body">
@@ -4806,6 +4863,127 @@ export function AttendancePage() {
             )}
           </div>
         </div>
+          </>
+        ) : (
+          <div className="fine-employee-step">
+            <div className="fine-employee-column">
+              <div className="fine-employee-column-header assigned">
+                <span className="fine-employee-column-icon assigned">
+                  <Users size={18} strokeWidth={2} />
+                </span>
+                <div>
+                  <div className="fine-employee-column-title">Joriy foydalanuvchilar</div>
+                  <p className="fine-employee-column-desc">
+                    Ro'yxatdagi foydalanuvchilar davomat qoidalariga rioya qilmagan taqdirda, belgilangan shablon asosida jarimaga tortiladi.
+                  </p>
+                </div>
+              </div>
+
+              {fineAssignedEmployees.length === 0 ? (
+                <div className="fine-employee-empty">
+                  <span className="fine-employee-empty-icon">
+                    <Users size={22} strokeWidth={1.5} />
+                  </span>
+                  <p>Ayni vaqtda ushbu jarima shabloniga hech qanday foydalanuvchi tayinlanmagan</p>
+                </div>
+              ) : (
+                <div className="fine-employee-list">
+                  {fineAssignedEmployees.map((emp) => (
+                    <div key={emp.id} className="fine-employee-row">
+                      <div className="fine-employee-row-info">
+                        <span className="fine-employee-row-name">{emp.first_name} {emp.last_name}</span>
+                        <span className="fine-employee-row-meta">
+                          {[emp.position, emp.phone].filter(Boolean).join(' • ')}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className="fine-employee-row-btn remove"
+                        title="Olib tashlash"
+                        onClick={() => removeFineEmployee(emp.id)}
+                      >
+                        <UserMinus size={15} strokeWidth={2.25} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="fine-employee-column">
+              <div className="fine-employee-column-header available">
+                <span className="fine-employee-column-icon available">
+                  <UserPlus size={18} strokeWidth={2} />
+                </span>
+                <div>
+                  <div className="fine-employee-column-title">
+                    Mavjud foydalanuvchilar
+                    <span className="fine-employee-count-badge">
+                      <UserPlus size={12} strokeWidth={2.5} /> {fineAvailableEmployees.length}
+                    </span>
+                  </div>
+                  <p className="fine-employee-column-desc">Ushbu jarima shabloniga hali tayinlanmagan xodimlar ro'yhati.</p>
+                </div>
+              </div>
+
+              <div className="fine-employee-search">
+                <Search size={15} />
+                <input
+                  type="text"
+                  placeholder="Xodimlarni qidirish..."
+                  value={fineEmployeeSearch}
+                  onChange={(e) => setFineEmployeeSearch(e.target.value)}
+                />
+              </div>
+
+              <div className="fine-employee-list">
+                {fineAvailableEmployees.map((emp) => (
+                  <div key={emp.id} className="fine-employee-row">
+                    <div className="fine-employee-row-info">
+                      <span className="fine-employee-row-name">{emp.first_name} {emp.last_name}</span>
+                      <span className="fine-employee-row-meta">
+                        {[emp.position, emp.phone].filter(Boolean).join(' • ')}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="fine-employee-row-btn add"
+                      title="Qo'shish"
+                      onClick={() => addFineEmployee(emp.id)}
+                    >
+                      <UserPlus size={15} strokeWidth={2.25} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="fine-employee-selected-bar">
+              <div className="fine-employee-selected-bar-info">
+                <Users size={16} strokeWidth={2.25} />
+                <span>
+                  Tanlangan xodimlar
+                  <small>
+                    {fineForm.employeeIds.length === 0
+                      ? 'Hali hech qanday xodim tanlanmagan'
+                      : `${fineForm.employeeIds.length} ta xodim tanlandi`}
+                  </small>
+                </span>
+              </div>
+              <div className="fine-employee-progress">
+                <span className="fine-employee-selected-count">
+                  {fineForm.employeeIds.length} / {employees.length}
+                </span>
+                <div className="fine-employee-progress-track">
+                  <div
+                    className="fine-employee-progress-fill"
+                    style={{ width: `${employees.length ? (fineForm.employeeIds.length / employees.length) * 100 : 0}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </Modal>
 
       <SidePanel
