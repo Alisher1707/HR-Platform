@@ -98,6 +98,75 @@ function findAttendanceStatusInJson(value) {
   return null;
 }
 
+/**
+ * Same recursive walk, for the camera's own event timestamp (Hikvision
+ * sends "dateTime": "2026-08-14T15:15:43+08:00" — includes its own UTC
+ * offset, so parsing it respects the device's local timezone setting
+ * regardless of what it is). Used instead of server receipt time so that a
+ * backlog of events flushed in one rapid burst (e.g. after the device
+ * reconnects from an outage) don't all land within the same second —
+ * without this, every backlogged event gets stamped with nearly the exact
+ * moment it happened to be *received*, not when it actually occurred,
+ * which can scramble the keldi/ketdi toggle order.
+ */
+function findEventDateTimeInJson(value) {
+  if (value === null || value === undefined) return null;
+
+  if (typeof value === 'string') {
+    try {
+      return findEventDateTimeInJson(JSON.parse(value));
+    } catch {
+      return null;
+    }
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findEventDateTimeInJson(item);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  if (typeof value === 'object') {
+    if (value.dateTime) return String(value.dateTime);
+
+    for (const nested of Object.values(value)) {
+      const found = findEventDateTimeInJson(nested);
+      if (found) return found;
+    }
+  }
+
+  return null;
+}
+
+// A backlogged event can legitimately be a while old (device was offline);
+// a wildly wrong value (bad device clock — wrong year, etc.) is what these
+// bounds guard against, falling back to server receipt time instead.
+const EVENT_TIME_MAX_PAST_MS = 30 * 24 * 60 * 60 * 1000; // 30 kun orqaga
+const EVENT_TIME_MAX_FUTURE_MS = 60 * 60 * 1000; // 1 soat oldinga
+
+/**
+ * Pulls the camera's own event dateTime and parses it, discarding it (and
+ * falling back to null, i.e. "use server time") if missing, unparseable,
+ * or outside a sane window around now.
+ */
+function extractEventDateTime(candidates) {
+  for (const text of candidates) {
+    const raw = findEventDateTimeInJson(text);
+    if (!raw) continue;
+
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) continue;
+
+    const now = Date.now();
+    if (parsed.getTime() < now - EVENT_TIME_MAX_PAST_MS || parsed.getTime() > now + EVENT_TIME_MAX_FUTURE_MS) continue;
+
+    return parsed;
+  }
+  return null;
+}
+
 /** Gathers every text blob (multipart fields, raw body, text/xml/json file parts) worth scanning. */
 function getCandidateTexts(req) {
   const candidates = [];
@@ -191,21 +260,32 @@ async function logDeviceEvent(deviceToken, eventType, personId, employeeId) {
  * as duplicates — Hikvision terminals fire repeatedly while a face stays
  * in frame.
  */
-async function recordAttendance(employeeId, deviceToken, rawPersonId, explicitType) {
-  // "Today" means the Tashkent calendar day, not the server's own (UTC) —
-  // otherwise a scan between 00:00-05:00 Tashkent time gets bucketed into
-  // the wrong day, breaking the "first scan today = keldi" toggle.
-  const todayStart = businessDayStart(new Date());
+async function recordAttendance(employeeId, deviceToken, rawPersonId, explicitType, eventDateTime) {
+  // Kameraning o'z vaqti bor va oqilona bo'lsa — o'shani ishlatamiz (bu
+  // hodisa haqiqatan qachon sodir bo'lganini bildiradi). Bo'lmasa, serverga
+  // yetib kelgan vaqt — eski xatti-harakat.
+  const recordedAt = eventDateTime || new Date();
 
+  // "Today" means the Tashkent calendar day THIS EVENT'S OWN TIME falls on,
+  // not the server's own (UTC) — otherwise a scan between 00:00-05:00
+  // Tashkent time gets bucketed into the wrong day, breaking the "first
+  // scan today = keldi" toggle.
+  const todayStart = businessDayStart(recordedAt);
+
+  // Eng yaqin OLDINGI yozuv — recorded_at bo'yicha, qachon bazaga
+  // yozilganidan qat'iy nazar. Bu orqada qolgan (backlog) hodisalar
+  // tartibsiz kelib qolsa ham, har bir hodisa o'zidan oldingi haqiqiy
+  // holatga nisbatan to'g'ri baholanishini ta'minlaydi.
   const { rows } = await query(
     `SELECT type, recorded_at FROM attendance_records
-     WHERE employee_id = $1 AND recorded_at >= $2
-     ORDER BY recorded_at DESC`,
-    [employeeId, todayStart]
+     WHERE employee_id = $1 AND recorded_at >= $2 AND recorded_at < $3
+     ORDER BY recorded_at DESC
+     LIMIT 1`,
+    [employeeId, todayStart, recordedAt]
   );
 
   if (rows.length > 0) {
-    const secondsSinceLast = (Date.now() - new Date(rows[0].recorded_at).getTime()) / 1000;
+    const secondsSinceLast = (recordedAt.getTime() - new Date(rows[0].recorded_at).getTime()) / 1000;
     if (secondsSinceLast < DUPLICATE_WINDOW_SECONDS) {
       return { skipped: true, reason: `oxirgi hodisadan ${Math.round(secondsSinceLast)}s o'tgan, takror deb hisoblandi` };
     }
@@ -214,7 +294,6 @@ async function recordAttendance(employeeId, deviceToken, rawPersonId, explicitTy
   const lastType = rows.length > 0 ? rows[0].type : null;
   const type = explicitType || (lastType === 'keldi' ? 'ketdi' : 'keldi');
 
-  const recordedAt = new Date();
   const { isLate, isAfterHours, isEarly, isOverShiftLimit, scheduleId } = type === 'keldi'
     ? { ...(await computeLateness(employeeId, recordedAt)), isEarly: null, isOverShiftLimit: null }
     : {
@@ -303,6 +382,12 @@ export async function receiveDeviceEvent(req, res) {
   const explicitType = extractAttendanceType(candidates);
   console.log('Kameraning o\'z belgisi (attendanceStatus):', explicitType || "(yo'q — standart mantiq ishlatiladi)");
 
+  const eventDateTime = extractEventDateTime(candidates);
+  console.log(
+    'Kameraning o\'z vaqti (dateTime):',
+    eventDateTime ? `${eventDateTime.toISOString()} (shu ishlatiladi)` : "(yo'q yoki ishonchsiz — server vaqti ishlatiladi)"
+  );
+
   try {
     const employee = await findEmployeeByPersonId(personId);
 
@@ -313,7 +398,7 @@ export async function receiveDeviceEvent(req, res) {
       return res.status(200).json({ success: true });
     }
 
-    const result = await recordAttendance(employee.id, deviceToken, personId, explicitType);
+    const result = await recordAttendance(employee.id, deviceToken, personId, explicitType, eventDateTime);
 
     if (result.skipped) {
       console.log(`Xodim: ${employee.first_name} ${employee.last_name} — yozilmadi (${result.reason})`);
