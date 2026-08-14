@@ -2342,14 +2342,25 @@ export function AttendancePage() {
     // Jami: har bir TO'LIQ keldi→ketdi juftligining yig'indisi (tanaffus
     // vaqtlari hisobga olinmaydi) — birinchi keldi bilan oxirgi ketdi
     // orasidagi oddiy farq emas, chunki bu orada bo'lgan tanaffusni ham
-    // "ishlagan vaqt"ga qo'shib yuborardi.
-    const sessionCount = Math.min(keldiRecords.length, ketdiRecords.length);
+    // "ishlagan vaqt"ga qo'shib yuborardi. Yozuvlar navbat bo'yicha (index)
+    // emas, balki xronologik holat mashinasi bilan juftlashtiriladi — kun
+    // kutilmagan "ketdi" bilan boshlansa ham (masalan kamera xato signal
+    // yuborsa), bu orfan yozuv shunchaki e'tiborsiz qoldiriladi va haqiqiy
+    // keldi→ketdi juftlari baribir to'g'ri topiladi.
     let totalMinutes = 0;
-    for (let i = 0; i < sessionCount; i += 1) {
-      totalMinutes += Math.max(0, (new Date(ketdiRecords[i].recorded_at) - new Date(keldiRecords[i].recorded_at)) / 60000);
+    let hasCompleteSession = false;
+    let openKeldi = null;
+    for (const r of records) {
+      if (r.type === 'keldi') {
+        openKeldi = r;
+      } else if (r.type === 'ketdi' && openKeldi) {
+        totalMinutes += Math.max(0, (new Date(r.recorded_at) - new Date(openKeldi.recorded_at)) / 60000);
+        hasCompleteSession = true;
+        openKeldi = null;
+      }
     }
     totalMinutes = Math.round(totalMinutes);
-    const totalLabel = sessionCount > 0 ? `${Math.floor(totalMinutes / 60)}s ${totalMinutes % 60}d` : '-';
+    const totalLabel = hasCompleteSession ? `${Math.floor(totalMinutes / 60)}s ${totalMinutes % 60}d` : '-';
 
     const hasKeldi = Boolean(firstKeldi);
     const hasKetdi = Boolean(lastKetdi);
