@@ -56,7 +56,7 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
   const departments = [
     { value: '', label: 'Tanlang...' },
     { value: 'moliya', label: 'Moliya' },
-    { value: 'hr', label: 'HR' },
+    { value: 'HR', label: 'HR' },
     { value: 'sotuv', label: 'Sotuv' },
     { value: 'kassir', label: 'Kassir' },
     { value: 'oquv', label: 'O\'quv' },
@@ -68,7 +68,7 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
   const positions = [
     { value: '', label: 'Tanlang...' },
     { value: 'moliya', label: 'Moliya' },
-    { value: 'hr', label: 'HR' },
+    { value: 'HR', label: 'HR' },
     { value: 'sotuv', label: 'Sotuv' },
     { value: 'kassir', label: 'Kassir' },
     { value: 'call_operator', label: 'Call-operator' },
