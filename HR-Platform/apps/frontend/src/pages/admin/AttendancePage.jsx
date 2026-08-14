@@ -2029,6 +2029,15 @@ export function AttendancePage() {
     });
   }, [employees, fineForm.employeeIds, fineEmployeeSearch]);
 
+  // "Hammasini tanlash" — joriy qidiruv natijasidagi (yoki filtrsiz bo'lsa
+  // barcha) mavjud xodimlarni bir zumda "Joriy foydalanuvchilar"ga o'tkazadi.
+  const addAllFineEmployees = () => {
+    setFineForm((prev) => ({
+      ...prev,
+      employeeIds: [...new Set([...prev.employeeIds, ...fineAvailableEmployees.map((e) => e.id)])],
+    }));
+  };
+
   const handleDeleteFinePolicy = async (policy) => {
     const ok = await confirm({
       title: 'Jarima siyosatini o\'chirish',
@@ -5135,14 +5144,24 @@ export function AttendancePage() {
                 </div>
               </div>
 
-              <div className="fine-employee-search">
-                <Search size={15} />
-                <input
-                  type="text"
-                  placeholder="Xodimlarni qidirish..."
-                  value={fineEmployeeSearch}
-                  onChange={(e) => setFineEmployeeSearch(e.target.value)}
-                />
+              <div className="fine-employee-search-row">
+                <div className="fine-employee-search">
+                  <Search size={15} />
+                  <input
+                    type="text"
+                    placeholder="Xodimlarni qidirish..."
+                    value={fineEmployeeSearch}
+                    onChange={(e) => setFineEmployeeSearch(e.target.value)}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="fine-employee-select-all-btn"
+                  onClick={addAllFineEmployees}
+                  disabled={fineAvailableEmployees.length === 0}
+                >
+                  Hammasini tanlash
+                </button>
               </div>
 
               <div className="fine-employee-list">

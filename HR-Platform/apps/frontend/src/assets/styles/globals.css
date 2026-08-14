@@ -5823,16 +5823,47 @@ button.attendance-pill {
   line-height: 1.4;
 }
 
+.fine-employee-search-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
 .fine-employee-search {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
   padding: 0.625rem 0.875rem;
-  margin-bottom: 0.75rem;
   border-radius: var(--radius-lg);
   border: 1.5px solid var(--border);
   background: var(--bg-input);
   color: var(--text-muted);
+}
+
+.fine-employee-select-all-btn {
+  flex-shrink: 0;
+  padding: 0.625rem 0.875rem;
+  border-radius: var(--radius-lg);
+  border: 1.5px solid rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.fine-employee-select-all-btn:hover:not(:disabled) {
+  background: rgba(16, 185, 129, 0.18);
+}
+
+.fine-employee-select-all-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .fine-employee-search input {
