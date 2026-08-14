@@ -218,8 +218,22 @@ function mapEmployeeFine(row) {
     source: row.source,
     policyTemplateId: row.policy_template_id,
     violationDate: row.violation_date,
+    punishmentStatus: row.punishment_status,
+    punishmentNote: row.punishment_note,
+    punishmentRecordedAt: row.punishment_recorded_at,
     createdAt: row.created_at,
   };
+}
+
+async function getEmployeeFineById(id) {
+  const [row] = await query(
+    `SELECT ef.*, ft.name AS fine_type_name
+     FROM employee_fines ef
+     LEFT JOIN fine_types ft ON ft.id = ef.fine_type_id
+     WHERE ef.id = $1`,
+    [id]
+  ).then((r) => r.rows);
+  return row;
 }
 
 export async function listEmployeeFines({
@@ -290,14 +304,31 @@ export async function createEmployeeFine({ employeeId, amount, fineTypeId, note,
     [employeeId, amount, fineTypeId || null, note || null, fileUrl || null, fileName || null, createdBy]
   );
 
-  const [row] = await query(
-    `SELECT ef.*, ft.name AS fine_type_name
-     FROM employee_fines ef
-     LEFT JOIN fine_types ft ON ft.id = ef.fine_type_id
-     WHERE ef.id = $1`,
-    [result.rows[0].id]
-  ).then((r) => r.rows);
+  const row = await getEmployeeFineById(result.rows[0].id);
+  return mapEmployeeFine(row);
+}
 
+/**
+ * HR "Bajardi"/"Bajarmadi" belgisini sababi bilan yozadi — jazo turi
+ * (fine_type, masalan "30 daqiqalik qo'shimcha ish") xodim tomonidan
+ * haqiqatan bajarilganmi-yo'qmi shuni kuzatadi.
+ */
+export async function updateFinePunishmentStatus(id, { status, note, recordedBy }) {
+  const existing = await getEmployeeFineById(id);
+  if (!existing) {
+    const error = new Error('Jarima topilmadi');
+    error.statusCode = HTTP_STATUS.NOT_FOUND;
+    throw error;
+  }
+
+  await query(
+    `UPDATE employee_fines
+     SET punishment_status = $1, punishment_note = $2, punishment_recorded_by = $3, punishment_recorded_at = NOW()
+     WHERE id = $4`,
+    [status, note || null, recordedBy, id]
+  );
+
+  const row = await getEmployeeFineById(id);
   return mapEmployeeFine(row);
 }
 

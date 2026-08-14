@@ -43,6 +43,11 @@ const createAssignedFineSchema = Joi.object({
   note: Joi.string().max(500).allow('', null),
 });
 
+const punishmentStatusSchema = Joi.object({
+  status: Joi.string().valid('bajarildi', 'bajarilmadi').required(),
+  note: Joi.string().trim().min(1).max(1000).required(),
+});
+
 const uuidParamSchema = Joi.object({ id: commonSchemas.uuid });
 const canManage = authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.HR);
 
@@ -87,6 +92,14 @@ router.post(
   handleMulterError,
   validate(createAssignedFineSchema),
   finesController.createAssignedFine
+);
+router.patch(
+  '/assigned/:id/punishment',
+  authenticate,
+  canManage,
+  validateParams(uuidParamSchema),
+  validate(punishmentStatusSchema),
+  finesController.updatePunishmentStatus
 );
 router.delete(
   '/assigned/:id',

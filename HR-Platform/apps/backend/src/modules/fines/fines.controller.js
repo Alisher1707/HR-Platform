@@ -128,6 +128,23 @@ export async function createAssignedFine(req, res) {
   }
 }
 
+export async function updatePunishmentStatus(req, res) {
+  try {
+    const { status, note } = req.body;
+
+    const fine = await finesService.updateFinePunishmentStatus(req.params.id, {
+      status,
+      note,
+      recordedBy: req.user.id,
+    });
+
+    return successResponse(res, fine, "Jazo holati saqlandi");
+  } catch (error) {
+    console.error('Update punishment status error:', error);
+    return errorResponse(res, error.message || "Jazo holatini saqlashda xatolik", error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+  }
+}
+
 export async function deleteAssignedFine(req, res) {
   try {
     const result = await finesService.deleteEmployeeFine(req.params.id);

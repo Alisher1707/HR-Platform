@@ -7452,6 +7452,86 @@ tr.finance-debt-row td {
   color: var(--text-muted);
 }
 
+.fine-punishment-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.fine-punishment-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.fine-punishment-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.fine-punishment-btn.done {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--success);
+}
+
+.fine-punishment-btn.done:hover {
+  background: rgba(16, 185, 129, 0.22);
+}
+
+.fine-punishment-btn.not-done {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--error);
+}
+
+.fine-punishment-btn.not-done:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.fine-punishment-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 999px;
+  border: none;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.fine-punishment-status-badge.bajarildi {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--success);
+}
+
+.fine-punishment-status-badge.bajarildi:hover {
+  background: rgba(16, 185, 129, 0.22);
+}
+
+.fine-punishment-status-badge.bajarilmadi {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--error);
+}
+
+.fine-punishment-status-badge.bajarilmadi:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.fine-punishment-modal-subject {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+}
+
 .finance-fine-file-input {
   width: 100%;
   padding: 0.625rem 0.875rem;

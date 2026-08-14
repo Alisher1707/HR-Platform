@@ -87,6 +87,11 @@ export const fineService = {
     return response.data;
   },
 
+  async updatePunishmentStatus(id, { status, note }) {
+    const response = await api.patch(`/fines/assigned/${id}/punishment`, { status, note });
+    return response.data.data;
+  },
+
   /**
    * Build absolute URL for an assigned fine's evidence file
    */

@@ -66,6 +66,8 @@ import {
   KeyRound,
   LogIn,
   Pencil,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import employeeService from '../../services/employeeService';
 import attendanceService from '../../services/attendanceService';
@@ -1883,6 +1885,35 @@ export function AttendancePage() {
   const [fineWizardStep, setFineWizardStep] = useState(1);
   const [fineEmployeeSearch, setFineEmployeeSearch] = useState('');
   const [assignedFinesEmployeeFilter, setAssignedFinesEmployeeFilter] = useState('');
+
+  // "Jarima turi" (jazo) xodim tomonidan bajarilganmi-yo'qmi belgilash —
+  // "Bajardi"/"Bajarmadi" ikonkasi bosilganda ochiladigan modal.
+  const [punishmentModal, setPunishmentModal] = useState(null); // { fine, status } | null
+  const [punishmentNoteInput, setPunishmentNoteInput] = useState('');
+  const [isSavingPunishment, setIsSavingPunishment] = useState(false);
+
+  const openPunishmentModal = (fine, status) => {
+    setPunishmentModal({ fine, status });
+    setPunishmentNoteInput(fine.punishmentStatus === status ? (fine.punishmentNote || '') : '');
+  };
+
+  const handleSubmitPunishmentStatus = async () => {
+    if (!punishmentModal || !punishmentNoteInput.trim()) return;
+    setIsSavingPunishment(true);
+    try {
+      await fineService.updatePunishmentStatus(punishmentModal.fine.id, {
+        status: punishmentModal.status,
+        note: punishmentNoteInput.trim(),
+      });
+      toast.success('Jazo holati saqlandi');
+      setPunishmentModal(null);
+      await fetchAssignedFines();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Jazo holatini saqlashda xatolik");
+    } finally {
+      setIsSavingPunishment(false);
+    }
+  };
 
   // "Turi" — jarima sababi (Kech kelish/Erta ketish/Chiqish yo'q/Kelmagan kun).
   // Doim FINE_TEMPLATE_TYPES'dagi 4 ta belgilangan tur — foydalanuvchi
@@ -4181,7 +4212,41 @@ export function AttendancePage() {
                           </td>
                           <td>
                             {f.fineTypeName ? (
-                              <Badge variant="warning">{f.fineTypeName}</Badge>
+                              <div className="fine-punishment-cell">
+                                <Badge variant="warning">{f.fineTypeName}</Badge>
+                                {f.punishmentStatus ? (
+                                  <button
+                                    type="button"
+                                    className={`fine-punishment-status-badge ${f.punishmentStatus}`}
+                                    title={f.punishmentNote || ''}
+                                    onClick={() => openPunishmentModal(f, f.punishmentStatus)}
+                                  >
+                                    {f.punishmentStatus === 'bajarildi'
+                                      ? <CheckCircle2 size={13} strokeWidth={2.25} />
+                                      : <XCircle size={13} strokeWidth={2.25} />}
+                                    {f.punishmentStatus === 'bajarildi' ? 'Bajardi' : 'Bajarmadi'}
+                                  </button>
+                                ) : (
+                                  <div className="fine-punishment-actions">
+                                    <button
+                                      type="button"
+                                      className="fine-punishment-btn done"
+                                      title="Bajardi"
+                                      onClick={() => openPunishmentModal(f, 'bajarildi')}
+                                    >
+                                      <CheckCircle2 size={15} strokeWidth={2.25} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="fine-punishment-btn not-done"
+                                      title="Bajarmadi"
+                                      onClick={() => openPunishmentModal(f, 'bajarilmadi')}
+                                    >
+                                      <XCircle size={15} strokeWidth={2.25} />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
                             ) : (
                               <span style={{ color: 'var(--text-muted)' }}>—</span>
                             )}
@@ -5211,6 +5276,45 @@ export function AttendancePage() {
               </div>
             </div>
           </div>
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={!!punishmentModal}
+        onClose={() => setPunishmentModal(null)}
+        title={punishmentModal?.status === 'bajarildi' ? 'Jazo bajarildi' : 'Jazo bajarilmadi'}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setPunishmentModal(null)} disabled={isSavingPunishment}>
+              Bekor qilish
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleSubmitPunishmentStatus}
+              disabled={!punishmentNoteInput.trim() || isSavingPunishment}
+              loading={isSavingPunishment}
+            >
+              Saqlash
+            </Button>
+          </>
+        }
+      >
+        {punishmentModal && (
+          <>
+            <p className="fine-punishment-modal-subject">
+              <strong>{punishmentModal.fine.empName}</strong> — {punishmentModal.fine.fineTypeName}
+            </p>
+            <div className="form-group">
+              <label className="form-label">Sababi <span className="required">*</span></label>
+              <Textarea
+                name="punishmentNote"
+                value={punishmentNoteInput}
+                onChange={(e) => setPunishmentNoteInput(e.target.value)}
+                placeholder={punishmentModal.status === 'bajarildi' ? "Qanday bajarganini yozing..." : "Nega bajarmaganini yozing..."}
+                rows={4}
+              />
+            </div>
+          </>
         )}
       </Modal>
 
