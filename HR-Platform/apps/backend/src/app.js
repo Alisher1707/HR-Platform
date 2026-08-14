@@ -9,6 +9,7 @@ import { testConnection } from './config/database.js';
 import { generalLimiter } from './shared/middleware/rateLimiter.js';
 import { errorHandler, notFoundHandler } from './shared/middleware/errorHandler.js';
 import { startAutoPromotionCron } from './services/autoPromotionService.js';
+import { startAutoFineCron } from './services/autoFineService.js';
 
 // Import routes
 import authRoutes from './modules/auth/auth.routes.js';
@@ -208,6 +209,9 @@ async function startServer() {
     // Start auto-promotion cron job
     startAutoPromotionCron();
 
+    // Start auto-fine cron job (kelmagan_kun / chiqish_yoq daily sweep)
+    startAutoFineCron();
+
     // Start listening
     app.listen(config.port, () => {
       console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -219,6 +223,7 @@ async function startServer() {
       console.log(`💚 Health Check: http://localhost:${config.port}/health`);
       console.log(`🎨 Frontend URL: ${config.frontendUrl}`);
       console.log(`⏰ Auto-Promotion: Active (every 5 minutes)`);
+      console.log(`⚖️  Auto-Fine: Active (every 30 minutes)`);
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
     });
   } catch (error) {

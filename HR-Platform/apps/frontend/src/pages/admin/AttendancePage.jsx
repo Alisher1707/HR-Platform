@@ -4127,6 +4127,7 @@ export function AttendancePage() {
                         <th>Miqdor</th>
                         <th>Jarima turi</th>
                         <th>Tafsilotlar</th>
+                        <th>Manba</th>
                         <th>Fayl</th>
                         <th />
                       </tr>
@@ -4170,6 +4171,15 @@ export function AttendancePage() {
                               <span>{f.note}</span>
                             ) : (
                               <span style={{ color: 'var(--text-muted)' }}>—</span>
+                            )}
+                          </td>
+                          <td>
+                            {f.source === 'auto' ? (
+                              <span className="fine-source-badge auto" title="Davomat asosida tizim tomonidan avtomatik yozilgan">
+                                <Zap size={12} strokeWidth={2.5} /> Avtomatik
+                              </span>
+                            ) : (
+                              <span className="fine-source-badge manual">Qo'lda</span>
                             )}
                           </td>
                           <td>

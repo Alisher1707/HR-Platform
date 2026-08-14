@@ -311,7 +311,7 @@ export async function getActiveScheduleForEmployee(employeeId) {
  * every cycle_days. Dates before start_date wrap "backwards" (still a
  * well-defined day-in-cycle) rather than going negative.
  */
-function getDayNumberForDate(schedule, date) {
+export function getDayNumberForDate(schedule, date) {
   // start_date is a plain DATE column — node-postgres already hands it back
   // as a UTC-midnight Date, so it needs no further conversion. `date` (a
   // scan's recorded_at) is a real timestamp though, and must be reduced to
@@ -325,7 +325,7 @@ function getDayNumberForDate(schedule, date) {
   return offset + 1;
 }
 
-async function getScheduleDay(scheduleId, dayNumber) {
+export async function getScheduleDay(scheduleId, dayNumber) {
   const result = await query(
     `SELECT is_work_day, start_time, end_time
      FROM work_schedule_days
@@ -339,10 +339,10 @@ async function getScheduleDay(scheduleId, dayNumber) {
 // cycle day has no config, so Davomat/Analitika stay meaningful before HR
 // gets around to setting up "Ish jadvallari" for everyone. A real assigned
 // day's own time always wins over this once one exists.
-const DEFAULT_START_TIME = '09:00';
-const DEFAULT_END_TIME = '18:00';
+export const DEFAULT_START_TIME = '09:00';
+export const DEFAULT_END_TIME = '18:00';
 
-function timeStringToMinutes(timeStr) {
+export function timeStringToMinutes(timeStr) {
   const [hour, minute] = timeStr.split(':').map(Number);
   return hour * 60 + minute;
 }

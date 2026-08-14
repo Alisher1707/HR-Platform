@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { query } from '../../config/database.js';
 import { computeLateness, computeEarlyLeave, computeShiftLimit } from '../schedules/schedules.service.js';
 import { recomputeEmployeePresence } from '../attendance/attendance.service.js';
+import { checkLateArrivalFine, checkEarlyLeaveFine } from '../../services/autoFineService.js';
 import { generateRandomString } from '../../shared/utils/crypto.js';
 import { businessDayStart } from '../../shared/utils/timezone.js';
 
@@ -231,6 +232,12 @@ async function recordAttendance(employeeId, deviceToken, rawPersonId, explicitTy
   );
 
   await recomputeEmployeePresence(employeeId);
+
+  if (type === 'keldi') {
+    await checkLateArrivalFine(employeeId, recordedAt, isLate);
+  } else {
+    await checkEarlyLeaveFine(employeeId, recordedAt, isEarly);
+  }
 
   return { skipped: false, type, isLate, isEarly };
 }

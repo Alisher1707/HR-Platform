@@ -215,6 +215,9 @@ function mapEmployeeFine(row) {
     note: row.note,
     fileUrl: row.file_url,
     fileName: row.file_name,
+    source: row.source,
+    policyTemplateId: row.policy_template_id,
+    violationDate: row.violation_date,
     createdAt: row.created_at,
   };
 }

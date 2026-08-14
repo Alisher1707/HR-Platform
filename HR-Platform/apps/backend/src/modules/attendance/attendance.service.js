@@ -1,6 +1,7 @@
 import { query } from '../../config/database.js';
 import { HTTP_STATUS } from '../../config/constants.js';
 import { computeLateness, computeEarlyLeave, computeShiftLimit } from '../schedules/schedules.service.js';
+import { checkLateArrivalFine, checkEarlyLeaveFine } from '../../services/autoFineService.js';
 
 /**
  * Attendance Service
@@ -224,6 +225,12 @@ export async function createManualAttendance({ employeeId, type, recordedAt, not
   );
 
   await recomputeEmployeePresence(employeeId);
+
+  if (type === 'keldi') {
+    await checkLateArrivalFine(employeeId, recordedAt, isLate);
+  } else {
+    await checkEarlyLeaveFine(employeeId, recordedAt, isEarly);
+  }
 
   return result.rows[0];
 }
