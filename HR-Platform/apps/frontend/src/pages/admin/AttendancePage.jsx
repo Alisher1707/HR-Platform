@@ -742,6 +742,47 @@ function SearchableSelect({
 }
 
 /**
+ * FinePunishmentCell
+ * "Jarima turi" (jazo) ustunidagi hujayra — hali belgilanmagan bo'lsa
+ * Bajardi/Bajarmadi ikonkalari, belgilangan bo'lsa rangli holat belgisini
+ * ko'rsatadi. `onAction(fine, status)` bosilganda chaqiriladi — asosiy
+ * jadvalda xodimning to'liq jarima paneli, panel ichida esa sababi so'rovchi
+ * modal ochish uchun ishlatiladi (chaqiruvchi tomonidan belgilanadi).
+ */
+function FinePunishmentCell({ fine, onAction }) {
+  if (!fine.fineTypeName) {
+    return <span style={{ color: 'var(--text-muted)' }}>—</span>;
+  }
+  return (
+    <div className="fine-punishment-cell">
+      <Badge variant="warning">{fine.fineTypeName}</Badge>
+      {fine.punishmentStatus ? (
+        <button
+          type="button"
+          className={`fine-punishment-status-badge ${fine.punishmentStatus}`}
+          title={fine.punishmentNote || ''}
+          onClick={() => onAction(fine, fine.punishmentStatus)}
+        >
+          {fine.punishmentStatus === 'bajarildi'
+            ? <CheckCircle2 size={13} strokeWidth={2.25} />
+            : <XCircle size={13} strokeWidth={2.25} />}
+          {fine.punishmentStatus === 'bajarildi' ? 'Bajardi' : 'Bajarmadi'}
+        </button>
+      ) : (
+        <div className="fine-punishment-actions">
+          <button type="button" className="fine-punishment-btn done" title="Bajardi" onClick={() => onAction(fine, 'bajarildi')}>
+            <CheckCircle2 size={15} strokeWidth={2.25} />
+          </button>
+          <button type="button" className="fine-punishment-btn not-done" title="Bajarmadi" onClick={() => onAction(fine, 'bajarilmadi')}>
+            <XCircle size={15} strokeWidth={2.25} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * FineTypeCreateButton
  * Toolbar'dagi ixcham "Jazo yaratish" tugmasi — bosilganda nomini so'raydigan
  * professional popover-card ochadi (jazo turlari katalogini kengaytirish uchun).
@@ -1892,6 +1933,36 @@ export function AttendancePage() {
   const [punishmentNoteInput, setPunishmentNoteInput] = useState('');
   const [isSavingPunishment, setIsSavingPunishment] = useState(false);
 
+  // Asosiy jadvaldagi Bajardi/Bajarmadi bosilganda — bitta jarimaga emas,
+  // shu xodimning BARCHA jarimalarini ko'rsatuvchi panelga o'tadi (filtrdan
+  // qat'iy nazar, chunki bu "xodim bo'yicha to'liq tarix" ko'rinishi).
+  const [employeePunishmentPanel, setEmployeePunishmentPanel] = useState(null); // { employeeId, empName } | null
+  const [employeePunishmentFines, setEmployeePunishmentFines] = useState([]);
+  const [isLoadingEmployeePunishmentFines, setIsLoadingEmployeePunishmentFines] = useState(false);
+
+  const fetchEmployeePunishmentFines = async (employeeId) => {
+    setIsLoadingEmployeePunishmentFines(true);
+    try {
+      const rows = await fineService.getAssignedFines({ employeeId });
+      const emp = employees.find((e) => e.id === employeeId);
+      setEmployeePunishmentFines(rows.map((f) => ({
+        ...f,
+        emp,
+        empName: emp ? `${emp.first_name} ${emp.last_name}` : '',
+        date: new Date(f.createdAt),
+      })));
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Xodim jarimalarini yuklashda xatolik");
+    } finally {
+      setIsLoadingEmployeePunishmentFines(false);
+    }
+  };
+
+  const openEmployeePunishmentPanel = (fine) => {
+    setEmployeePunishmentPanel({ employeeId: fine.employeeId, empName: fine.empName });
+    fetchEmployeePunishmentFines(fine.employeeId);
+  };
+
   const openPunishmentModal = (fine, status) => {
     setPunishmentModal({ fine, status });
     setPunishmentNoteInput(fine.punishmentStatus === status ? (fine.punishmentNote || '') : '');
@@ -1908,6 +1979,7 @@ export function AttendancePage() {
       toast.success('Jazo holati saqlandi');
       setPunishmentModal(null);
       await fetchAssignedFines();
+      if (employeePunishmentPanel) await fetchEmployeePunishmentFines(employeePunishmentPanel.employeeId);
     } catch (err) {
       toast.error(err.response?.data?.message || "Jazo holatini saqlashda xatolik");
     } finally {
@@ -4211,45 +4283,7 @@ export function AttendancePage() {
                             <Badge variant="error">{formatUZS(f.amount)}</Badge>
                           </td>
                           <td>
-                            {f.fineTypeName ? (
-                              <div className="fine-punishment-cell">
-                                <Badge variant="warning">{f.fineTypeName}</Badge>
-                                {f.punishmentStatus ? (
-                                  <button
-                                    type="button"
-                                    className={`fine-punishment-status-badge ${f.punishmentStatus}`}
-                                    title={f.punishmentNote || ''}
-                                    onClick={() => openPunishmentModal(f, f.punishmentStatus)}
-                                  >
-                                    {f.punishmentStatus === 'bajarildi'
-                                      ? <CheckCircle2 size={13} strokeWidth={2.25} />
-                                      : <XCircle size={13} strokeWidth={2.25} />}
-                                    {f.punishmentStatus === 'bajarildi' ? 'Bajardi' : 'Bajarmadi'}
-                                  </button>
-                                ) : (
-                                  <div className="fine-punishment-actions">
-                                    <button
-                                      type="button"
-                                      className="fine-punishment-btn done"
-                                      title="Bajardi"
-                                      onClick={() => openPunishmentModal(f, 'bajarildi')}
-                                    >
-                                      <CheckCircle2 size={15} strokeWidth={2.25} />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="fine-punishment-btn not-done"
-                                      title="Bajarmadi"
-                                      onClick={() => openPunishmentModal(f, 'bajarilmadi')}
-                                    >
-                                      <XCircle size={15} strokeWidth={2.25} />
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <span style={{ color: 'var(--text-muted)' }}>—</span>
-                            )}
+                            <FinePunishmentCell fine={f} onAction={openEmployeePunishmentPanel} />
                           </td>
                           <td>
                             {f.note ? (
@@ -5317,6 +5351,33 @@ export function AttendancePage() {
           </>
         )}
       </Modal>
+
+      <SidePanel
+        isOpen={!!employeePunishmentPanel}
+        onClose={() => setEmployeePunishmentPanel(null)}
+        title={employeePunishmentPanel ? `${employeePunishmentPanel.empName} — jarimalari` : 'Jarimalari'}
+      >
+        {isLoadingEmployeePunishmentFines ? (
+          <LoadingSpinner text="Yuklanmoqda..." />
+        ) : employeePunishmentFines.length === 0 ? (
+          <EmptyState icon={<PackageX size={48} strokeWidth={1.25} />} title="Jarimalar topilmadi" text="" />
+        ) : (
+          <div className="fine-employee-history-list">
+            {employeePunishmentFines.map((f) => (
+              <div key={f.id} className="fine-employee-history-item">
+                <div className="fine-employee-history-item-top">
+                  <span className="finance-payment-time">
+                    <CalendarDays size={13} strokeWidth={2.25} /> {format(f.date, 'dd.MM.yyyy HH:mm')}
+                  </span>
+                  <Badge variant="error">{formatUZS(f.amount)}</Badge>
+                </div>
+                <FinePunishmentCell fine={f} onAction={openPunishmentModal} />
+                {f.note && <p className="fine-employee-history-note">{f.note}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+      </SidePanel>
 
       <SidePanel
         isOpen={isCreateDeviceOpen}
