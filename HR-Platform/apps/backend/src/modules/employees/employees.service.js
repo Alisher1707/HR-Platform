@@ -84,14 +84,15 @@ export async function createEmployee(employeeData, createdBy) {
 
     // Xodimlar bo'limidan qo'lda qo'shilgan xodim allaqachon ishga qabul
     // qilingan hisoblanadi — Lead kanbanida yangi ariza ("KELDI") emas,
-    // to'g'ridan-to'g'ri "Shartnoma imzolandi" ustunida ko'rinishi kerak.
-    // shartnoma_start_date qasddan bo'sh qoldiriladi — bu qator hech qachon
-    // avtomatik promotsiya jobi (1 soatlik taymer) tomonidan qayta ishlanmasin,
-    // chunki bu xodim allaqachon to'liq ro'yxatga olingan (o'sha job faqat
-    // haqiqiy nomzod-> xodim o'tishini yakunlash uchun mo'ljallangan).
+    // to'g'ridan-to'g'ri "Shartnoma imzolandi" ustunida qisqa muddat
+    // ko'rinadi. shartnoma_start_date shu yerda ham (organik nomzodlar
+    // kabi) belgilanadi, shunda avtomatik promotsiya jobi bir soatdan so'ng
+    // bu yozuvni ham tozalaydi — aks holda (avvalgi xatti-harakat) bu qator
+    // Lead doskasida abadiy osilib qolardi, chunki hech narsa uni olib
+    // tashlamasdi.
     const applicationResult = await client.query(
-      `INSERT INTO applications (employee_id, status, position, notes, order_index)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO applications (employee_id, status, position, notes, order_index, shartnoma_start_date)
+       VALUES ($1, $2, $3, $4, $5, NOW())
        RETURNING *`,
       [
         employee.id,

@@ -934,7 +934,6 @@ export function OrganizationPage() {
                               </div>
                               <div className="attendance-employee-name">
                                 <span className="org-pos-name-main">{p.name}</span>
-                                <span className="org-pos-name-suffix"> bo'limi</span>
                               </div>
                             </div>
                           </td>

@@ -43,24 +43,16 @@ export async function processAutoPromotions() {
 
     for (const candidate of candidates) {
       try {
-        // Step 1: Delete application from kanban (candidate is now employee)
-        await client.query(
-          `DELETE FROM applications WHERE id = $1`,
-          [candidate.id]
-        );
-
-        // Step 2: Update employee record to mark as hired
-        await client.query(
-          `UPDATE employees
-           SET status = 'Faol',
-               join_date = COALESCE(join_date, CURRENT_DATE),
-               position = COALESCE(position, $1),
-               updated_at = NOW()
-           WHERE id = $2`,
-          [candidate.position, candidate.employee_id]
-        );
-
-        // Step 3: Log history before deletion
+        // Step 1: Log history — MUST happen before the delete below, since
+        // application_history.application_id is a foreign key into
+        // applications(id). Doing this after the delete (as the code used
+        // to) meant every single auto-promotion failed with a foreign-key
+        // violation, silently leaving candidates stuck in SHARTNOMA
+        // forever — this insert has to fire while the row it references
+        // still exists. Note application_history has ON DELETE CASCADE, so
+        // this row is itself removed the instant Step 2 deletes the
+        // application — this insert's only real purpose is making Step 2
+        // succeed without an FK error, not leaving a lasting audit trail.
         await client.query(
           `INSERT INTO application_history (application_id, changed_by, old_status, new_status, comment)
            VALUES ($1, NULL, $2, NULL, $3)`,
@@ -69,6 +61,23 @@ export async function processAutoPromotions() {
             APPLICATION_STATUS.SHARTNOMA,
             '🤖 Avtomatik: 1 soat shartnoma muddati tugadi, xodimga aylantirildi va doskadan olib tashlandi'
           ]
+        );
+
+        // Step 2: Delete application from kanban (candidate is now employee)
+        await client.query(
+          `DELETE FROM applications WHERE id = $1`,
+          [candidate.id]
+        );
+
+        // Step 3: Update employee record to mark as hired
+        await client.query(
+          `UPDATE employees
+           SET status = 'Faol',
+               join_date = COALESCE(join_date, CURRENT_DATE),
+               position = COALESCE(position, $1),
+               updated_at = NOW()
+           WHERE id = $2`,
+          [candidate.position, candidate.employee_id]
         );
 
         processed.push({
