@@ -237,10 +237,12 @@ async function submitAriza(chatId, employee, draft, { fileUrl, fileName } = {}) 
   }
 }
 
-// "Ishga kelmagan kun" va "Ishdan ertaroq ketish" — bularda kimdir ishni
-// bajarishi va xodim qachon qaytishi HR uchun muhim, boshqa turlarda
-// (Kechikib qolish, Javob so'rash...) bu savollar ortiqcha bo'lardi.
-const HANDOVER_REQUIRED_CATEGORIES = ['kelmagan_kun', 'erta_ketish'];
+// "Ishga kelmagan kun", "Ishdan ertaroq ketish" va "Javob so'rash/Boshqa" —
+// bularning barchasida xodim shu kun (yoki bir qismida) ishda bo'lmasligi
+// mumkin, shuning uchun kimdir uning ishini bajarishi va u qachon
+// qaytishi HR uchun muhim. "Kechikib qolish"/"Chiqishni belgilamagan"da
+// xodim baribir ish kunida bo'lgani uchun bu savollar ortiqcha bo'lardi.
+const HANDOVER_REQUIRED_CATEGORIES = ['kelmagan_kun', 'erta_ketish', 'umumiy'];
 
 async function askDocumentQuestion(chatId, employee, draft) {
   await saveSession(chatId, employee.id, 'awaiting_file', draft);
