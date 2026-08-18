@@ -336,7 +336,22 @@ async function handleAwaitingFile(chatId, employee, session, message) {
 
 async function handleMessage(message) {
   const chatId = message.chat.id;
+  const text = (message.text || '').trim();
   const employee = await findEmployeeByChatId(chatId);
+
+  // "/start" is the universal reset — it must ALWAYS return to a known,
+  // top-level state, even mid-flow (e.g. someone stuck at "awaiting_date"
+  // from an abandoned earlier ariza). Checked before any session-state
+  // dispatch below, so a leftover session can never swallow it.
+  if (text.startsWith('/start')) {
+    await clearSession(chatId);
+    if (!employee) {
+      await handleUnlinkedChat(chatId, text);
+    } else {
+      await sendMainMenu(chatId, employee, `Xush kelibsiz, ${employee.first_name} ${employee.last_name}!`);
+    }
+    return;
+  }
 
   if (!employee) {
     await handleUnlinkedChat(chatId, message.text || '');
@@ -366,7 +381,6 @@ async function handleMessage(message) {
     return;
   }
 
-  const text = (message.text || '').trim();
   if (text === '🧾 Jarimalar') {
     await handleFinesListRequest(chatId, employee);
     return;
