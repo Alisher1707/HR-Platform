@@ -9,8 +9,11 @@ import * as finesService from '../fines/fines.service.js';
  * project does often.
  */
 
+// Reply-klaviatura tugmalarining "dizayni" — Telegram bot tugmalarida rang
+// yoki grafik icon bo'lmaydi (klientning o'zi chizadi), shuning uchun
+// yagona vosita — mos emoji + tugmalarni mantiqiy qatorlarga guruhlash.
 const MAIN_MENU_KEYBOARD = {
-  keyboard: [['📋 Jarimalar'], ['📝 Ariza yuborish']],
+  keyboard: [['🧾 Jarimalar', '✍️ Ariza yuborish']],
   resize_keyboard: true,
 };
 
@@ -20,9 +23,9 @@ const TODAY_ANSWERS = ['bugun', 'bugun.'];
 const ARIZA_CATEGORIES = [
   { value: 'kech_kelish', label: 'Kechikib qolish', emoji: '⏰' },
   { value: 'erta_ketish', label: 'Ishdan ertaroq ketish', emoji: '🚪' },
-  { value: 'chiqish_yoq', label: "Chiqishni belgilamagan", emoji: '🚫' },
-  { value: 'kelmagan_kun', label: 'Ishga kelmagan kun', emoji: '📅' },
-  { value: 'umumiy', label: "Javob so'rash / Boshqa", emoji: '❓' },
+  { value: 'chiqish_yoq', label: 'Chiqishni belgilamagan', emoji: '🔕' },
+  { value: 'kelmagan_kun', label: 'Ishga kelmagan kun', emoji: '🏠' },
+  { value: 'umumiy', label: "Javob so'rash / Boshqa", emoji: '💬' },
 ];
 
 async function findEmployeeByChatId(chatId) {
@@ -71,7 +74,7 @@ async function clearSession(chatId) {
 function formatFineLine(fine) {
   const date = fine.violationDate || (fine.createdAt ? String(fine.createdAt).slice(0, 10) : '');
   const type = fine.fineTypeName || 'Jarima';
-  return `⚠️ ${Number(fine.amount).toLocaleString('ru-RU')} so'm — ${type} — ${date}`;
+  return `🧾 ${Number(fine.amount).toLocaleString('ru-RU')} so'm — ${type} — ${date}`;
 }
 
 async function sendMainMenu(chatId, employee, greeting) {
@@ -119,15 +122,27 @@ async function handleFinesListRequest(chatId, employee) {
     return;
   }
 
-  const text = ['📋 Faol jarimalaringiz:', ...active.slice(0, 20).map(formatFineLine)].join('\n');
+  const text = ['🧾 Faol jarimalaringiz:', ...active.slice(0, 20).map(formatFineLine)].join('\n');
   await telegramApi.sendMessage(chatId, text);
 }
 
+function arizaCategoryButton(category) {
+  return { text: `${category.emoji} ${category.label}`, callback_data: `ariza_cat:${category.value}` };
+}
+
 async function handleArizaStartRequest(chatId, employee) {
+  // Birinchi 4 tur — 2x2 to'r ko'rinishida (ilova-menyuga o'xshab), oxirgi
+  // "umumiy" tur esa alohida, to'liq kenglikdagi qatorda — u boshqalardan
+  // tabiati bilan farq qiladi (aniq voqea emas, erkin savol).
+  const [kechKelish, ertaKetish, chiqishYoq, kelmaganKun, umumiy] = ARIZA_CATEGORIES;
   const keyboard = {
-    inline_keyboard: ARIZA_CATEGORIES.map((c) => [{ text: `${c.emoji} ${c.label}`, callback_data: `ariza_cat:${c.value}` }]),
+    inline_keyboard: [
+      [arizaCategoryButton(kechKelish), arizaCategoryButton(ertaKetish)],
+      [arizaCategoryButton(chiqishYoq), arizaCategoryButton(kelmaganKun)],
+      [arizaCategoryButton(umumiy)],
+    ],
   };
-  await telegramApi.sendMessage(chatId, "Ariza turini tanlang:", { replyMarkup: keyboard });
+  await telegramApi.sendMessage(chatId, '📮 Ariza turini tanlang:', { replyMarkup: keyboard });
 }
 
 async function handleCallbackQuery(callbackQuery) {
@@ -266,11 +281,11 @@ async function handleMessage(message) {
   }
 
   const text = (message.text || '').trim();
-  if (text === '📋 Jarimalar') {
+  if (text === '🧾 Jarimalar') {
     await handleFinesListRequest(chatId, employee);
     return;
   }
-  if (text === '📝 Ariza yuborish') {
+  if (text === '✍️ Ariza yuborish') {
     await handleArizaStartRequest(chatId, employee);
     return;
   }
