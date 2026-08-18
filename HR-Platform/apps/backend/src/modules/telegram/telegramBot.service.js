@@ -73,13 +73,22 @@ async function sendMainMenu(chatId, employee, greeting) {
 }
 
 async function handleLinkAttempt(chatId, rawText) {
-  const code = (rawText || '').replace('/start', '').trim().toUpperCase();
+  const trimmed = (rawText || '').trim();
 
+  // "/start" har doim (deep-link payload bilan yoki bo'lmasin) shu bir xil
+  // xabarni ko'rsatadi — Telegram mijozi ba'zan chuqur havoladagi (?start=)
+  // kodni serverga yubormay qoladi (bizning nazoratimizdan tashqari, mijoz
+  // tarafidagi cheklov), shuning uchun payload hech qachon avtomatik
+  // ishlatilmaydi. Har doim bitta ishonchli yo'l: xodim kodni HR'dan olib,
+  // qo'lda yuboradi.
+  if (trimmed.startsWith('/start')) {
+    await telegramApi.sendMessage(chatId, "Botdan foydalanish uchun HR tomonidan berilgan kodni yuboring.");
+    return;
+  }
+
+  const code = trimmed.toUpperCase();
   if (!code) {
-    await telegramApi.sendMessage(
-      chatId,
-      "Botdan foydalanish uchun HR sizga bergan bog'lash kodini yuboring."
-    );
+    await telegramApi.sendMessage(chatId, "Botdan foydalanish uchun HR tomonidan berilgan kodni yuboring.");
     return;
   }
 
