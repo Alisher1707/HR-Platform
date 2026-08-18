@@ -56,11 +56,11 @@ export const employeeService = {
   },
 
   /**
-   * Generate a one-time Telegram-bot link code for this employee (fine
-   * appeal bot) — HR shares the resulting deep link/code with them.
+   * Claims the code an employee got automatically from the Telegram bot
+   * (fine appeal bot) and relayed to HR — links their chat to this employee.
    */
-  async generateTelegramLinkCode(id) {
-    const response = await api.post(`/employees/${id}/telegram-link-code`);
+  async claimTelegramCode(id, code) {
+    const response = await api.post(`/employees/${id}/telegram-claim-code`, { code });
     return response.data.data;
   },
 

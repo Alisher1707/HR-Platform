@@ -66,6 +66,10 @@ const uuidParamSchema = Joi.object({
   id: commonSchemas.uuid,
 });
 
+const telegramClaimCodeSchema = Joi.object({
+  code: Joi.string().trim().min(4).max(8).required(),
+});
+
 const employeeQuerySchema = Joi.object({
   search: Joi.string().max(100).optional(),
   createdBy: commonSchemas.uuid.optional(),
@@ -136,13 +140,14 @@ router.post(
   employeesController.uploadResume
 );
 
-// POST /api/v1/employees/:id/telegram-link-code - Generate a Telegram-bot link code (ADMIN, HR)
+// POST /api/v1/employees/:id/telegram-claim-code - Claim the code an employee got from the bot (ADMIN, HR)
 router.post(
-  '/:id/telegram-link-code',
+  '/:id/telegram-claim-code',
   authenticate,
   authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.HR),
   validateParams(uuidParamSchema),
-  employeesController.generateTelegramLinkCode
+  validate(telegramClaimCodeSchema),
+  employeesController.claimTelegramCode
 );
 
 // DELETE /api/v1/employees/:id - Delete employee (ADMIN only)

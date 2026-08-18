@@ -1,6 +1,5 @@
 import { query, getClient } from '../../config/database.js';
 import { HTTP_STATUS, MESSAGES } from '../../config/constants.js';
-import { generateLinkCode } from '../../shared/utils/crypto.js';
 
 /**
  * Employees Service
@@ -443,33 +442,3 @@ export async function deleteEmployee(id) {
   return { id: result.rows[0].id };
 }
 
-/**
- * Generates a fresh one-time code HR gives the employee to link their
- * Telegram account (deep link `t.me/<bot>?start=<code>`) — the bot swaps it
- * for a permanent telegram_chat_id on first contact. Regenerating overwrites
- * any previous unused code for this employee.
- */
-export async function generateTelegramLinkCode(id) {
-  const employeeCheck = await query('SELECT id FROM employees WHERE id = $1', [id]);
-  if (employeeCheck.rows.length === 0) {
-    const error = new Error(MESSAGES.EMPLOYEE_NOT_FOUND);
-    error.statusCode = HTTP_STATUS.NOT_FOUND;
-    throw error;
-  }
-
-  // Collisions are extremely unlikely (32^6 possibilities) but trivial to
-  // guard against — just retry with a fresh code on the rare unique clash.
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const code = generateLinkCode();
-    try {
-      await query('UPDATE employees SET telegram_link_code = $1 WHERE id = $2', [code, id]);
-      return { code };
-    } catch (err) {
-      if (err.code !== '23505') throw err; // not a unique-violation — rethrow
-    }
-  }
-
-  const error = new Error("Bog'lash kodini yaratib bo'lmadi, qayta urinib ko'ring");
-  error.statusCode = HTTP_STATUS.INTERNAL_SERVER_ERROR;
-  throw error;
-}

@@ -1,6 +1,8 @@
 import { query } from '../../config/database.js';
 import * as telegramApi from './telegramApi.js';
 import * as finesService from '../fines/fines.service.js';
+import { generateLinkCode } from '../../shared/utils/crypto.js';
+import { HTTP_STATUS } from '../../config/constants.js';
 
 /**
  * Fine-appeal Telegram bot — a small text/inline-keyboard conversation.
@@ -24,23 +26,12 @@ async function findEmployeeByChatId(chatId) {
   return rows[0] || null;
 }
 
-async function findEmployeeByLinkCode(code) {
-  const { rows } = await query(
-    'SELECT id, first_name, last_name FROM employees WHERE telegram_link_code = $1',
-    [code]
-  );
-  return rows[0] || null;
-}
-
 async function linkChatToEmployee(chatId, employeeId) {
   // A chat_id can only belong to one employee at a time — detach it from
   // whoever held it before (re-linking scenario) to avoid the unique
   // constraint rejecting the new link.
   await query('UPDATE employees SET telegram_chat_id = NULL WHERE telegram_chat_id = $1', [chatId]);
-  await query(
-    'UPDATE employees SET telegram_chat_id = $1, telegram_link_code = NULL WHERE id = $2',
-    [chatId, employeeId]
-  );
+  await query('UPDATE employees SET telegram_chat_id = $1 WHERE id = $2', [chatId, employeeId]);
 }
 
 async function getSession(chatId) {
@@ -72,37 +63,80 @@ async function sendMainMenu(chatId, employee, greeting) {
   await telegramApi.sendMessage(chatId, text, { replyMarkup: MAIN_MENU_KEYBOARD });
 }
 
-async function handleLinkAttempt(chatId, rawText) {
-  const trimmed = (rawText || '').trim();
+/**
+ * Returns this chat's not-yet-claimed code, generating one on first
+ * contact and reusing it on every later /start until HR claims it — so
+ * pressing Start repeatedly never produces a different code.
+ */
+async function ensurePendingCode(chatId) {
+  const existing = await query('SELECT pending_code FROM telegram_bot_sessions WHERE chat_id = $1', [chatId]);
+  if (existing.rows[0]?.pending_code) return existing.rows[0].pending_code;
 
-  // "/start" har doim (deep-link payload bilan yoki bo'lmasin) shu bir xil
-  // xabarni ko'rsatadi — Telegram mijozi ba'zan chuqur havoladagi (?start=)
-  // kodni serverga yubormay qoladi (bizning nazoratimizdan tashqari, mijoz
-  // tarafidagi cheklov), shuning uchun payload hech qachon avtomatik
-  // ishlatilmaydi. Har doim bitta ishonchli yo'l: xodim kodni HR'dan olib,
-  // qo'lda yuboradi.
-  if (trimmed.startsWith('/start')) {
-    await telegramApi.sendMessage(chatId, "Botdan foydalanish uchun HR tomonidan berilgan kodni yuboring.");
-    return;
+  // Collisions are astronomically unlikely (32^6 possibilities) but trivial
+  // to guard against — retry with a fresh code on the rare unique clash.
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const code = generateLinkCode();
+    try {
+      await query(
+        `INSERT INTO telegram_bot_sessions (chat_id, pending_code, updated_at)
+         VALUES ($1, $2, NOW())
+         ON CONFLICT (chat_id) DO UPDATE SET pending_code = $2, updated_at = NOW()`,
+        [chatId, code]
+      );
+      return code;
+    } catch (err) {
+      if (err.code !== '23505') throw err;
+    }
   }
+  throw new Error("Kod yaratib bo'lmadi, qayta urinib ko'ring");
+}
 
-  const code = trimmed.toUpperCase();
+/**
+ * Every unlinked chat gets the SAME reply, whatever they send — the bot
+ * hands them their own unique code and tells them to relay it to HR. HR
+ * completes the link from the admin panel (claimPendingCode below), so a
+ * random person contacting the bot never gets attached to any employee on
+ * their own.
+ */
+async function handleUnlinkedChat(chatId) {
+  const code = await ensurePendingCode(chatId);
+  await telegramApi.sendMessage(
+    chatId,
+    `Botdan foydalanish uchun ushbu kodni HR'ga ayting: (${code})\n\nHR kodni tizimda tasdiqlagach, botdan foydalana olasiz.`
+  );
+}
+
+/**
+ * Called from the employees module when HR submits the code an employee
+ * relayed to them (POST /employees/:id/telegram-claim-code). Links that
+ * chat to the given employee and notifies them via the bot.
+ */
+export async function claimPendingCode(rawCode, employeeId) {
+  const code = (rawCode || '').trim().toUpperCase();
   if (!code) {
-    await telegramApi.sendMessage(chatId, "Botdan foydalanish uchun HR tomonidan berilgan kodni yuboring.");
-    return;
+    const error = new Error('Kodni kiriting');
+    error.statusCode = HTTP_STATUS.BAD_REQUEST;
+    throw error;
   }
 
-  const employee = await findEmployeeByLinkCode(code);
-  if (!employee) {
-    await telegramApi.sendMessage(
-      chatId,
-      "Kod topilmadi yoki eskirgan. HR'dan yangi kod so'rang va qayta yuboring."
-    );
-    return;
+  const { rows } = await query('SELECT chat_id FROM telegram_bot_sessions WHERE pending_code = $1', [code]);
+  if (rows.length === 0) {
+    const error = new Error("Kod topilmadi yoki eskirgan — xodimdan botga qayta /start bosishini so'rang");
+    error.statusCode = HTTP_STATUS.NOT_FOUND;
+    throw error;
   }
 
-  await linkChatToEmployee(chatId, employee.id);
-  await sendMainMenu(chatId, employee, `✅ Xush kelibsiz, ${employee.first_name} ${employee.last_name}! Endi botdan foydalanishingiz mumkin.`);
+  const chatId = rows[0].chat_id;
+  await linkChatToEmployee(chatId, employeeId);
+  await query('UPDATE telegram_bot_sessions SET pending_code = NULL WHERE chat_id = $1', [chatId]);
+
+  const { rows: empRows } = await query('SELECT first_name, last_name FROM employees WHERE id = $1', [employeeId]);
+  const employee = empRows[0];
+  if (employee) {
+    // Best-effort — a failed Telegram delivery must never fail HR's claim request.
+    sendMainMenu(chatId, employee, `✅ HR tomonidan tasdiqlandi! Xush kelibsiz, ${employee.first_name} ${employee.last_name}.`)
+      .catch((err) => console.error('Telegram: tasdiqlash xabarini yuborishda xatolik:', err.message));
+  }
 }
 
 async function handleFinesListRequest(chatId, employee) {
@@ -220,7 +254,7 @@ async function handleMessage(message) {
   const employee = await findEmployeeByChatId(chatId);
 
   if (!employee) {
-    await handleLinkAttempt(chatId, message.text || '');
+    await handleUnlinkedChat(chatId);
     return;
   }
 
