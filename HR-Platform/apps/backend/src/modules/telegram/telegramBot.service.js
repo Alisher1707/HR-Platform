@@ -71,8 +71,25 @@ async function clearSession(chatId) {
   await query('DELETE FROM telegram_bot_sessions WHERE chat_id = $1', [chatId]);
 }
 
+/**
+ * Postgres DATE/TIMESTAMPTZ columns come back from `pg` as real JS `Date`
+ * objects — interpolating one directly into a template string silently
+ * calls its default .toString() ("Mon Aug 17 2026 00:00:00 GMT+0000 ..."),
+ * not a clean date. Always format explicitly. UTC getters are used because
+ * a DATE column is parsed as UTC midnight — local getters could shift the
+ * displayed day depending on the server's timezone.
+ */
+function formatDateLabel(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+  return `${day}.${month}.${d.getUTCFullYear()}`;
+}
+
 function formatFineLine(fine) {
-  const date = fine.violationDate || (fine.createdAt ? String(fine.createdAt).slice(0, 10) : '');
+  const date = formatDateLabel(fine.violationDate || fine.createdAt);
   const type = fine.fineTypeName || 'Jarima';
   return `🧾 ${Number(fine.amount).toLocaleString('ru-RU')} so'm — ${type} — ${date}`;
 }
@@ -122,7 +139,7 @@ async function handleFinesListRequest(chatId, employee) {
     return;
   }
 
-  const text = ['🧾 Faol jarimalaringiz:', ...active.slice(0, 20).map(formatFineLine)].join('\n');
+  const text = ['🧾 Faol jarimalaringiz:', ...active.slice(0, 20).map(formatFineLine)].join('\n\n');
   await telegramApi.sendMessage(chatId, text);
 }
 
