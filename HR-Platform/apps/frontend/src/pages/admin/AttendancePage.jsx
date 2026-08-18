@@ -828,6 +828,16 @@ function AppealCard({ appeal, onApprove, onReject, disabled, compact }) {
       </div>
       <p className="appeal-card-employee"><strong>{appeal.employeeName}</strong></p>
       <p className="appeal-card-reason">{appeal.reason}</p>
+      {(appeal.handoverPerson || appeal.returnAt) && (
+        <div className="appeal-card-handover">
+          {appeal.handoverPerson && (
+            <span><Users size={12} strokeWidth={2.25} /> Vazifa: <strong>{appeal.handoverPerson}</strong></span>
+          )}
+          {appeal.returnAt && (
+            <span><Clock size={12} strokeWidth={2.25} /> Qaytishi: <strong>{format(new Date(appeal.returnAt), 'dd.MM.yyyy HH:mm')}</strong></span>
+          )}
+        </div>
+      )}
       {appeal.fineTypeName && (
         <p className="appeal-card-linked-fine">
           <Paperclip size={12} strokeWidth={2.25} /> {appeal.fineTypeName} — {formatUZS(appeal.fineAmount)}
@@ -2062,6 +2072,8 @@ export function AttendancePage() {
     Xodim: a.employeeName || '-',
     Turi: ARIZA_CATEGORY_META[a.category]?.label || a.category,
     Sababi: a.reason,
+    "Vazifa topshirilgan shaxs": a.handoverPerson || '-',
+    "Ishga qaytish vaqti": a.returnAt ? format(new Date(a.returnAt), 'dd.MM.yyyy HH:mm') : '-',
     Holat: APPEAL_STATUS_LABELS[a.status] || a.status,
     "HR izohi": a.reviewNote || '-',
     Yuborilgan: format(new Date(a.createdAt), 'dd.MM.yyyy HH:mm'),

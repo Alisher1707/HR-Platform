@@ -7743,6 +7743,23 @@ tr.finance-debt-row td {
   color: var(--text-muted);
 }
 
+.appeal-card-handover {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: var(--radius-md, 8px);
+  background: var(--bg-secondary);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.appeal-card-handover span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
 .dashboard-appeals-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));

@@ -355,6 +355,8 @@ function mapFineAppeal(row) {
     employeeName: row.employee_first_name ? `${row.employee_first_name} ${row.employee_last_name}` : null,
     category: row.category,
     incidentDate: row.incident_date,
+    handoverPerson: row.handover_person,
+    returnAt: row.return_at,
     fineAmount: row.fine_amount != null ? Number(row.fine_amount) : null,
     fineTypeName: row.fine_type_name || null,
     fineViolationDate: row.fine_violation_date,
@@ -403,7 +405,9 @@ async function findMatchingFineId(employeeId, category, incidentDate) {
   return rows.length === 1 ? rows[0].id : null;
 }
 
-export async function createFineAppeal({ employeeId, category, incidentDate, reason, fileUrl, fileName }) {
+export async function createFineAppeal({
+  employeeId, category, incidentDate, reason, fileUrl, fileName, handoverPerson, returnAt,
+}) {
   const employeeFineId = await findMatchingFineId(employeeId, category, incidentDate);
 
   const conflictClause = employeeFineId
@@ -411,11 +415,11 @@ export async function createFineAppeal({ employeeId, category, incidentDate, rea
     : "ON CONFLICT (employee_id, category, incident_date) WHERE status = 'kutilmoqda' AND employee_fine_id IS NULL DO NOTHING";
 
   const result = await query(
-    `INSERT INTO fine_appeals (employee_fine_id, employee_id, category, incident_date, reason, file_url, file_name)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO fine_appeals (employee_fine_id, employee_id, category, incident_date, reason, file_url, file_name, handover_person, return_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      ${conflictClause}
      RETURNING id`,
-    [employeeFineId, employeeId, category, incidentDate || null, reason, fileUrl || null, fileName || null]
+    [employeeFineId, employeeId, category, incidentDate || null, reason, fileUrl || null, fileName || null, handoverPerson || null, returnAt || null]
   );
 
   if (result.rows.length === 0) {

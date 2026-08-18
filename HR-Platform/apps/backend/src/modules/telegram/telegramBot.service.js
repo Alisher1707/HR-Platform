@@ -224,6 +224,8 @@ async function submitAriza(chatId, employee, draft, { fileUrl, fileName } = {}) 
       reason: draft.reason,
       fileUrl: fileUrl || null,
       fileName: fileName || null,
+      handoverPerson: draft.handoverPerson || null,
+      returnAt: draft.returnAt || null,
     });
     await clearSession(chatId);
     await telegramApi.sendMessage(chatId, '✅ Arizangiz yuborildi. HR javobini kuting — natija shu yerdan xabar qilinadi.');
@@ -235,6 +237,19 @@ async function submitAriza(chatId, employee, draft, { fileUrl, fileName } = {}) 
   }
 }
 
+// "Ishga kelmagan kun" va "Ishdan ertaroq ketish" — bularda kimdir ishni
+// bajarishi va xodim qachon qaytishi HR uchun muhim, boshqa turlarda
+// (Kechikib qolish, Javob so'rash...) bu savollar ortiqcha bo'lardi.
+const HANDOVER_REQUIRED_CATEGORIES = ['kelmagan_kun', 'erta_ketish'];
+
+async function askDocumentQuestion(chatId, employee, draft) {
+  await saveSession(chatId, employee.id, 'awaiting_file', draft);
+  await telegramApi.sendMessage(
+    chatId,
+    "Hujjat (rasm yoki fayl) biriktirasizmi? Yuborishingiz mumkin, yoki \"Yo'q\" deb yozing."
+  );
+}
+
 async function handleAwaitingReason(chatId, employee, session, message) {
   if (!message.text) {
     await telegramApi.sendMessage(chatId, "Iltimos, sababni matn ko'rinishida yozing.");
@@ -242,11 +257,57 @@ async function handleAwaitingReason(chatId, employee, session, message) {
   }
 
   const draft = { ...session.draft, reason: message.text.trim() };
-  await saveSession(chatId, employee.id, 'awaiting_file', draft);
+
+  if (HANDOVER_REQUIRED_CATEGORIES.includes(draft.category)) {
+    await saveSession(chatId, employee.id, 'awaiting_handover', draft);
+    await telegramApi.sendMessage(chatId, 'Vazifalaringizni kimga topshirasiz? F.I.Sh. kiriting:');
+    return;
+  }
+
+  await askDocumentQuestion(chatId, employee, draft);
+}
+
+/** Accepts "DD.MM.YYYY HH:MM", returns a UTC ISO datetime string or null. Tashkent has no DST, so the +5 offset is a safe constant. */
+function parseReturnDateTime(text) {
+  const match = (text || '').trim().match(/^(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})\s+(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+
+  const [, day, month, year, hour, minute] = match;
+  const d = Number(day);
+  const m = Number(month);
+  const h = Number(hour);
+  const min = Number(minute);
+  if (d < 1 || d > 31 || m < 1 || m > 12 || h > 23 || min > 59) return null;
+
+  return new Date(Date.UTC(Number(year), m - 1, d, h - 5, min, 0)).toISOString();
+}
+
+async function handleAwaitingHandover(chatId, employee, session, message) {
+  if (!message.text || !message.text.trim()) {
+    await telegramApi.sendMessage(chatId, "Iltimos, F.I.Sh.ni matn ko'rinishida yozing.");
+    return;
+  }
+
+  const draft = { ...session.draft, handoverPerson: message.text.trim() };
+  await saveSession(chatId, employee.id, 'awaiting_return_time', draft);
   await telegramApi.sendMessage(
     chatId,
-    "Hujjat (rasm yoki fayl) biriktirasizmi? Yuborishingiz mumkin, yoki \"Yo'q\" deb yozing."
+    'Ishga aniq qachon qaytasiz? Sana va vaqtni kiriting (kun.oy.yil soat:daqiqa, masalan 20.08.2026 09:00):'
   );
+}
+
+async function handleAwaitingReturnTime(chatId, employee, session, message) {
+  const returnAt = parseReturnDateTime(message.text);
+  if (!returnAt) {
+    await telegramApi.sendMessage(
+      chatId,
+      'Format tushunarsiz. Sana va vaqtni "kun.oy.yil soat:daqiqa" ko\'rinishida kiriting (masalan 20.08.2026 09:00).'
+    );
+    return;
+  }
+
+  const draft = { ...session.draft, returnAt };
+  await askDocumentQuestion(chatId, employee, draft);
 }
 
 async function handleAwaitingFile(chatId, employee, session, message) {
@@ -290,6 +351,14 @@ async function handleMessage(message) {
   }
   if (session && session.state === 'awaiting_reason') {
     await handleAwaitingReason(chatId, employee, session, message);
+    return;
+  }
+  if (session && session.state === 'awaiting_handover') {
+    await handleAwaitingHandover(chatId, employee, session, message);
+    return;
+  }
+  if (session && session.state === 'awaiting_return_time') {
+    await handleAwaitingReturnTime(chatId, employee, session, message);
     return;
   }
   if (session && session.state === 'awaiting_file') {

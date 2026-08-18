@@ -12,7 +12,7 @@ import autoTable from 'jspdf-autotable';
 export function exportAppealsToExcel(rows, filename) {
   const worksheet = XLSX.utils.json_to_sheet(rows);
   worksheet['!cols'] = [
-    { wch: 22 }, { wch: 22 }, { wch: 24 }, { wch: 40 }, { wch: 14 }, { wch: 30 }, { wch: 18 },
+    { wch: 14 }, { wch: 22 }, { wch: 24 }, { wch: 36 }, { wch: 24 }, { wch: 20 }, { wch: 14 }, { wch: 28 }, { wch: 18 },
   ];
 
   const workbook = XLSX.utils.book_new();
