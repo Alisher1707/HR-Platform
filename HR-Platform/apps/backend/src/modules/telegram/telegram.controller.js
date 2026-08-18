@@ -11,8 +11,18 @@ import { handleUpdate } from './telegramBot.service.js';
 export async function receiveTelegramUpdate(req, res) {
   res.status(200).json({ ok: true });
 
+  const update = req.body || {};
+  const chatId = update.message?.chat?.id || update.callback_query?.message?.chat?.id;
+  const text = update.message?.text;
+  const callbackData = update.callback_query?.data;
+  console.log(
+    `Telegram update: chat=${chatId ?? '?'}` +
+    (text !== undefined ? ` text=${JSON.stringify(text)}` : '') +
+    (callbackData !== undefined ? ` callback=${JSON.stringify(callbackData)}` : '')
+  );
+
   try {
-    await handleUpdate(req.body || {});
+    await handleUpdate(update);
   } catch (err) {
     console.error('Telegram webhook: yangilanishni qayta ishlashda xatolik:', err.message);
   }
