@@ -56,15 +56,6 @@ export const employeeService = {
   },
 
   /**
-   * Claims the code an employee got automatically from the Telegram bot
-   * (fine appeal bot) and relayed to HR — links their chat to this employee.
-   */
-  async claimTelegramCode(id, code) {
-    const response = await api.post(`/employees/${id}/telegram-claim-code`, { code });
-    return response.data.data;
-  },
-
-  /**
    * Upload employee photo (avatar)
    */
   async uploadPhoto(id, file) {

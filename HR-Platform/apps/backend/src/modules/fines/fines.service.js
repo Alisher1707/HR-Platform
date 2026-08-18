@@ -353,6 +353,8 @@ function mapFineAppeal(row) {
     employeeFineId: row.employee_fine_id,
     employeeId: row.employee_id,
     employeeName: row.employee_first_name ? `${row.employee_first_name} ${row.employee_last_name}` : null,
+    category: row.category,
+    incidentDate: row.incident_date,
     fineAmount: row.fine_amount != null ? Number(row.fine_amount) : null,
     fineTypeName: row.fine_type_name || null,
     fineViolationDate: row.fine_violation_date,
@@ -372,51 +374,52 @@ const SELECT_FINE_APPEAL = `
          ef.amount AS fine_amount, ef.violation_date AS fine_violation_date, ft.name AS fine_type_name
   FROM fine_appeals fa
   JOIN employees e ON e.id = fa.employee_id
-  JOIN employee_fines ef ON ef.id = fa.employee_fine_id
+  LEFT JOIN employee_fines ef ON ef.id = fa.employee_fine_id
   LEFT JOIN fine_types ft ON ft.id = ef.fine_type_id
 `;
 
-/** Xodimning hozircha apellatsiya berilmagan, hali faol jarimalari — bot shu ro'yxatdan tanlatadi. */
-export async function listAppealableFinesForEmployee(employeeId) {
-  const result = await query(
-    `SELECT ef.*, ft.name AS fine_type_name
+/**
+ * Ariza berilganda, agar shu xodimning aynan shu tur+sana uchun faol
+ * jarimasi allaqachon mavjud bo'lsa — arizani o'shanga avtomatik bog'laydi
+ * (tasdiqlansa, o'sha jarima bekor bo'ladi). Aniq bitta moslik topilmasa
+ * (yo'q yoki bir nechta) — bog'lanmaydi, ariza "umumiy" tushuntirish
+ * sifatida qoladi, HR o'zi qaror qiladi.
+ */
+async function findMatchingFineId(employeeId, category, incidentDate) {
+  if (category === 'umumiy' || !incidentDate) return null;
+
+  const { rows } = await query(
+    `SELECT ef.id
      FROM employee_fines ef
-     LEFT JOIN fine_types ft ON ft.id = ef.fine_type_id
+     LEFT JOIN fine_policy_templates fpt ON fpt.id = ef.policy_template_id
      WHERE ef.employee_id = $1
        AND ef.status = 'faol'
-       AND NOT EXISTS (
-         SELECT 1 FROM fine_appeals fa WHERE fa.employee_fine_id = ef.id AND fa.status = 'kutilmoqda'
-       )
-     ORDER BY ef.created_at DESC
-     LIMIT 20`,
-    [employeeId]
+       AND (ef.violation_date = $2 OR ef.created_at::date = $2)
+       AND (fpt.violation_type = $3 OR ef.policy_template_id IS NULL)
+       AND NOT EXISTS (SELECT 1 FROM fine_appeals fa WHERE fa.employee_fine_id = ef.id AND fa.status = 'kutilmoqda')
+     LIMIT 2`,
+    [employeeId, incidentDate, category]
   );
-  return result.rows.map(mapEmployeeFine);
+  return rows.length === 1 ? rows[0].id : null;
 }
 
-export async function createFineAppeal({ employeeFineId, employeeId, reason, fileUrl, fileName }) {
-  const fine = await getEmployeeFineById(employeeFineId);
-  if (!fine || fine.employee_id !== employeeId) {
-    const error = new Error('Jarima topilmadi');
-    error.statusCode = HTTP_STATUS.NOT_FOUND;
-    throw error;
-  }
-  if (fine.status !== 'faol') {
-    const error = new Error('Bu jarima allaqachon bekor qilingan');
-    error.statusCode = HTTP_STATUS.BAD_REQUEST;
-    throw error;
-  }
+export async function createFineAppeal({ employeeId, category, incidentDate, reason, fileUrl, fileName }) {
+  const employeeFineId = await findMatchingFineId(employeeId, category, incidentDate);
+
+  const conflictClause = employeeFineId
+    ? "ON CONFLICT (employee_fine_id) WHERE status = 'kutilmoqda' DO NOTHING"
+    : "ON CONFLICT (employee_id, category, incident_date) WHERE status = 'kutilmoqda' AND employee_fine_id IS NULL DO NOTHING";
 
   const result = await query(
-    `INSERT INTO fine_appeals (employee_fine_id, employee_id, reason, file_url, file_name)
-     VALUES ($1, $2, $3, $4, $5)
-     ON CONFLICT (employee_fine_id) WHERE status = 'kutilmoqda' DO NOTHING
+    `INSERT INTO fine_appeals (employee_fine_id, employee_id, category, incident_date, reason, file_url, file_name)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ${conflictClause}
      RETURNING id`,
-    [employeeFineId, employeeId, reason, fileUrl || null, fileName || null]
+    [employeeFineId, employeeId, category, incidentDate || null, reason, fileUrl || null, fileName || null]
   );
 
   if (result.rows.length === 0) {
-    const error = new Error('Bu jarima uchun allaqachon kutilayotgan ariza mavjud');
+    const error = new Error('Shu tur va sana uchun allaqachon kutilayotgan ariza mavjud');
     error.statusCode = HTTP_STATUS.CONFLICT;
     throw error;
   }
@@ -463,7 +466,9 @@ export async function reviewFineAppeal(id, { status, note, reviewedBy }) {
       throw error;
     }
 
-    if (status === 'tasdiqlandi') {
+    // Proaktiv arizalarda (hali jarima yozilmagan) employee_fine_id bo'sh
+    // bo'lishi mumkin — bekor qiladigan aniq jarima yo'q, faqat tasdiqlanadi.
+    if (status === 'tasdiqlandi' && rows[0].employee_fine_id) {
       await client.query(`UPDATE employee_fines SET status = 'bekor_qilindi' WHERE id = $1`, [rows[0].employee_fine_id]);
     }
 

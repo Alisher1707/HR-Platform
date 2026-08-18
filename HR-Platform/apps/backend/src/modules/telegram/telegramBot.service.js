@@ -1,8 +1,6 @@
 import { query } from '../../config/database.js';
 import * as telegramApi from './telegramApi.js';
 import * as finesService from '../fines/fines.service.js';
-import { generateLinkCode } from '../../shared/utils/crypto.js';
-import { HTTP_STATUS } from '../../config/constants.js';
 
 /**
  * Fine-appeal Telegram bot — a small text/inline-keyboard conversation.
@@ -12,16 +10,34 @@ import { HTTP_STATUS } from '../../config/constants.js';
  */
 
 const MAIN_MENU_KEYBOARD = {
-  keyboard: [['📋 Jarimalarim'], ['📝 Tushuntirish xati yuborish']],
+  keyboard: [['📋 Jarimalar'], ['📝 Ariza yuborish']],
   resize_keyboard: true,
 };
 
 const NO_FILE_ANSWERS = ["yo'q", 'yoq', "yo'q.", 'yoq.', 'yo`q', 'yo‘q'];
+const TODAY_ANSWERS = ['bugun', 'bugun.'];
+
+const ARIZA_CATEGORIES = [
+  { value: 'kech_kelish', label: 'Kechikib qolish', emoji: '⏰' },
+  { value: 'erta_ketish', label: 'Ishdan ertaroq ketish', emoji: '🚪' },
+  { value: 'chiqish_yoq', label: "Chiqishni belgilamagan", emoji: '🚫' },
+  { value: 'kelmagan_kun', label: 'Ishga kelmagan kun', emoji: '📅' },
+  { value: 'umumiy', label: "Javob so'rash / Boshqa", emoji: '❓' },
+];
 
 async function findEmployeeByChatId(chatId) {
   const { rows } = await query(
     'SELECT id, first_name, last_name FROM employees WHERE telegram_chat_id = $1',
     [chatId]
+  );
+  return rows[0] || null;
+}
+
+/** person_id — Xodimlar ro'yxatida "ID: 1038" tarzida ko'rinadigan, har bir xodimga tizim tomonidan berilgan raqam. */
+async function findEmployeeByPersonId(personId) {
+  const { rows } = await query(
+    'SELECT id, first_name, last_name FROM employees WHERE person_id = $1',
+    [personId]
   );
   return rows[0] || null;
 }
@@ -55,7 +71,7 @@ async function clearSession(chatId) {
 function formatFineLine(fine) {
   const date = fine.violationDate || (fine.createdAt ? String(fine.createdAt).slice(0, 10) : '');
   const type = fine.fineTypeName || 'Jarima';
-  return `• ${Number(fine.amount).toLocaleString('ru-RU')} so'm — ${type} — ${date}`;
+  return `⚠️ ${Number(fine.amount).toLocaleString('ru-RU')} so'm — ${type} — ${date}`;
 }
 
 async function sendMainMenu(chatId, employee, greeting) {
@@ -64,79 +80,34 @@ async function sendMainMenu(chatId, employee, greeting) {
 }
 
 /**
- * Returns this chat's not-yet-claimed code, generating one on first
- * contact and reusing it on every later /start until HR claims it — so
- * pressing Start repeatedly never produces a different code.
+ * Unlinked chat — every message gets the same instruction until the
+ * employee sends a valid person_id. No code, no HR step: the employee
+ * already knows their own ID (visible to them / assigned by HR), so this
+ * links immediately and self-service, same as before with codes but with
+ * one less round trip.
  */
-async function ensurePendingCode(chatId) {
-  const existing = await query('SELECT pending_code FROM telegram_bot_sessions WHERE chat_id = $1', [chatId]);
-  if (existing.rows[0]?.pending_code) return existing.rows[0].pending_code;
+async function handleUnlinkedChat(chatId, rawText) {
+  const trimmed = (rawText || '').trim();
 
-  // Collisions are astronomically unlikely (32^6 possibilities) but trivial
-  // to guard against — retry with a fresh code on the rare unique clash.
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const code = generateLinkCode();
-    try {
-      await query(
-        `INSERT INTO telegram_bot_sessions (chat_id, pending_code, updated_at)
-         VALUES ($1, $2, NOW())
-         ON CONFLICT (chat_id) DO UPDATE SET pending_code = $2, updated_at = NOW()`,
-        [chatId, code]
-      );
-      return code;
-    } catch (err) {
-      if (err.code !== '23505') throw err;
-    }
-  }
-  throw new Error("Kod yaratib bo'lmadi, qayta urinib ko'ring");
-}
-
-/**
- * Every unlinked chat gets the SAME reply, whatever they send — the bot
- * hands them their own unique code and tells them to relay it to HR. HR
- * completes the link from the admin panel (claimPendingCode below), so a
- * random person contacting the bot never gets attached to any employee on
- * their own.
- */
-async function handleUnlinkedChat(chatId) {
-  const code = await ensurePendingCode(chatId);
-  await telegramApi.sendMessage(
-    chatId,
-    `Botdan foydalanish uchun ushbu kodni HR'ga ayting: (${code})\n\nHR kodni tizimda tasdiqlagach, botdan foydalana olasiz.`
-  );
-}
-
-/**
- * Called from the employees module when HR submits the code an employee
- * relayed to them (POST /employees/:id/telegram-claim-code). Links that
- * chat to the given employee and notifies them via the bot.
- */
-export async function claimPendingCode(rawCode, employeeId) {
-  const code = (rawCode || '').trim().toUpperCase();
-  if (!code) {
-    const error = new Error('Kodni kiriting');
-    error.statusCode = HTTP_STATUS.BAD_REQUEST;
-    throw error;
+  if (!trimmed || trimmed.startsWith('/start')) {
+    await telegramApi.sendMessage(chatId, "Botdan foydalanish uchun ID raqamingizni yuboring (masalan: 1038).");
+    return;
   }
 
-  const { rows } = await query('SELECT chat_id FROM telegram_bot_sessions WHERE pending_code = $1', [code]);
-  if (rows.length === 0) {
-    const error = new Error("Kod topilmadi yoki eskirgan — xodimdan botga qayta /start bosishini so'rang");
-    error.statusCode = HTTP_STATUS.NOT_FOUND;
-    throw error;
+  const personId = trimmed.replace(/[^0-9]/g, '');
+  if (!personId) {
+    await telegramApi.sendMessage(chatId, 'Iltimos, faqat ID raqamingizni yuboring (masalan: 1038).');
+    return;
   }
 
-  const chatId = rows[0].chat_id;
-  await linkChatToEmployee(chatId, employeeId);
-  await query('UPDATE telegram_bot_sessions SET pending_code = NULL WHERE chat_id = $1', [chatId]);
-
-  const { rows: empRows } = await query('SELECT first_name, last_name FROM employees WHERE id = $1', [employeeId]);
-  const employee = empRows[0];
-  if (employee) {
-    // Best-effort — a failed Telegram delivery must never fail HR's claim request.
-    sendMainMenu(chatId, employee, `✅ HR tomonidan tasdiqlandi! Xush kelibsiz, ${employee.first_name} ${employee.last_name}.`)
-      .catch((err) => console.error('Telegram: tasdiqlash xabarini yuborishda xatolik:', err.message));
+  const employee = await findEmployeeByPersonId(personId);
+  if (!employee) {
+    await telegramApi.sendMessage(chatId, 'Bunday ID topilmadi. ID raqamingizni tekshirib qayta yuboring, yoki HR\'ga murojaat qiling.');
+    return;
   }
+
+  await linkChatToEmployee(chatId, employee.id);
+  await sendMainMenu(chatId, employee, `✅ Xush kelibsiz, ${employee.first_name} ${employee.last_name}!`);
 }
 
 async function handleFinesListRequest(chatId, employee) {
@@ -144,33 +115,19 @@ async function handleFinesListRequest(chatId, employee) {
   const active = fines.filter((f) => f.status === 'faol');
 
   if (active.length === 0) {
-    await telegramApi.sendMessage(chatId, 'Sizda hozircha faol jarima yo\'q.');
+    await telegramApi.sendMessage(chatId, "Sizda hozircha faol jarima yo'q. ✅");
     return;
   }
 
-  const text = ['Faol jarimalaringiz:', ...active.slice(0, 20).map(formatFineLine)].join('\n');
+  const text = ['📋 Faol jarimalaringiz:', ...active.slice(0, 20).map(formatFineLine)].join('\n');
   await telegramApi.sendMessage(chatId, text);
 }
 
-async function handleAppealStartRequest(chatId, employee) {
-  const fines = await finesService.listAppealableFinesForEmployee(employee.id);
-
-  if (fines.length === 0) {
-    await telegramApi.sendMessage(
-      chatId,
-      "Hozircha tushuntirish xati yuborish mumkin bo'lgan jarima yo'q (yo faol jarima yo'q, yo hammasi bo'yicha ariza allaqachon yuborilgan)."
-    );
-    return;
-  }
-
+async function handleArizaStartRequest(chatId, employee) {
   const keyboard = {
-    inline_keyboard: fines.map((f) => [
-      { text: formatFineLine(f).replace(/^•\s*/, ''), callback_data: `appeal_fine:${f.id}` },
-    ]),
+    inline_keyboard: ARIZA_CATEGORIES.map((c) => [{ text: `${c.emoji} ${c.label}`, callback_data: `ariza_cat:${c.value}` }]),
   };
-  await telegramApi.sendMessage(chatId, 'Qaysi jarima uchun tushuntirish xati yubormoqchisiz?', {
-    replyMarkup: keyboard,
-  });
+  await telegramApi.sendMessage(chatId, "Ariza turini tanlang:", { replyMarkup: keyboard });
 }
 
 async function handleCallbackQuery(callbackQuery) {
@@ -185,24 +142,59 @@ async function handleCallbackQuery(callbackQuery) {
   const employee = await findEmployeeByChatId(chatId);
   if (!employee) return;
 
-  if (data.startsWith('appeal_fine:')) {
-    const fineId = data.slice('appeal_fine:'.length);
-    await saveSession(chatId, employee.id, 'awaiting_reason', { fineId });
-    await telegramApi.sendMessage(chatId, 'Sababini batafsil yozib yuboring:');
+  if (data.startsWith('ariza_cat:')) {
+    const category = data.slice('ariza_cat:'.length);
+    const label = ARIZA_CATEGORIES.find((c) => c.value === category)?.label || category;
+    await saveSession(chatId, employee.id, 'awaiting_date', { category });
+    await telegramApi.sendMessage(
+      chatId,
+      `"${label}" — qaysi sana uchun? "Bugun" deb yozing yoki sanani kiriting (kun.oy.yil, masalan 18.08.2026).`
+    );
   }
 }
 
-async function submitAppeal(chatId, employee, draft, { fileUrl, fileName } = {}) {
+/** Accepts "Bugun" or DD.MM.YYYY, returns an ISO (YYYY-MM-DD) date string or null. */
+function parseIncidentDate(text) {
+  const trimmed = (text || '').trim().toLowerCase();
+  if (TODAY_ANSWERS.includes(trimmed)) {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  const match = trimmed.match(/^(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})$/);
+  if (!match) return null;
+
+  const [, day, month, year] = match;
+  const d = Number(day);
+  const m = Number(month);
+  if (d < 1 || d > 31 || m < 1 || m > 12) return null;
+
+  return `${year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+async function handleAwaitingDate(chatId, employee, session, message) {
+  const incidentDate = parseIncidentDate(message.text);
+  if (!incidentDate) {
+    await telegramApi.sendMessage(chatId, 'Sana tushunarsiz. "Bugun" deb yozing yoki kun.oy.yil formatida kiriting (masalan 18.08.2026).');
+    return;
+  }
+
+  const draft = { ...session.draft, incidentDate };
+  await saveSession(chatId, employee.id, 'awaiting_reason', draft);
+  await telegramApi.sendMessage(chatId, 'Sababingizni batafsil yozing:');
+}
+
+async function submitAriza(chatId, employee, draft, { fileUrl, fileName } = {}) {
   try {
     await finesService.createFineAppeal({
-      employeeFineId: draft.fineId,
       employeeId: employee.id,
+      category: draft.category,
+      incidentDate: draft.incidentDate,
       reason: draft.reason,
       fileUrl: fileUrl || null,
       fileName: fileName || null,
     });
     await clearSession(chatId);
-    await telegramApi.sendMessage(chatId, '✅ Arizangiz yuborildi. HR javobini kuting — tasdiqlansa, sizga shu yerdan xabar beriladi.');
+    await telegramApi.sendMessage(chatId, '✅ Arizangiz yuborildi. HR javobini kuting — natija shu yerdan xabar qilinadi.');
     await sendMainMenu(chatId, employee, 'Boshqa nima qilmoqchisiz?');
   } catch (err) {
     await clearSession(chatId);
@@ -213,7 +205,7 @@ async function submitAppeal(chatId, employee, draft, { fileUrl, fileName } = {})
 
 async function handleAwaitingReason(chatId, employee, session, message) {
   if (!message.text) {
-    await telegramApi.sendMessage(chatId, 'Iltimos, sababni matn ko\'rinishida yozing.');
+    await telegramApi.sendMessage(chatId, "Iltimos, sababni matn ko'rinishida yozing.");
     return;
   }
 
@@ -229,7 +221,7 @@ async function handleAwaitingFile(chatId, employee, session, message) {
   const draft = session.draft;
 
   if (message.text && NO_FILE_ANSWERS.includes(message.text.trim().toLowerCase())) {
-    await submitAppeal(chatId, employee, draft);
+    await submitAriza(chatId, employee, draft);
     return;
   }
 
@@ -243,7 +235,7 @@ async function handleAwaitingFile(chatId, employee, session, message) {
 
   try {
     const downloaded = await telegramApi.downloadTelegramFile(fileId);
-    await submitAppeal(chatId, employee, draft, downloaded || {});
+    await submitAriza(chatId, employee, draft, downloaded || {});
   } catch (err) {
     await telegramApi.sendMessage(chatId, `Faylni yuklab olishda xatolik: ${err.message}. Qayta urinib ko'ring yoki "Yo'q" deb yozing.`);
   }
@@ -254,12 +246,16 @@ async function handleMessage(message) {
   const employee = await findEmployeeByChatId(chatId);
 
   if (!employee) {
-    await handleUnlinkedChat(chatId);
+    await handleUnlinkedChat(chatId, message.text || '');
     return;
   }
 
   const session = await getSession(chatId);
 
+  if (session && session.state === 'awaiting_date') {
+    await handleAwaitingDate(chatId, employee, session, message);
+    return;
+  }
   if (session && session.state === 'awaiting_reason') {
     await handleAwaitingReason(chatId, employee, session, message);
     return;
@@ -270,12 +266,12 @@ async function handleMessage(message) {
   }
 
   const text = (message.text || '').trim();
-  if (text === '📋 Jarimalarim') {
+  if (text === '📋 Jarimalar') {
     await handleFinesListRequest(chatId, employee);
     return;
   }
-  if (text === '📝 Tushuntirish xati yuborish') {
-    await handleAppealStartRequest(chatId, employee);
+  if (text === '📝 Ariza yuborish') {
+    await handleArizaStartRequest(chatId, employee);
     return;
   }
 
@@ -290,16 +286,18 @@ export async function handleUpdate(update) {
   }
 }
 
-/** Called by fines.service.reviewFineAppeal — best-effort, never throws. */
+/** Called by fines.controller after reviewFineAppeal — best-effort, never throws. */
 export async function notifyAppealReviewed(employeeId, { status, note, fineAmount, fineTypeName }) {
   try {
     const { rows } = await query('SELECT telegram_chat_id FROM employees WHERE id = $1', [employeeId]);
     const chatId = rows[0] && rows[0].telegram_chat_id;
     if (!chatId) return;
 
-    const label = fineTypeName ? `${fineTypeName} (${Number(fineAmount).toLocaleString('ru-RU')} so'm)` : 'Jarima';
+    const fineNote = fineTypeName
+      ? ` "${fineTypeName}" (${Number(fineAmount).toLocaleString('ru-RU')} so'm) jarimasi bekor qilindi.`
+      : '';
     const text = status === 'tasdiqlandi'
-      ? `✅ Arizangiz tasdiqlandi. "${label}" jarimasi bekor qilindi.`
+      ? `✅ Arizangiz tasdiqlandi.${fineNote}`
       : `❌ Arizangiz rad etildi.${note ? `\nSabab: ${note}` : ''}`;
 
     await telegramApi.sendMessage(chatId, text);

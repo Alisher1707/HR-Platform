@@ -68,6 +68,7 @@ import {
   Pencil,
   CheckCircle2,
   XCircle,
+  HelpCircle,
 } from 'lucide-react';
 import employeeService from '../../services/employeeService';
 import attendanceService from '../../services/attendanceService';
@@ -193,6 +194,18 @@ const FINE_TEMPLATE_TYPES = [
   { value: 'chiqish_yoq', label: "Chiqish yo'q", color: '#d97706', icon: DoorClosed },
   { value: 'kelmagan_kun', label: 'Kelmagan kun', color: '#a855f7', icon: CalendarOff },
 ];
+
+// Telegram bot orqali kelgan arizalar turlari — jarima siyosati
+// turlariga mos (rang/icon FINE_TEMPLATE_TYPES bilan bir xil, faqat
+// nomlanishi xodimga ariza yuborishda ko'rsatilgan variantga mos: "Kechikib
+// qolish"/"Ishdan ertaroq ketish"), + umumiy tur.
+const ARIZA_CATEGORY_META = {
+  kech_kelish: { label: 'Kechikib qolish', color: '#f43f5e', icon: Clock },
+  erta_ketish: { label: 'Ishdan ertaroq ketish', color: '#f97316', icon: LogOut },
+  chiqish_yoq: { label: "Chiqishni belgilamagan", color: '#d97706', icon: DoorClosed },
+  kelmagan_kun: { label: 'Ishga kelmagan kun', color: '#a855f7', icon: CalendarOff },
+  umumiy: { label: "Javob so'rash", color: '#0ea5e9', icon: HelpCircle },
+};
 
 const CUSTOM_FINE_TYPE_COLOR = '#6366f1';
 
@@ -776,6 +789,69 @@ function FinePunishmentCell({ fine, onAction }) {
           <button type="button" className="fine-punishment-btn not-done" title="Bajarmadi" onClick={() => onAction(fine, 'bajarilmadi')}>
             <XCircle size={15} strokeWidth={2.25} />
           </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Ariza turi (category) uchun rangli, iconli belgi — ARIZA_CATEGORY_META asosida. */
+function AppealCategoryBadge({ category }) {
+  const meta = ARIZA_CATEGORY_META[category] || ARIZA_CATEGORY_META.umumiy;
+  const Icon = meta.icon;
+  return (
+    <span className="appeal-category-badge" style={{ background: `${meta.color}1f`, color: meta.color }}>
+      <Icon size={13} strokeWidth={2.25} /> {meta.label}
+    </span>
+  );
+}
+
+/**
+ * AppealCard
+ * Bitta ariza (tushuntirish xati) uchun to'liq karta — Dashboard'dagi
+ * "Arizalar" widget'ida va Moliya > Jarimalar'dagi to'liq panelda bir xil
+ * ko'rinishda qayta ishlatiladi. `compact` — Dashboard widget uchun kichikroq
+ * padding/matn hajmi.
+ */
+function AppealCard({ appeal, onApprove, onReject, disabled, compact }) {
+  return (
+    <div className={`appeal-card ${compact ? 'appeal-card-compact' : ''}`}>
+      <div className="appeal-card-top">
+        <AppealCategoryBadge category={appeal.category} />
+        <span className="finance-payment-time">
+          <CalendarDays size={13} strokeWidth={2.25} />
+          {appeal.incidentDate ? format(new Date(appeal.incidentDate), 'dd.MM.yyyy') : format(new Date(appeal.createdAt), 'dd.MM.yyyy')}
+        </span>
+      </div>
+      <p className="appeal-card-employee"><strong>{appeal.employeeName}</strong></p>
+      <p className="appeal-card-reason">{appeal.reason}</p>
+      {appeal.fineTypeName && (
+        <p className="appeal-card-linked-fine">
+          <Paperclip size={12} strokeWidth={2.25} /> {appeal.fineTypeName} — {formatUZS(appeal.fineAmount)}
+        </p>
+      )}
+      {appeal.fileUrl && (
+        <a href={fineService.getFileUrl(appeal.fileUrl)} target="_blank" rel="noreferrer" className="fine-appeal-file-link">
+          <Paperclip size={13} strokeWidth={2.25} /> {appeal.fileName || 'Hujjat'}
+        </a>
+      )}
+      {appeal.status === 'kutilmoqda' ? (
+        <div className="fine-appeal-actions">
+          <Button variant="outline" size="sm" icon={<XCircle size={14} strokeWidth={2.25} />} onClick={() => onReject(appeal)} disabled={disabled}>
+            Rad etish
+          </Button>
+          <Button variant="primary" size="sm" icon={<CheckCircle2 size={14} strokeWidth={2.25} />} onClick={() => onApprove(appeal)} disabled={disabled}>
+            Tasdiqlash
+          </Button>
+        </div>
+      ) : (
+        <div className="fine-appeal-result">
+          {appeal.status === 'tasdiqlandi' ? (
+            <Badge variant="success">Tasdiqlandi</Badge>
+          ) : (
+            <Badge variant="error">Rad etildi</Badge>
+          )}
+          {appeal.reviewNote && <span className="fine-appeal-review-note">{appeal.reviewNote}</span>}
         </div>
       )}
     </div>
@@ -1964,10 +2040,14 @@ export function AttendancePage() {
     }
   };
 
+  // Arizalar endi Davomat tabining tepasidagi "Arizalar" kartasida (asosiy
+  // ko'rinish) va Moliya > Jarimalar'dagi to'liq panelda ko'rinadi —
+  // shuning uchun sahifa ochilishidayoq bir marta yuklanadi, faqat
+  // moliyaTab'ga bog'liq emas.
   useEffect(() => {
-    if (moliyaTab === 'jarimalar') fetchFineAppeals();
+    fetchFineAppeals();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [moliyaTab]);
+  }, []);
 
   const pendingAppeals = useMemo(() => fineAppeals.filter((a) => a.status === 'kutilmoqda'), [fineAppeals]);
   const reviewedAppeals = useMemo(() => fineAppeals.filter((a) => a.status !== 'kutilmoqda'), [fineAppeals]);
@@ -2780,11 +2860,14 @@ export function AttendancePage() {
             <StatsCard label="Ishda emas" value={attendanceStats.ishdaEmas} icon={<Briefcase size={20} strokeWidth={2} />} iconColor="rose" />
           </div>
 
-          {/* Arizalar */}
+          {/* Arizalar — Telegram bot orqali kelgan jarima tushuntirish xatlari */}
           <Card className="mb-6" style={{ padding: 0 }}>
             <div className="attendance-section-header">
               <div className="attendance-section-header-title">
                 <h3>Arizalar</h3>
+                {pendingAppeals.length > 0 && (
+                  <span className="fine-appeals-pill-badge">{pendingAppeals.length}</span>
+                )}
                 <button
                   type="button"
                   className="attendance-toggle-btn"
@@ -2793,13 +2876,40 @@ export function AttendancePage() {
                 >
                   {isArizalarOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                 </button>
-                <button type="button" className="attendance-toggle-btn accent" title="Kengaytirish">
+                <button
+                  type="button"
+                  className="attendance-toggle-btn accent"
+                  title="Kengaytirish"
+                  onClick={() => setIsAppealsPanelOpen(true)}
+                >
                   <Maximize2 size={14} />
                 </button>
               </div>
             </div>
             {isArizalarOpen && (
-              <p className="attendance-muted-center">Kutilayotgan arizalar yo'q</p>
+              isLoadingFineAppeals ? (
+                <LoadingSpinner text="Yuklanmoqda..." />
+              ) : pendingAppeals.length === 0 ? (
+                <p className="attendance-muted-center">Kutilayotgan arizalar yo'q</p>
+              ) : (
+                <div className="dashboard-appeals-grid">
+                  {pendingAppeals.slice(0, 4).map((a) => (
+                    <AppealCard
+                      key={a.id}
+                      appeal={a}
+                      onApprove={handleApproveAppeal}
+                      onReject={(appeal) => { setAppealRejectModal(appeal); setAppealRejectNote(''); }}
+                      disabled={isSavingAppealReview}
+                      compact
+                    />
+                  ))}
+                  {pendingAppeals.length > 4 && (
+                    <button type="button" className="dashboard-appeals-more" onClick={() => setIsAppealsPanelOpen(true)}>
+                      Yana {pendingAppeals.length - 4} ta ariza →
+                    </button>
+                  )}
+                </div>
+              )
             )}
           </Card>
 
@@ -5492,61 +5602,15 @@ export function AttendancePage() {
             text=""
           />
         ) : (
-          <div className="fine-employee-history-list">
+          <div className="appeal-card-list">
             {(appealsTab === 'pending' ? pendingAppeals : reviewedAppeals).map((a) => (
-              <div key={a.id} className="fine-employee-history-item">
-                <div className="fine-employee-history-item-top">
-                  <span className="finance-payment-time">
-                    <CalendarDays size={13} strokeWidth={2.25} /> {format(new Date(a.createdAt), 'dd.MM.yyyy HH:mm')}
-                  </span>
-                  <Badge variant="error">{formatUZS(a.fineAmount)}</Badge>
-                </div>
-                <p className="fine-appeal-subject">
-                  <strong>{a.employeeName}</strong> — {a.fineTypeName || 'Jarima'}
-                </p>
-                <p className="fine-employee-history-note">{a.reason}</p>
-                {a.fileUrl && (
-                  <a
-                    href={fineService.getFileUrl(a.fileUrl)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="fine-appeal-file-link"
-                  >
-                    <Paperclip size={13} strokeWidth={2.25} /> {a.fileName || 'Hujjat'}
-                  </a>
-                )}
-                {a.status === 'kutilmoqda' ? (
-                  <div className="fine-appeal-actions">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      icon={<XCircle size={14} strokeWidth={2.25} />}
-                      onClick={() => { setAppealRejectModal(a); setAppealRejectNote(''); }}
-                      disabled={isSavingAppealReview}
-                    >
-                      Rad etish
-                    </Button>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      icon={<CheckCircle2 size={14} strokeWidth={2.25} />}
-                      onClick={() => handleApproveAppeal(a)}
-                      disabled={isSavingAppealReview}
-                    >
-                      Tasdiqlash
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="fine-appeal-result">
-                    {a.status === 'tasdiqlandi' ? (
-                      <Badge variant="success">Tasdiqlandi</Badge>
-                    ) : (
-                      <Badge variant="error">Rad etildi</Badge>
-                    )}
-                    {a.reviewNote && <span className="fine-appeal-review-note">{a.reviewNote}</span>}
-                  </div>
-                )}
-              </div>
+              <AppealCard
+                key={a.id}
+                appeal={a}
+                onApprove={handleApproveAppeal}
+                onReject={(appeal) => { setAppealRejectModal(appeal); setAppealRejectNote(''); }}
+                disabled={isSavingAppealReview}
+              />
             ))}
           </div>
         )}

@@ -14,27 +14,6 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
   const fileInputRef = useRef(null);
   const resumeInputRef = useRef(null);
 
-  // Xodim botga /start bosganda BOT o'zi unikal kod beradi va xodim shu
-  // kodni HR'ga aytadi — HR shu yerda kodni kiritib tasdiqlaydi.
-  const [claimCodeInput, setClaimCodeInput] = useState('');
-  const [isClaimingTelegramCode, setIsClaimingTelegramCode] = useState(false);
-  const [justLinkedTelegram, setJustLinkedTelegram] = useState(false);
-
-  const handleClaimTelegramCode = async () => {
-    if (!employee?.id || !claimCodeInput.trim()) return;
-    setIsClaimingTelegramCode(true);
-    try {
-      await employeeService.claimTelegramCode(employee.id, claimCodeInput.trim());
-      toast.success("Xodim Telegram botga bog'landi");
-      setClaimCodeInput('');
-      setJustLinkedTelegram(true);
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Kodni tasdiqlashda xatolik");
-    } finally {
-      setIsClaimingTelegramCode(false);
-    }
-  };
-
   const [formData, setFormData] = useState({
     employeeNumber: '27',
     firstName: '',
@@ -525,34 +504,20 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
             />
           </div>
 
-          {/* Telegram bot ulanishi — jarima tushuntirish xati yuborish uchun */}
+          {/* Telegram bot ulanishi — jarima tushuntirish xati yuborish uchun. Xodim
+              botga o'zining ID raqamini (pastda ko'ringan) yuborib o'zi bog'lanadi —
+              HR tomonidan hech qanday amal talab qilinmaydi, shuning uchun bu yerda
+              faqat holat ko'rsatiladi. */}
           {isEditing && (
             <div className="form-field">
               <label className="form-label">Telegram bot (tushuntirish xati)</label>
-              {employee.telegram_chat_id || justLinkedTelegram ? (
+              {employee.telegram_chat_id ? (
                 <div className="telegram-link-status telegram-link-status-linked">✅ Bog'langan</div>
               ) : (
                 <>
-                  <div className="telegram-claim-row">
-                    <input
-                      type="text"
-                      className="form-input telegram-claim-input"
-                      placeholder="Xodim aytgan kod"
-                      value={claimCodeInput}
-                      onChange={(e) => setClaimCodeInput(e.target.value.toUpperCase())}
-                      maxLength={8}
-                    />
-                    <button
-                      type="button"
-                      className="telegram-link-generate-btn"
-                      onClick={handleClaimTelegramCode}
-                      disabled={isClaimingTelegramCode || !claimCodeInput.trim()}
-                    >
-                      {isClaimingTelegramCode ? "Bog'lanmoqda..." : "Bog'lash"}
-                    </button>
-                  </div>
+                  <div className="telegram-link-status">Bog'lanmagan</div>
                   <p className="telegram-link-hint">
-                    Xodim Telegram botga /start bosganda oladigan kodni shu yerga kiriting.
+                    Xodim botga o'z ID raqamini ({employee.person_id || '—'}) yuborib o'zi bog'lanadi.
                   </p>
                 </>
               )}
@@ -942,44 +907,15 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
           border-radius: var(--radius-lg);
           font-size: 0.875rem;
           font-weight: 500;
+          background: var(--bg-primary);
+          border: 1px solid var(--border);
+          color: var(--text-secondary);
         }
 
         .telegram-link-status-linked {
           background: rgba(16, 185, 129, 0.1);
+          border-color: transparent;
           color: var(--success, #10b981);
-        }
-
-        .telegram-link-generate-btn {
-          padding: 0.75rem 1rem;
-          background: var(--bg-primary);
-          border: 1.5px dashed var(--border);
-          border-radius: var(--radius-lg);
-          color: var(--accent);
-          font-size: 0.875rem;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .telegram-link-generate-btn:hover:not(:disabled) {
-          border-color: var(--accent);
-          background: rgba(139, 92, 246, 0.05);
-        }
-
-        .telegram-link-generate-btn:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-
-        .telegram-claim-row {
-          display: flex;
-          gap: 0.625rem;
-        }
-
-        .telegram-claim-input {
-          flex: 1;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
         }
 
         .telegram-link-hint {

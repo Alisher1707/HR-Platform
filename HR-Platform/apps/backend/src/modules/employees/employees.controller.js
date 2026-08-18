@@ -5,7 +5,6 @@ import { asyncHandler } from '../../shared/middleware/errorHandler.js';
 import { successResponse, createdResponse, paginatedResponse, errorResponse } from '../../shared/utils/response.js';
 import { HTTP_STATUS, MESSAGES } from '../../config/constants.js';
 import * as employeesService from './employees.service.js';
-import { claimPendingCode } from '../telegram/telegramBot.service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const employeePhotosDir = path.join(__dirname, '../../../uploads/employees');
@@ -190,13 +189,3 @@ export const deleteEmployee = asyncHandler(async (req, res) => {
   return successResponse(res, result, 'Employee deleted successfully');
 });
 
-/**
- * POST /api/v1/employees/:id/telegram-claim-code
- * The employee gets a unique code from the bot on their own (it shows it
- * automatically the first time they message it) and relays it to HR; this
- * claims that code for the given employee and links their Telegram chat.
- */
-export const claimTelegramCode = asyncHandler(async (req, res) => {
-  await claimPendingCode(req.body.code, req.params.id);
-  return successResponse(res, { linked: true }, "Xodim Telegram botga bog'landi");
-});
