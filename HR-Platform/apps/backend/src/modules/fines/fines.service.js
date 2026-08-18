@@ -218,6 +218,7 @@ function mapEmployeeFine(row) {
     source: row.source,
     policyTemplateId: row.policy_template_id,
     violationDate: row.violation_date,
+    status: row.status,
     punishmentStatus: row.punishment_status,
     punishmentNote: row.punishment_note,
     punishmentRecordedAt: row.punishment_recorded_at,
@@ -340,4 +341,139 @@ export async function deleteEmployeeFine(id) {
     throw error;
   }
   return { success: true, id };
+}
+
+/**
+ * Tushuntirish xati (apellatsiya) — Telegram bot orqali yuborilgan, HR
+ * tasdiqlasa bog'liq jarima "bekor_qilindi" bo'ladi.
+ */
+function mapFineAppeal(row) {
+  return {
+    id: row.id,
+    employeeFineId: row.employee_fine_id,
+    employeeId: row.employee_id,
+    employeeName: row.employee_first_name ? `${row.employee_first_name} ${row.employee_last_name}` : null,
+    fineAmount: row.fine_amount != null ? Number(row.fine_amount) : null,
+    fineTypeName: row.fine_type_name || null,
+    fineViolationDate: row.fine_violation_date,
+    reason: row.reason,
+    fileUrl: row.file_url,
+    fileName: row.file_name,
+    status: row.status,
+    reviewedBy: row.reviewed_by,
+    reviewedAt: row.reviewed_at,
+    reviewNote: row.review_note,
+    createdAt: row.created_at,
+  };
+}
+
+const SELECT_FINE_APPEAL = `
+  SELECT fa.*, e.first_name AS employee_first_name, e.last_name AS employee_last_name,
+         ef.amount AS fine_amount, ef.violation_date AS fine_violation_date, ft.name AS fine_type_name
+  FROM fine_appeals fa
+  JOIN employees e ON e.id = fa.employee_id
+  JOIN employee_fines ef ON ef.id = fa.employee_fine_id
+  LEFT JOIN fine_types ft ON ft.id = ef.fine_type_id
+`;
+
+/** Xodimning hozircha apellatsiya berilmagan, hali faol jarimalari — bot shu ro'yxatdan tanlatadi. */
+export async function listAppealableFinesForEmployee(employeeId) {
+  const result = await query(
+    `SELECT ef.*, ft.name AS fine_type_name
+     FROM employee_fines ef
+     LEFT JOIN fine_types ft ON ft.id = ef.fine_type_id
+     WHERE ef.employee_id = $1
+       AND ef.status = 'faol'
+       AND NOT EXISTS (
+         SELECT 1 FROM fine_appeals fa WHERE fa.employee_fine_id = ef.id AND fa.status = 'kutilmoqda'
+       )
+     ORDER BY ef.created_at DESC
+     LIMIT 20`,
+    [employeeId]
+  );
+  return result.rows.map(mapEmployeeFine);
+}
+
+export async function createFineAppeal({ employeeFineId, employeeId, reason, fileUrl, fileName }) {
+  const fine = await getEmployeeFineById(employeeFineId);
+  if (!fine || fine.employee_id !== employeeId) {
+    const error = new Error('Jarima topilmadi');
+    error.statusCode = HTTP_STATUS.NOT_FOUND;
+    throw error;
+  }
+  if (fine.status !== 'faol') {
+    const error = new Error('Bu jarima allaqachon bekor qilingan');
+    error.statusCode = HTTP_STATUS.BAD_REQUEST;
+    throw error;
+  }
+
+  const result = await query(
+    `INSERT INTO fine_appeals (employee_fine_id, employee_id, reason, file_url, file_name)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (employee_fine_id) WHERE status = 'kutilmoqda' DO NOTHING
+     RETURNING id`,
+    [employeeFineId, employeeId, reason, fileUrl || null, fileName || null]
+  );
+
+  if (result.rows.length === 0) {
+    const error = new Error('Bu jarima uchun allaqachon kutilayotgan ariza mavjud');
+    error.statusCode = HTTP_STATUS.CONFLICT;
+    throw error;
+  }
+
+  const [row] = await query(`${SELECT_FINE_APPEAL} WHERE fa.id = $1`, [result.rows[0].id]).then((r) => r.rows);
+  return mapFineAppeal(row);
+}
+
+export async function listFineAppeals({ status } = {}) {
+  const conditions = [];
+  const params = [];
+
+  if (status) {
+    params.push(status);
+    conditions.push(`fa.status = $${params.length}`);
+  }
+
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const result = await query(`${SELECT_FINE_APPEAL} ${where} ORDER BY fa.created_at DESC`, params);
+  return result.rows.map(mapFineAppeal);
+}
+
+export async function getFineAppealById(id) {
+  const [row] = await query(`${SELECT_FINE_APPEAL} WHERE fa.id = $1`, [id]).then((r) => r.rows);
+  return row ? mapFineAppeal(row) : null;
+}
+
+export async function reviewFineAppeal(id, { status, note, reviewedBy }) {
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+
+    const { rows } = await client.query(
+      `UPDATE fine_appeals
+       SET status = $1, review_note = $2, reviewed_by = $3, reviewed_at = NOW()
+       WHERE id = $4 AND status = 'kutilmoqda'
+       RETURNING employee_fine_id`,
+      [status, note || null, reviewedBy, id]
+    );
+
+    if (rows.length === 0) {
+      const error = new Error('Ariza topilmadi yoki allaqachon ko\'rib chiqilgan');
+      error.statusCode = HTTP_STATUS.NOT_FOUND;
+      throw error;
+    }
+
+    if (status === 'tasdiqlandi') {
+      await client.query(`UPDATE employee_fines SET status = 'bekor_qilindi' WHERE id = $1`, [rows[0].employee_fine_id]);
+    }
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  return getFineAppealById(id);
 }

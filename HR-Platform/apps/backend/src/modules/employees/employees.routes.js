@@ -136,6 +136,15 @@ router.post(
   employeesController.uploadResume
 );
 
+// POST /api/v1/employees/:id/telegram-link-code - Generate a Telegram-bot link code (ADMIN, HR)
+router.post(
+  '/:id/telegram-link-code',
+  authenticate,
+  authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.HR),
+  validateParams(uuidParamSchema),
+  employeesController.generateTelegramLinkCode
+);
+
 // DELETE /api/v1/employees/:id - Delete employee (ADMIN only)
 router.delete(
   '/:id',

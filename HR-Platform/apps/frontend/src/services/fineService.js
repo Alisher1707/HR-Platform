@@ -93,6 +93,20 @@ export const fineService = {
   },
 
   /**
+   * Tushuntirish xatlari — xodim Telegram bot orqali yuborgan jarima
+   * apellatsiyasi. HR tasdiqlasa bog'liq jarima bekor bo'ladi.
+   */
+  async getFineAppeals(status) {
+    const response = await api.get('/fines/appeals', { params: { status: status || undefined } });
+    return response.data.data;
+  },
+
+  async reviewFineAppeal(id, { status, note }) {
+    const response = await api.patch(`/fines/appeals/${id}/review`, { status, note });
+    return response.data.data;
+  },
+
+  /**
    * Build absolute URL for an assigned fine's evidence file
    */
   getFileUrl(fileUrl) {

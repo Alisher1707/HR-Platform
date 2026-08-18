@@ -7561,6 +7561,88 @@ tr.finance-debt-row td {
   margin: 0;
 }
 
+.fine-appeals-pill-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.125rem;
+  height: 1.125rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--error);
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.fine-appeals-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.fine-appeals-tab {
+  padding: 0.5rem 0.25rem 0.75rem;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: var(--transition-fast);
+}
+
+.fine-appeals-tab:hover {
+  color: var(--text-secondary);
+}
+
+.fine-appeals-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.fine-appeal-subject {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.fine-appeal-file-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  color: var(--accent);
+  text-decoration: none;
+  width: fit-content;
+}
+
+.fine-appeal-file-link:hover {
+  text-decoration: underline;
+}
+
+.fine-appeal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.fine-appeal-result {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.fine-appeal-review-note {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
 .finance-fine-file-input {
   width: 100%;
   padding: 0.625rem 0.875rem;

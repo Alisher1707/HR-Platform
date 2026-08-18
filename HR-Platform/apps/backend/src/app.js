@@ -23,6 +23,8 @@ import schedulesRoutes from './modules/schedules/schedules.routes.js';
 import finesRoutes from './modules/fines/fines.routes.js';
 import onboardingRoutes from './modules/onboarding/onboarding.routes.js';
 import payrollRoutes from './modules/payroll/payroll.routes.js';
+import telegramRoutes from './modules/telegram/telegram.routes.js';
+import { ensureWebhookRegistered } from './modules/telegram/telegramApi.js';
 
 /**
  * Initialize Express Application
@@ -133,6 +135,18 @@ app.use(
 );
 
 /**
+ * Static Files - Fine-appeal documents submitted via the Telegram bot
+ */
+app.use(
+  '/uploads/appeals',
+  express.static(path.join(__dirname, '../uploads/appeals'), {
+    setHeaders: (res) => {
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    },
+  })
+);
+
+/**
  * Rate Limiting
  */
 app.use(generalLimiter);
@@ -165,6 +179,7 @@ app.use(`${API_PREFIX}/schedules`, schedulesRoutes);
 app.use(`${API_PREFIX}/fines`, finesRoutes);
 app.use(`${API_PREFIX}/onboarding`, onboardingRoutes);
 app.use(`${API_PREFIX}/payroll`, payrollRoutes);
+app.use(`${API_PREFIX}/telegram`, telegramRoutes);
 
 /**
  * API Documentation Root
@@ -211,6 +226,9 @@ async function startServer() {
 
     // Start auto-fine cron job (kelmagan_kun / chiqish_yoq daily sweep)
     startAutoFineCron();
+
+    // Register the Telegram webhook (no-op if not configured, e.g. local dev)
+    ensureWebhookRegistered();
 
     // Start listening
     app.listen(config.port, () => {

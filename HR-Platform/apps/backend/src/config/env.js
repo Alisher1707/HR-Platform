@@ -35,6 +35,14 @@ export const config = {
   invite: {
     expiresInDays: parseInt(process.env.INVITE_TOKEN_EXPIRES_DAYS || '7', 10),
   },
+
+  // Telegram Bot Configuration (optional — fine-appeal bot feature no-ops without it)
+  telegram: {
+    botToken: process.env.TELEGRAM_BOT_TOKEN || null,
+    botUsername: process.env.TELEGRAM_BOT_USERNAME || null,
+    webhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET || null,
+    webhookBaseUrl: process.env.TELEGRAM_WEBHOOK_BASE_URL || null,
+  },
 };
 
 /**

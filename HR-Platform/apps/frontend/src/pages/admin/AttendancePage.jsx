@@ -1940,6 +1940,75 @@ export function AttendancePage() {
   const [employeePunishmentFines, setEmployeePunishmentFines] = useState([]);
   const [isLoadingEmployeePunishmentFines, setIsLoadingEmployeePunishmentFines] = useState(false);
 
+  // "Tushuntirish xatlari" — xodim Telegram bot orqali yuborgan jarima
+  // apellatsiyasi. Bitta so'rovda hammasini olamiz, "Kutilayotgan"/"Tarix"
+  // ikkalasi ham shu yerdan client-side filtrlanadi (almashtirganda qayta
+  // so'rov yubormaslik uchun).
+  const [fineAppeals, setFineAppeals] = useState([]);
+  const [isLoadingFineAppeals, setIsLoadingFineAppeals] = useState(false);
+  const [isAppealsPanelOpen, setIsAppealsPanelOpen] = useState(false);
+  const [appealsTab, setAppealsTab] = useState('pending'); // 'pending' | 'history'
+  const [appealRejectModal, setAppealRejectModal] = useState(null); // appeal | null
+  const [appealRejectNote, setAppealRejectNote] = useState('');
+  const [isSavingAppealReview, setIsSavingAppealReview] = useState(false);
+
+  const fetchFineAppeals = async () => {
+    setIsLoadingFineAppeals(true);
+    try {
+      const rows = await fineService.getFineAppeals();
+      setFineAppeals(rows);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Tushuntirish xatlarini yuklashda xatolik');
+    } finally {
+      setIsLoadingFineAppeals(false);
+    }
+  };
+
+  useEffect(() => {
+    if (moliyaTab === 'jarimalar') fetchFineAppeals();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moliyaTab]);
+
+  const pendingAppeals = useMemo(() => fineAppeals.filter((a) => a.status === 'kutilmoqda'), [fineAppeals]);
+  const reviewedAppeals = useMemo(() => fineAppeals.filter((a) => a.status !== 'kutilmoqda'), [fineAppeals]);
+
+  const handleApproveAppeal = async (appeal) => {
+    const ok = await confirm({
+      title: 'Arizani tasdiqlash',
+      message: `${appeal.employeeName} — "${appeal.fineTypeName || 'Jarima'}" jarimasi bekor qilinsinmi? Xodimga botdan xabar yuboriladi.`,
+      confirmLabel: 'Tasdiqlash',
+    });
+    if (!ok) return;
+
+    setIsSavingAppealReview(true);
+    try {
+      await fineService.reviewFineAppeal(appeal.id, { status: 'tasdiqlandi' });
+      toast.success('Ariza tasdiqlandi, jarima bekor qilindi');
+      await fetchFineAppeals();
+      await fetchAssignedFines();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Arizani tasdiqlashda xatolik');
+    } finally {
+      setIsSavingAppealReview(false);
+    }
+  };
+
+  const handleRejectAppeal = async () => {
+    if (!appealRejectModal || !appealRejectNote.trim()) return;
+    setIsSavingAppealReview(true);
+    try {
+      await fineService.reviewFineAppeal(appealRejectModal.id, { status: 'rad_etildi', note: appealRejectNote.trim() });
+      toast.success('Ariza rad etildi');
+      setAppealRejectModal(null);
+      setAppealRejectNote('');
+      await fetchFineAppeals();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Arizani rad etishda xatolik');
+    } finally {
+      setIsSavingAppealReview(false);
+    }
+  };
+
   const fetchEmployeePunishmentFines = async (employeeId) => {
     setIsLoadingEmployeePunishmentFines(true);
     try {
@@ -3757,14 +3826,27 @@ export function AttendancePage() {
                       </button>
                     </>
                   ) : (
-                    <button
-                      type="button"
-                      className="attendance-pill active"
-                      title="Tayinlangan jarimalar ro'yxati"
-                      onClick={() => setIsAssignedFinesOpen(true)}
-                    >
-                      <Eye size={15} strokeWidth={2.25} /> Tayinlangan jarimalar ro'yxati
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        className="attendance-pill active"
+                        title="Tayinlangan jarimalar ro'yxati"
+                        onClick={() => setIsAssignedFinesOpen(true)}
+                      >
+                        <Eye size={15} strokeWidth={2.25} /> Tayinlangan jarimalar ro'yxati
+                      </button>
+                      <button
+                        type="button"
+                        className="attendance-pill active fine-appeals-pill"
+                        title="Tushuntirish xatlari"
+                        onClick={() => setIsAppealsPanelOpen(true)}
+                      >
+                        <FileText size={15} strokeWidth={2.25} /> Tushuntirish xatlari
+                        {pendingAppeals.length > 0 && (
+                          <span className="fine-appeals-pill-badge">{pendingAppeals.length}</span>
+                        )}
+                      </button>
+                    </>
                   )}
                   <Button
                     variant="primary"
@@ -5378,6 +5460,136 @@ export function AttendancePage() {
           </div>
         )}
       </SidePanel>
+
+      <SidePanel
+        isOpen={isAppealsPanelOpen}
+        onClose={() => setIsAppealsPanelOpen(false)}
+        title="Tushuntirish xatlari"
+      >
+        <div className="fine-appeals-tabs">
+          <button
+            type="button"
+            className={`fine-appeals-tab ${appealsTab === 'pending' ? 'active' : ''}`}
+            onClick={() => setAppealsTab('pending')}
+          >
+            Kutilayotgan{pendingAppeals.length > 0 ? ` (${pendingAppeals.length})` : ''}
+          </button>
+          <button
+            type="button"
+            className={`fine-appeals-tab ${appealsTab === 'history' ? 'active' : ''}`}
+            onClick={() => setAppealsTab('history')}
+          >
+            Tarix
+          </button>
+        </div>
+
+        {isLoadingFineAppeals ? (
+          <LoadingSpinner text="Yuklanmoqda..." />
+        ) : (appealsTab === 'pending' ? pendingAppeals : reviewedAppeals).length === 0 ? (
+          <EmptyState
+            icon={<FileText size={48} strokeWidth={1.25} />}
+            title={appealsTab === 'pending' ? "Kutilayotgan ariza yo'q" : "Hali hech narsa ko'rib chiqilmagan"}
+            text=""
+          />
+        ) : (
+          <div className="fine-employee-history-list">
+            {(appealsTab === 'pending' ? pendingAppeals : reviewedAppeals).map((a) => (
+              <div key={a.id} className="fine-employee-history-item">
+                <div className="fine-employee-history-item-top">
+                  <span className="finance-payment-time">
+                    <CalendarDays size={13} strokeWidth={2.25} /> {format(new Date(a.createdAt), 'dd.MM.yyyy HH:mm')}
+                  </span>
+                  <Badge variant="error">{formatUZS(a.fineAmount)}</Badge>
+                </div>
+                <p className="fine-appeal-subject">
+                  <strong>{a.employeeName}</strong> — {a.fineTypeName || 'Jarima'}
+                </p>
+                <p className="fine-employee-history-note">{a.reason}</p>
+                {a.fileUrl && (
+                  <a
+                    href={fineService.getFileUrl(a.fileUrl)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="fine-appeal-file-link"
+                  >
+                    <Paperclip size={13} strokeWidth={2.25} /> {a.fileName || 'Hujjat'}
+                  </a>
+                )}
+                {a.status === 'kutilmoqda' ? (
+                  <div className="fine-appeal-actions">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      icon={<XCircle size={14} strokeWidth={2.25} />}
+                      onClick={() => { setAppealRejectModal(a); setAppealRejectNote(''); }}
+                      disabled={isSavingAppealReview}
+                    >
+                      Rad etish
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      icon={<CheckCircle2 size={14} strokeWidth={2.25} />}
+                      onClick={() => handleApproveAppeal(a)}
+                      disabled={isSavingAppealReview}
+                    >
+                      Tasdiqlash
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="fine-appeal-result">
+                    {a.status === 'tasdiqlandi' ? (
+                      <Badge variant="success">Tasdiqlandi</Badge>
+                    ) : (
+                      <Badge variant="error">Rad etildi</Badge>
+                    )}
+                    {a.reviewNote && <span className="fine-appeal-review-note">{a.reviewNote}</span>}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </SidePanel>
+
+      <Modal
+        isOpen={!!appealRejectModal}
+        onClose={() => setAppealRejectModal(null)}
+        title="Arizani rad etish"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setAppealRejectModal(null)} disabled={isSavingAppealReview}>
+              Bekor qilish
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleRejectAppeal}
+              disabled={!appealRejectNote.trim() || isSavingAppealReview}
+              loading={isSavingAppealReview}
+            >
+              Rad etish
+            </Button>
+          </>
+        }
+      >
+        {appealRejectModal && (
+          <>
+            <p className="fine-punishment-modal-subject">
+              <strong>{appealRejectModal.employeeName}</strong> — {appealRejectModal.fineTypeName || 'Jarima'}
+            </p>
+            <div className="form-group">
+              <label className="form-label">Rad etish sababi <span className="required">*</span></label>
+              <Textarea
+                name="appealRejectNote"
+                value={appealRejectNote}
+                onChange={(e) => setAppealRejectNote(e.target.value)}
+                placeholder="Xodimga shu sabab botdan yuboriladi..."
+                rows={4}
+              />
+            </div>
+          </>
+        )}
+      </Modal>
 
       <SidePanel
         isOpen={isCreateDeviceOpen}

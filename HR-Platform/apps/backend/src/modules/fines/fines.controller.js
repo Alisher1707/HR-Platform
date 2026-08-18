@@ -1,4 +1,5 @@
 import * as finesService from './fines.service.js';
+import { notifyAppealReviewed } from '../telegram/telegramBot.service.js';
 import { successResponse, errorResponse } from '../../shared/utils/response.js';
 import { HTTP_STATUS } from '../../config/constants.js';
 
@@ -152,5 +153,39 @@ export async function deleteAssignedFine(req, res) {
   } catch (error) {
     console.error('Delete assigned fine error:', error);
     return errorResponse(res, error.message || 'Jarimani o\'chirishda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+  }
+}
+
+export async function getFineAppeals(req, res) {
+  try {
+    const appeals = await finesService.listFineAppeals({ status: req.query.status || null });
+    return successResponse(res, appeals, 'Tushuntirish xatlari olindi');
+  } catch (error) {
+    console.error('Get fine appeals error:', error);
+    return errorResponse(res, error.message || 'Tushuntirish xatlarini olishda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+  }
+}
+
+export async function reviewFineAppeal(req, res) {
+  try {
+    const { status, note } = req.body;
+
+    const appeal = await finesService.reviewFineAppeal(req.params.id, {
+      status,
+      note,
+      reviewedBy: req.user.id,
+    });
+
+    notifyAppealReviewed(appeal.employeeId, {
+      status: appeal.status,
+      note: appeal.reviewNote,
+      fineAmount: appeal.fineAmount,
+      fineTypeName: appeal.fineTypeName,
+    });
+
+    return successResponse(res, appeal, 'Ariza ko\'rib chiqildi');
+  } catch (error) {
+    console.error('Review fine appeal error:', error);
+    return errorResponse(res, error.message || 'Arizani ko\'rib chiqishda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }

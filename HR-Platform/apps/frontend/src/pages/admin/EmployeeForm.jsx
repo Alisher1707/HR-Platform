@@ -14,6 +14,30 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
   const fileInputRef = useRef(null);
   const resumeInputRef = useRef(null);
 
+  const [telegramLinkResult, setTelegramLinkResult] = useState(null); // { code, deepLink } | null
+  const [isGeneratingTelegramCode, setIsGeneratingTelegramCode] = useState(false);
+  const [isCodeCopied, setIsCodeCopied] = useState(false);
+
+  const handleGenerateTelegramCode = async () => {
+    if (!employee?.id) return;
+    setIsGeneratingTelegramCode(true);
+    try {
+      const result = await employeeService.generateTelegramLinkCode(employee.id);
+      setTelegramLinkResult(result);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Bog'lash kodini yaratishda xatolik");
+    } finally {
+      setIsGeneratingTelegramCode(false);
+    }
+  };
+
+  const handleCopyTelegramLink = () => {
+    if (!telegramLinkResult?.deepLink) return;
+    navigator.clipboard.writeText(telegramLinkResult.deepLink);
+    setIsCodeCopied(true);
+    setTimeout(() => setIsCodeCopied(false), 2000);
+  };
+
   const [formData, setFormData] = useState({
     employeeNumber: '27',
     firstName: '',
@@ -504,6 +528,41 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
             />
           </div>
 
+          {/* Telegram bot ulanishi — jarima tushuntirish xati yuborish uchun */}
+          {isEditing && (
+            <div className="form-field">
+              <label className="form-label">Telegram bot (tushuntirish xati)</label>
+              {employee.telegram_chat_id ? (
+                <div className="telegram-link-status telegram-link-status-linked">✅ Bog'langan</div>
+              ) : telegramLinkResult ? (
+                <div className="telegram-link-result">
+                  <div className="telegram-link-code">{telegramLinkResult.code}</div>
+                  {telegramLinkResult.deepLink && (
+                    <button
+                      type="button"
+                      className="telegram-link-copy-btn"
+                      onClick={handleCopyTelegramLink}
+                    >
+                      {isCodeCopied ? 'Nusxalandi ✓' : 'Havolani nusxalash'}
+                    </button>
+                  )}
+                  <p className="telegram-link-hint">
+                    Bu kod yoki havolani xodimga yuboring — Telegram botga yozib bog'lanadi.
+                  </p>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="telegram-link-generate-btn"
+                  onClick={handleGenerateTelegramCode}
+                  disabled={isGeneratingTelegramCode}
+                >
+                  {isGeneratingTelegramCode ? 'Yaratilmoqda...' : "Bog'lash kodi yaratish"}
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Tajriba */}
           <div className="form-field">
             <label className="form-label">Tajriba (yil)</label>
@@ -877,6 +936,80 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
         .error-text {
           font-size: 0.75rem;
           color: var(--error);
+        }
+
+        .telegram-link-status {
+          display: flex;
+          align-items: center;
+          gap: 0.4rem;
+          padding: 0.75rem 1rem;
+          border-radius: var(--radius-lg);
+          font-size: 0.875rem;
+          font-weight: 500;
+        }
+
+        .telegram-link-status-linked {
+          background: rgba(16, 185, 129, 0.1);
+          color: var(--success, #10b981);
+        }
+
+        .telegram-link-generate-btn {
+          padding: 0.75rem 1rem;
+          background: var(--bg-primary);
+          border: 1.5px dashed var(--border);
+          border-radius: var(--radius-lg);
+          color: var(--accent);
+          font-size: 0.875rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .telegram-link-generate-btn:hover:not(:disabled) {
+          border-color: var(--accent);
+          background: rgba(139, 92, 246, 0.05);
+        }
+
+        .telegram-link-generate-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .telegram-link-result {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 0.625rem;
+          padding: 0.75rem 1rem;
+          background: var(--bg-primary);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-lg);
+        }
+
+        .telegram-link-code {
+          font-family: monospace;
+          font-size: 1rem;
+          font-weight: 700;
+          letter-spacing: 0.1em;
+          color: var(--accent);
+        }
+
+        .telegram-link-copy-btn {
+          padding: 0.375rem 0.75rem;
+          background: var(--accent-gradient, var(--accent));
+          border: none;
+          border-radius: var(--radius-md, 8px);
+          color: #fff;
+          font-size: 0.75rem;
+          font-weight: 600;
+          cursor: pointer;
+        }
+
+        .telegram-link-hint {
+          flex-basis: 100%;
+          margin: 0;
+          font-size: 0.75rem;
+          color: var(--text-secondary);
         }
 
         .upload-card {

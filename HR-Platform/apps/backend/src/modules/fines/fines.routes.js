@@ -48,6 +48,15 @@ const punishmentStatusSchema = Joi.object({
   note: Joi.string().trim().min(1).max(1000).required(),
 });
 
+const listAppealsQuerySchema = Joi.object({
+  status: Joi.string().valid('kutilmoqda', 'tasdiqlandi', 'rad_etildi').optional(),
+});
+
+const reviewAppealSchema = Joi.object({
+  status: Joi.string().valid('tasdiqlandi', 'rad_etildi').required(),
+  note: Joi.string().trim().max(1000).allow('', null),
+});
+
 const uuidParamSchema = Joi.object({ id: commonSchemas.uuid });
 const canManage = authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.HR);
 
@@ -107,6 +116,17 @@ router.delete(
   authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
   validateParams(uuidParamSchema),
   finesController.deleteAssignedFine
+);
+
+// Xodim Telegram bot orqali yuborgan tushuntirish xatlari (apellatsiya)
+router.get('/appeals', authenticate, canManage, validateQuery(listAppealsQuerySchema), finesController.getFineAppeals);
+router.patch(
+  '/appeals/:id/review',
+  authenticate,
+  canManage,
+  validateParams(uuidParamSchema),
+  validate(reviewAppealSchema),
+  finesController.reviewFineAppeal
 );
 
 export default router;

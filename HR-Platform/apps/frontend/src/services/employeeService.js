@@ -56,6 +56,15 @@ export const employeeService = {
   },
 
   /**
+   * Generate a one-time Telegram-bot link code for this employee (fine
+   * appeal bot) — HR shares the resulting deep link/code with them.
+   */
+  async generateTelegramLinkCode(id) {
+    const response = await api.post(`/employees/${id}/telegram-link-code`);
+    return response.data.data;
+  },
+
+  /**
    * Upload employee photo (avatar)
    */
   async uploadPhoto(id, file) {

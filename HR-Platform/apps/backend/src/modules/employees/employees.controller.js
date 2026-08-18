@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { asyncHandler } from '../../shared/middleware/errorHandler.js';
 import { successResponse, createdResponse, paginatedResponse, errorResponse } from '../../shared/utils/response.js';
 import { HTTP_STATUS, MESSAGES } from '../../config/constants.js';
+import { config } from '../../config/env.js';
 import * as employeesService from './employees.service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -187,4 +188,16 @@ export const deleteEmployee = asyncHandler(async (req, res) => {
   const result = await employeesService.deleteEmployee(req.params.id);
 
   return successResponse(res, result, 'Employee deleted successfully');
+});
+
+/**
+ * POST /api/v1/employees/:id/telegram-link-code
+ * HR generates a one-time code to give the employee, linking their
+ * Telegram account so the fine-appeal bot can message them.
+ */
+export const generateTelegramLinkCode = asyncHandler(async (req, res) => {
+  const { code } = await employeesService.generateTelegramLinkCode(req.params.id);
+  const deepLink = config.telegram.botUsername ? `https://t.me/${config.telegram.botUsername}?start=${code}` : null;
+
+  return successResponse(res, { code, deepLink }, "Bog'lash kodi yaratildi");
 });
