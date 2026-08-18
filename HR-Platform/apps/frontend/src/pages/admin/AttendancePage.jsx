@@ -77,6 +77,7 @@ import devicesService from '../../services/devicesService';
 import fineService from '../../services/fineService';
 import payrollService from '../../services/payrollService';
 import { exportAttendanceReportToExcel } from '../../utils/exportExcel';
+import { exportAppealsToExcel, exportAppealsToPdf } from '../../utils/exportAppeals';
 import useToast from '../../hooks/useToast';
 import { useAuthStore } from '../../store/authStore';
 import Card from '../../components/ui/Card';
@@ -206,6 +207,8 @@ const ARIZA_CATEGORY_META = {
   kelmagan_kun: { label: 'Ishga kelmagan kun', color: '#a855f7', icon: CalendarOff },
   umumiy: { label: "Javob so'rash", color: '#0ea5e9', icon: HelpCircle },
 };
+
+const APPEAL_STATUS_LABELS = { kutilmoqda: 'Kutilmoqda', tasdiqlandi: 'Tasdiqlandi', rad_etildi: 'Rad etildi' };
 
 const CUSTOM_FINE_TYPE_COLOR = '#6366f1';
 
@@ -2051,6 +2054,34 @@ export function AttendancePage() {
 
   const pendingAppeals = useMemo(() => fineAppeals.filter((a) => a.status === 'kutilmoqda'), [fineAppeals]);
   const reviewedAppeals = useMemo(() => fineAppeals.filter((a) => a.status !== 'kutilmoqda'), [fineAppeals]);
+
+  // Kelgan HAR BIR ariza (kutilayotgan, tasdiqlangan, rad etilgan — barchasi)
+  // shu yerda bitta joyda saqlanadi va Excel/PDF sifatida yuklab olinadi.
+  const appealsExportRows = useMemo(() => fineAppeals.map((a) => ({
+    Sana: format(new Date(a.incidentDate || a.createdAt), 'dd.MM.yyyy'),
+    Xodim: a.employeeName || '-',
+    Turi: ARIZA_CATEGORY_META[a.category]?.label || a.category,
+    Sababi: a.reason,
+    Holat: APPEAL_STATUS_LABELS[a.status] || a.status,
+    "HR izohi": a.reviewNote || '-',
+    Yuborilgan: format(new Date(a.createdAt), 'dd.MM.yyyy HH:mm'),
+  })), [fineAppeals]);
+
+  const handleExportAppealsExcel = () => {
+    if (appealsExportRows.length === 0) {
+      toast.info("Yuklab olish uchun ariza yo'q");
+      return;
+    }
+    exportAppealsToExcel(appealsExportRows, `arizalar-${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+  };
+
+  const handleExportAppealsPdf = () => {
+    if (appealsExportRows.length === 0) {
+      toast.info("Yuklab olish uchun ariza yo'q");
+      return;
+    }
+    exportAppealsToPdf(appealsExportRows, `arizalar-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+  };
 
   const handleApproveAppeal = async (appeal) => {
     const ok = await confirm({
@@ -5591,6 +5622,20 @@ export function AttendancePage() {
           >
             Tarix
           </button>
+        </div>
+
+        <div className="fine-appeals-export-row">
+          <span className="fine-appeals-export-label">
+            Hammasi ({fineAppeals.length}) — bitta faylda yuklab olish:
+          </span>
+          <div className="fine-appeals-export-buttons">
+            <button type="button" className="fine-appeals-export-btn" onClick={handleExportAppealsExcel}>
+              <Download size={13} strokeWidth={2.25} /> Excel
+            </button>
+            <button type="button" className="fine-appeals-export-btn" onClick={handleExportAppealsPdf}>
+              <Download size={13} strokeWidth={2.25} /> PDF
+            </button>
+          </div>
         </div>
 
         {isLoadingFineAppeals ? (
