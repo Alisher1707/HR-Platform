@@ -91,7 +91,8 @@ function formatDateLabel(value) {
 function formatFineLine(fine) {
   const date = formatDateLabel(fine.violationDate || fine.createdAt);
   const type = fine.fineTypeName || 'Jarima';
-  return `🧾 ${Number(fine.amount).toLocaleString('ru-RU')} so'm — ${type} — ${date}`;
+  const line = `🧾 ${Number(fine.amount).toLocaleString('ru-RU')} so'm — ${type} — ${date}`;
+  return fine.note ? `${line}\n   ↳ ${fine.note}` : line;
 }
 
 async function sendMainMenu(chatId, employee, greeting) {
