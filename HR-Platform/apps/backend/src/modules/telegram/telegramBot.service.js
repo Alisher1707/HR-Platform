@@ -422,3 +422,25 @@ export async function notifyAppealReviewed(employeeId, { status, note, fineAmoun
     console.error('Telegram bot: apellatsiya natijasini xabar qilishda xatolik:', err.message);
   }
 }
+
+/**
+ * Called right after a new employee_fines row is inserted — both the
+ * manual path (fines.controller#createAssignedFine) and every automatic
+ * path (autoFineService#insertAutoFine) — so the employee finds out the
+ * moment it happens instead of only when they open "Jarimalar" themselves.
+ * Best-effort, never throws: a missed notification must never block or
+ * fail the fine-creation request/cron run itself.
+ */
+export async function notifyFineCreated(employeeId, { amount, note }) {
+  try {
+    const { rows } = await query('SELECT telegram_chat_id FROM employees WHERE id = $1', [employeeId]);
+    const chatId = rows[0] && rows[0].telegram_chat_id;
+    if (!chatId) return;
+
+    const amountLabel = Number(amount).toLocaleString('ru-RU');
+    const text = `⚠️ Sizga yangi jarima yozildi:\n🧾 ${amountLabel} so'm${note ? ` — ${note}` : ''}`;
+    await telegramApi.sendMessage(chatId, text);
+  } catch (err) {
+    console.error('Telegram bot: jarima xabarini yuborishda xatolik:', err.message);
+  }
+}

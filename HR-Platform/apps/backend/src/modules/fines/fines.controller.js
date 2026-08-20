@@ -1,5 +1,5 @@
 import * as finesService from './fines.service.js';
-import { notifyAppealReviewed } from '../telegram/telegramBot.service.js';
+import { notifyAppealReviewed, notifyFineCreated } from '../telegram/telegramBot.service.js';
 import { successResponse, errorResponse } from '../../shared/utils/response.js';
 import { HTTP_STATUS } from '../../config/constants.js';
 
@@ -121,6 +121,8 @@ export async function createAssignedFine(req, res) {
       fileName: req.file ? req.file.originalname : null,
       createdBy: req.user.id,
     });
+
+    notifyFineCreated(fine.employeeId, { amount: fine.amount, note: fine.note });
 
     return successResponse(res, fine, 'Jarima tayinlandi', HTTP_STATUS.CREATED);
   } catch (error) {

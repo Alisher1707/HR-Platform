@@ -1,5 +1,6 @@
 import { query, getClient } from '../config/database.js';
 import { businessDayStart, businessDateOnly, businessMinutesSinceMidnight } from '../shared/utils/timezone.js';
+import { notifyFineCreated } from '../modules/telegram/telegramBot.service.js';
 import {
   getActiveScheduleForEmployee,
   getDayNumberForDate,
@@ -57,7 +58,14 @@ async function insertAutoFine(run, { employeeId, amount, fineTypeId, policyTempl
      RETURNING id`,
     [employeeId, amount, fineTypeId || null, note, policyTemplateId, violationDate]
   );
-  return result.rows.length > 0;
+  const created = result.rows.length > 0;
+
+  // Fire-and-forget — this can run inside processDailyAutoFines' DB
+  // transaction, so it must never be awaited (would hold the transaction
+  // open for a network round-trip) and never throw (already self-catches).
+  if (created) notifyFineCreated(employeeId, { amount, note });
+
+  return created;
 }
 
 /**
