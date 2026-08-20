@@ -106,6 +106,11 @@ export const fineService = {
     return response.data.data;
   },
 
+  async forwardAppealToManager(id) {
+    const response = await api.post(`/fines/appeals/${id}/forward-to-manager`);
+    return response.data.data;
+  },
+
   /**
    * Build absolute URL for an assigned fine's evidence file
    */

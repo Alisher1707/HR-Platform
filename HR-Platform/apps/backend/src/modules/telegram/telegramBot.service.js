@@ -88,6 +88,39 @@ function formatDateLabel(value) {
   return `${day}.${month}.${d.getUTCFullYear()}`;
 }
 
+/**
+ * For real TIMESTAMPTZ instants (createdAt, returnAt) — unlike a plain
+ * DATE column, these carry a real time-of-day, so displaying them needs
+ * the Tashkent (UTC+5, no DST) wall-clock shift `parseReturnDateTime`
+ * applied in reverse, or a submission/return near midnight could show the
+ * wrong calendar day.
+ */
+function tashkentParts(value) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  const t = new Date(d.getTime() + 5 * 60 * 60 * 1000);
+  return {
+    day: String(t.getUTCDate()).padStart(2, '0'),
+    month: String(t.getUTCMonth() + 1).padStart(2, '0'),
+    year: t.getUTCFullYear(),
+    hour: String(t.getUTCHours()).padStart(2, '0'),
+    minute: String(t.getUTCMinutes()).padStart(2, '0'),
+  };
+}
+function formatTimestampDateLabel(value) {
+  const p = tashkentParts(value);
+  return p ? `${p.day}.${p.month}.${p.year}` : '';
+}
+function formatTimestampDateTimeLabel(value) {
+  const p = tashkentParts(value);
+  return p ? `${p.day}.${p.month}.${p.year} ${p.hour}:${p.minute}` : '';
+}
+
+/** Telegram's HTML parse_mode rejects unescaped &/</> in dynamic text (free-typed reason, names...). */
+function escapeHtml(text) {
+  return String(text ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function formatFineLine(fine) {
   const date = formatDateLabel(fine.violationDate || fine.createdAt);
   const type = fine.fineTypeName || 'Jarima';
@@ -183,7 +216,64 @@ async function handleCallbackQuery(callbackQuery) {
       chatId,
       `"${label}" — qaysi sana uchun? "Bugun" deb yozing yoki sanani kiriting (kun.oy.yil, masalan 18.08.2026).`
     );
+    return;
   }
+
+  if (data.startsWith('mgr_approve:') || data.startsWith('mgr_reject:')) {
+    await handleManagerDecisionCallback(chatId, employee, data);
+  }
+}
+
+/**
+ * The Rahbar tapped Tasdiqlash/Rad etish under a forwarded ariza. Verified
+ * against the current is_bot_manager flag (not just "some employee got
+ * this callback") as defense-in-depth — in practice only the Rahbar's own
+ * chat ever receives a message with this callback_data, but the role could
+ * theoretically be reassigned between forwarding and tapping.
+ */
+async function handleManagerDecisionCallback(chatId, employee, data) {
+  const manager = await finesService.getBotManagerEmployee();
+  if (!manager || manager.id !== employee.id) {
+    await telegramApi.sendMessage(chatId, 'Bu amal faqat Rahbar uchun.');
+    return;
+  }
+
+  const isApprove = data.startsWith('mgr_approve:');
+  const appealId = data.slice((isApprove ? 'mgr_approve:' : 'mgr_reject:').length);
+
+  if (isApprove) {
+    await resolveManagerDecision(chatId, employee, appealId, 'tasdiqlandi', null);
+    return;
+  }
+
+  await saveSession(chatId, employee.id, 'awaiting_manager_reject_note', { appealId });
+  await telegramApi.sendMessage(chatId, 'Rad etish sababini qisqacha yozing:');
+}
+
+async function resolveManagerDecision(chatId, employee, appealId, status, note) {
+  try {
+    const appeal = await finesService.reviewFineAppeal(appealId, { status, note, reviewedByEmployeeId: employee.id });
+    await telegramApi.sendMessage(chatId, status === 'tasdiqlandi' ? '✅ Siz tasdiqladingiz.' : '❌ Siz rad etdingiz.');
+    notifyAppealReviewed(appeal.employeeId, {
+      status: appeal.status,
+      note: appeal.reviewNote,
+      fineAmount: appeal.fineAmount,
+      fineTypeName: appeal.fineTypeName,
+    });
+  } catch (err) {
+    await telegramApi.sendMessage(chatId, `Amalni bajarib bo'lmadi: ${err.message}`);
+  }
+}
+
+async function handleAwaitingManagerRejectNote(chatId, employee, session, message) {
+  if (!message.text || !message.text.trim()) {
+    await telegramApi.sendMessage(chatId, "Iltimos, sababni matn ko'rinishida yozing.");
+    return;
+  }
+
+  const { appealId } = session.draft;
+  await clearSession(chatId);
+  await resolveManagerDecision(chatId, employee, appealId, 'rad_etildi', message.text.trim());
 }
 
 /** Accepts "Bugun" or DD.MM.YYYY, returns an ISO (YYYY-MM-DD) date string or null. */
@@ -379,6 +469,10 @@ async function handleMessage(message) {
     await handleAwaitingReturnTime(chatId, employee, session, message);
     return;
   }
+  if (session && session.state === 'awaiting_manager_reject_note') {
+    await handleAwaitingManagerRejectNote(chatId, employee, session, message);
+    return;
+  }
   if (session && session.state === 'awaiting_file') {
     await handleAwaitingFile(chatId, employee, session, message);
     return;
@@ -443,5 +537,64 @@ export async function notifyFineCreated(employeeId, { amount, note }) {
     await telegramApi.sendMessage(chatId, text);
   } catch (err) {
     console.error('Telegram bot: jarima xabarini yuborishda xatolik:', err.message);
+  }
+}
+
+function buildManagerMessage(appeal) {
+  const categoryMeta = ARIZA_CATEGORIES.find((c) => c.value === appeal.category);
+  const lines = [
+    "📨 <b>Yangi ariza — tasdiqlash so'raladi</b>",
+    '',
+    `👤 Xodim: <b>${escapeHtml(appeal.employeeName)}</b>`,
+    `${categoryMeta ? categoryMeta.emoji : '📋'} Turi: ${escapeHtml(categoryMeta ? categoryMeta.label : appeal.category)}`,
+    `📅 Ariza sanasi: ${formatTimestampDateLabel(appeal.createdAt)}`,
+    `🗓 Javob so'ralayotgan sana: ${formatDateLabel(appeal.incidentDate) || '—'}`,
+    `💬 Sababi: ${escapeHtml(appeal.reason)}`,
+  ];
+
+  if (appeal.handoverPerson) {
+    lines.push(`👥 Vazifa topshirgan: <b>${escapeHtml(appeal.handoverPerson)}</b>`);
+  }
+  if (appeal.returnAt) {
+    lines.push(`🕐 Ishga qaytish: <b>${formatTimestampDateTimeLabel(appeal.returnAt)}</b>`);
+  }
+  if (appeal.fileUrl) {
+    lines.push("📎 Hujjat biriktirilgan (HR panelida ko'rish mumkin)");
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Called by fines.controller after markAppealForwardedToManager — sends
+ * the full ariza to the Rahbar's own bot chat with Tasdiqlash/Rad etish
+ * inline buttons. Unlike the other notify* helpers this one DOES surface
+ * failure back to the caller (missing/unlinked Rahbar) — HR needs to know
+ * the forward didn't actually reach anyone, not just get a silent success.
+ */
+export async function sendAppealToManager(appeal) {
+  const manager = await finesService.getBotManagerEmployee();
+  if (!manager) {
+    return { sent: false, reason: "Rahbar tayinlanmagan. Administratordan so'rang." };
+  }
+  if (!manager.telegram_chat_id) {
+    return { sent: false, reason: "Rahbar hali botga ulanmagan. U botga /start bilan ID raqamini yuborishi kerak." };
+  }
+
+  const keyboard = {
+    inline_keyboard: [[
+      { text: '✅ Tasdiqlash', callback_data: `mgr_approve:${appeal.id}` },
+      { text: '❌ Rad etish', callback_data: `mgr_reject:${appeal.id}` },
+    ]],
+  };
+
+  try {
+    await telegramApi.sendMessage(manager.telegram_chat_id, buildManagerMessage(appeal), {
+      replyMarkup: keyboard,
+      parseMode: 'HTML',
+    });
+    return { sent: true };
+  } catch (err) {
+    return { sent: false, reason: `Rahbarga yuborishda xatolik: ${err.message}` };
   }
 }

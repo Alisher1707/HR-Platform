@@ -365,8 +365,10 @@ function mapFineAppeal(row) {
     fileName: row.file_name,
     status: row.status,
     reviewedBy: row.reviewed_by,
+    reviewedByEmployeeId: row.reviewed_by_employee_id,
     reviewedAt: row.reviewed_at,
     reviewNote: row.review_note,
+    forwardedToManagerAt: row.forwarded_to_manager_at,
     createdAt: row.created_at,
   };
 }
@@ -451,17 +453,23 @@ export async function getFineAppealById(id) {
   return row ? mapFineAppeal(row) : null;
 }
 
-export async function reviewFineAppeal(id, { status, note, reviewedBy }) {
+/**
+ * `reviewedBy` (users.id) is set when HR reviews via the web panel;
+ * `reviewedByEmployeeId` (employees.id) is set when the Rahbar reviews via
+ * their own Telegram bot chat instead — exactly one of the two is passed,
+ * never both.
+ */
+export async function reviewFineAppeal(id, { status, note, reviewedBy, reviewedByEmployeeId }) {
   const client = await getClient();
   try {
     await client.query('BEGIN');
 
     const { rows } = await client.query(
       `UPDATE fine_appeals
-       SET status = $1, review_note = $2, reviewed_by = $3, reviewed_at = NOW()
-       WHERE id = $4 AND status = 'kutilmoqda'
+       SET status = $1, review_note = $2, reviewed_by = $3, reviewed_by_employee_id = $4, reviewed_at = NOW()
+       WHERE id = $5 AND status = 'kutilmoqda'
        RETURNING employee_fine_id`,
-      [status, note || null, reviewedBy, id]
+      [status, note || null, reviewedBy || null, reviewedByEmployeeId || null, id]
     );
 
     if (rows.length === 0) {
@@ -485,4 +493,24 @@ export async function reviewFineAppeal(id, { status, note, reviewedBy }) {
   }
 
   return getFineAppealById(id);
+}
+
+/** Marks an appeal as escalated to the Rahbar — only while still pending, mirroring reviewFineAppeal's guard. */
+export async function markAppealForwardedToManager(id) {
+  const result = await query(
+    `UPDATE fine_appeals SET forwarded_to_manager_at = NOW()
+     WHERE id = $1 AND status = 'kutilmoqda'
+     RETURNING id`,
+    [id]
+  );
+  if (result.rows.length === 0) return null;
+  return getFineAppealById(id);
+}
+
+/** The single employee flagged as the bot-approval Rahbar (see migration 051), or null if none is assigned yet. */
+export async function getBotManagerEmployee() {
+  const { rows } = await query(
+    `SELECT id, first_name, last_name, telegram_chat_id FROM employees WHERE is_bot_manager = true LIMIT 1`
+  );
+  return rows[0] || null;
 }

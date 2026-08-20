@@ -1,5 +1,5 @@
 import * as finesService from './fines.service.js';
-import { notifyAppealReviewed, notifyFineCreated } from '../telegram/telegramBot.service.js';
+import { notifyAppealReviewed, notifyFineCreated, sendAppealToManager } from '../telegram/telegramBot.service.js';
 import { successResponse, errorResponse } from '../../shared/utils/response.js';
 import { HTTP_STATUS } from '../../config/constants.js';
 
@@ -189,5 +189,28 @@ export async function reviewFineAppeal(req, res) {
   } catch (error) {
     console.error('Review fine appeal error:', error);
     return errorResponse(res, error.message || 'Arizani ko\'rib chiqishda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+  }
+}
+
+export async function forwardAppealToManager(req, res) {
+  try {
+    const appeal = await finesService.getFineAppealById(req.params.id);
+    if (!appeal || appeal.status !== 'kutilmoqda') {
+      return errorResponse(res, "Ariza topilmadi yoki allaqachon ko'rib chiqilgan", HTTP_STATUS.NOT_FOUND);
+    }
+
+    // Only recorded as "forwarded" once the message genuinely reached the
+    // Rahbar — marking it beforehand would leave a misleading "sent" badge
+    // in the HR panel even when delivery actually failed.
+    const result = await sendAppealToManager(appeal);
+    if (!result.sent) {
+      return errorResponse(res, result.reason || "Rahbarga yuborib bo'lmadi", HTTP_STATUS.BAD_REQUEST);
+    }
+
+    const updated = await finesService.markAppealForwardedToManager(appeal.id);
+    return successResponse(res, updated, 'Ariza rahbarga yuborildi');
+  } catch (error) {
+    console.error('Forward appeal to manager error:', error);
+    return errorResponse(res, error.message || 'Rahbarga yuborishda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }

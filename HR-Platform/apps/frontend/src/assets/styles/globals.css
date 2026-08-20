@@ -7671,6 +7671,7 @@ tr.finance-debt-row td {
 .fine-appeal-actions {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 
@@ -7719,6 +7720,25 @@ tr.finance-debt-row td {
   justify-content: space-between;
   gap: 0.5rem;
   flex-wrap: wrap;
+}
+
+.appeal-card-top-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.appeal-forwarded-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--accent, #6366f1);
+  font-size: 0.6875rem;
+  font-weight: 700;
 }
 
 .appeal-card-employee {

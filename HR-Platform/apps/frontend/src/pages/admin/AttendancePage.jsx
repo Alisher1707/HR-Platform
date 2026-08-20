@@ -69,6 +69,7 @@ import {
   CheckCircle2,
   XCircle,
   HelpCircle,
+  Send,
 } from 'lucide-react';
 import employeeService from '../../services/employeeService';
 import attendanceService from '../../services/attendanceService';
@@ -816,11 +817,18 @@ function AppealCategoryBadge({ category }) {
  * ko'rinishda qayta ishlatiladi. `compact` — Dashboard widget uchun kichikroq
  * padding/matn hajmi.
  */
-function AppealCard({ appeal, onApprove, onReject, disabled, compact }) {
+function AppealCard({ appeal, onApprove, onReject, onForwardToManager, disabled, compact }) {
   return (
     <div className={`appeal-card ${compact ? 'appeal-card-compact' : ''}`}>
       <div className="appeal-card-top">
-        <AppealCategoryBadge category={appeal.category} />
+        <div className="appeal-card-top-left">
+          <AppealCategoryBadge category={appeal.category} />
+          {appeal.forwardedToManagerAt && (
+            <span className="appeal-forwarded-badge" title={format(new Date(appeal.forwardedToManagerAt), 'dd.MM.yyyy HH:mm')}>
+              <Send size={11} strokeWidth={2.25} /> Rahbarga yuborilgan
+            </span>
+          )}
+        </div>
         <span className="finance-payment-time">
           <CalendarDays size={13} strokeWidth={2.25} />
           {appeal.incidentDate ? format(new Date(appeal.incidentDate), 'dd.MM.yyyy') : format(new Date(appeal.createdAt), 'dd.MM.yyyy')}
@@ -850,6 +858,9 @@ function AppealCard({ appeal, onApprove, onReject, disabled, compact }) {
       )}
       {appeal.status === 'kutilmoqda' ? (
         <div className="fine-appeal-actions">
+          <Button variant="outline" size="sm" icon={<Send size={14} strokeWidth={2.25} />} onClick={() => onForwardToManager(appeal)} disabled={disabled}>
+            Rahbarga yuborish
+          </Button>
           <Button variant="outline" size="sm" icon={<XCircle size={14} strokeWidth={2.25} />} onClick={() => onReject(appeal)} disabled={disabled}>
             Rad etish
           </Button>
@@ -2116,6 +2127,19 @@ export function AttendancePage() {
     }
   };
 
+  const handleForwardAppealToManager = async (appeal) => {
+    setIsSavingAppealReview(true);
+    try {
+      await fineService.forwardAppealToManager(appeal.id);
+      toast.success('Ariza rahbarga yuborildi');
+      await fetchFineAppeals();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Rahbarga yuborishda xatolik");
+    } finally {
+      setIsSavingAppealReview(false);
+    }
+  };
+
   const handleRejectAppeal = async () => {
     if (!appealRejectModal || !appealRejectNote.trim()) return;
     setIsSavingAppealReview(true);
@@ -2942,6 +2966,7 @@ export function AttendancePage() {
                       appeal={a}
                       onApprove={handleApproveAppeal}
                       onReject={(appeal) => { setAppealRejectModal(appeal); setAppealRejectNote(''); }}
+                      onForwardToManager={handleForwardAppealToManager}
                       disabled={isSavingAppealReview}
                       compact
                     />
@@ -5666,6 +5691,7 @@ export function AttendancePage() {
                 appeal={a}
                 onApprove={handleApproveAppeal}
                 onReject={(appeal) => { setAppealRejectModal(appeal); setAppealRejectNote(''); }}
+                onForwardToManager={handleForwardAppealToManager}
                 disabled={isSavingAppealReview}
               />
             ))}

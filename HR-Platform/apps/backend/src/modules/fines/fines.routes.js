@@ -128,5 +128,12 @@ router.patch(
   validate(reviewAppealSchema),
   finesController.reviewFineAppeal
 );
+router.post(
+  '/appeals/:id/forward-to-manager',
+  authenticate,
+  canManage,
+  validateParams(uuidParamSchema),
+  finesController.forwardAppealToManager
+);
 
 export default router;
