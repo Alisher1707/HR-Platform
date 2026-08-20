@@ -254,12 +254,7 @@ async function resolveManagerDecision(chatId, employee, appealId, status, note) 
   try {
     const appeal = await finesService.reviewFineAppeal(appealId, { status, note, reviewedByEmployeeId: employee.id });
     await telegramApi.sendMessage(chatId, status === 'tasdiqlandi' ? '✅ Siz tasdiqladingiz.' : '❌ Siz rad etdingiz.');
-    notifyAppealReviewed(appeal.employeeId, {
-      status: appeal.status,
-      note: appeal.reviewNote,
-      fineAmount: appeal.fineAmount,
-      fineTypeName: appeal.fineTypeName,
-    });
+    notifyAppealReviewed(appeal.employeeId, { status: appeal.status, note: appeal.reviewNote });
   } catch (err) {
     await telegramApi.sendMessage(chatId, `Amalni bajarib bo'lmadi: ${err.message}`);
   }
@@ -499,17 +494,17 @@ export async function handleUpdate(update) {
 }
 
 /** Called by fines.controller after reviewFineAppeal — best-effort, never throws. */
-export async function notifyAppealReviewed(employeeId, { status, note, fineAmount, fineTypeName }) {
+export async function notifyAppealReviewed(employeeId, { status, note }) {
   try {
     const { rows } = await query('SELECT telegram_chat_id FROM employees WHERE id = $1', [employeeId]);
     const chatId = rows[0] && rows[0].telegram_chat_id;
     if (!chatId) return;
 
-    const fineNote = fineTypeName
-      ? ` "${fineTypeName}" (${Number(fineAmount).toLocaleString('ru-RU')} so'm) jarimasi bekor qilindi.`
-      : '';
+    // Tasdiqlash endi bog'liq jarimani avtomatik bekor qilmaydi — shuning
+    // uchun xabar ham buni da'vo qilmaydi, faqat arizaning o'zi
+    // qabul qilinganini bildiradi.
     const text = status === 'tasdiqlandi'
-      ? `✅ Arizangiz tasdiqlandi.${fineNote}`
+      ? '✅ Arizangiz tasdiqlandi.'
       : `❌ Arizangiz rad etildi.${note ? `\nSabab: ${note}` : ''}`;
 
     await telegramApi.sendMessage(chatId, text);

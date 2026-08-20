@@ -458,38 +458,25 @@ export async function getFineAppealById(id) {
  * `reviewedByEmployeeId` (employees.id) is set when the Rahbar reviews via
  * their own Telegram bot chat instead — exactly one of the two is passed,
  * never both.
+ *
+ * Tasdiqlash/rad etish only records the decision — it does NOT touch the
+ * linked jarima's status. Cancelling a fine (if warranted) is a separate,
+ * deliberate HR action elsewhere; an ariza being accepted isn't by itself
+ * treated as automatic grounds to cancel the charge.
  */
 export async function reviewFineAppeal(id, { status, note, reviewedBy, reviewedByEmployeeId }) {
-  const client = await getClient();
-  try {
-    await client.query('BEGIN');
+  const result = await query(
+    `UPDATE fine_appeals
+     SET status = $1, review_note = $2, reviewed_by = $3, reviewed_by_employee_id = $4, reviewed_at = NOW()
+     WHERE id = $5 AND status = 'kutilmoqda'
+     RETURNING id`,
+    [status, note || null, reviewedBy || null, reviewedByEmployeeId || null, id]
+  );
 
-    const { rows } = await client.query(
-      `UPDATE fine_appeals
-       SET status = $1, review_note = $2, reviewed_by = $3, reviewed_by_employee_id = $4, reviewed_at = NOW()
-       WHERE id = $5 AND status = 'kutilmoqda'
-       RETURNING employee_fine_id`,
-      [status, note || null, reviewedBy || null, reviewedByEmployeeId || null, id]
-    );
-
-    if (rows.length === 0) {
-      const error = new Error('Ariza topilmadi yoki allaqachon ko\'rib chiqilgan');
-      error.statusCode = HTTP_STATUS.NOT_FOUND;
-      throw error;
-    }
-
-    // Proaktiv arizalarda (hali jarima yozilmagan) employee_fine_id bo'sh
-    // bo'lishi mumkin — bekor qiladigan aniq jarima yo'q, faqat tasdiqlanadi.
-    if (status === 'tasdiqlandi' && rows[0].employee_fine_id) {
-      await client.query(`UPDATE employee_fines SET status = 'bekor_qilindi' WHERE id = $1`, [rows[0].employee_fine_id]);
-    }
-
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK');
+  if (result.rows.length === 0) {
+    const error = new Error('Ariza topilmadi yoki allaqachon ko\'rib chiqilgan');
+    error.statusCode = HTTP_STATUS.NOT_FOUND;
     throw error;
-  } finally {
-    client.release();
   }
 
   return getFineAppealById(id);

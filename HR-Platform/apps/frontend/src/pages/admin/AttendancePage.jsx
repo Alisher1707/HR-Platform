@@ -2109,7 +2109,7 @@ export function AttendancePage() {
   const handleApproveAppeal = async (appeal) => {
     const ok = await confirm({
       title: 'Arizani tasdiqlash',
-      message: `${appeal.employeeName} — "${appeal.fineTypeName || 'Jarima'}" jarimasi bekor qilinsinmi? Xodimga botdan xabar yuboriladi.`,
+      message: `${appeal.employeeName}ning arizasi tasdiqlansinmi? Xodimga botdan xabar yuboriladi.`,
       confirmLabel: 'Tasdiqlash',
     });
     if (!ok) return;
@@ -2117,9 +2117,8 @@ export function AttendancePage() {
     setIsSavingAppealReview(true);
     try {
       await fineService.reviewFineAppeal(appeal.id, { status: 'tasdiqlandi' });
-      toast.success('Ariza tasdiqlandi, jarima bekor qilindi');
+      toast.success('Ariza tasdiqlandi');
       await fetchFineAppeals();
-      await fetchAssignedFines();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Arizani tasdiqlashda xatolik');
     } finally {

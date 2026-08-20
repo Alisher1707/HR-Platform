@@ -178,12 +178,7 @@ export async function reviewFineAppeal(req, res) {
       reviewedBy: req.user.id,
     });
 
-    notifyAppealReviewed(appeal.employeeId, {
-      status: appeal.status,
-      note: appeal.reviewNote,
-      fineAmount: appeal.fineAmount,
-      fineTypeName: appeal.fineTypeName,
-    });
+    notifyAppealReviewed(appeal.employeeId, { status: appeal.status, note: appeal.reviewNote });
 
     return successResponse(res, appeal, 'Ariza ko\'rib chiqildi');
   } catch (error) {
