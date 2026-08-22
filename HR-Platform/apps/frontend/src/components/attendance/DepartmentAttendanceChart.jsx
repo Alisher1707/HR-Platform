@@ -6,9 +6,9 @@ import EmptyState from '../ui/EmptyState';
 import { Building2 } from 'lucide-react';
 
 const SEGMENTS = [
-  { key: 'onTime', label: 'Vaqtida keldi', color: 'var(--success)', gradientId: 'dept-grad-success' },
-  { key: 'late', label: 'Kech keldi', color: 'var(--warning)', gradientId: 'dept-grad-warning' },
-  { key: 'absent', label: 'Kelmagan', color: 'var(--error)', gradientId: 'dept-grad-error' },
+  { key: 'onTime', label: 'Vaqtida keldi', color: 'var(--dept-success)', gradientId: 'dept-grad-success' },
+  { key: 'late', label: 'Kech keldi', color: 'var(--dept-warning)', gradientId: 'dept-grad-warning' },
+  { key: 'absent', label: 'Kelmagan', color: 'var(--dept-error)', gradientId: 'dept-grad-error' },
   { key: 'pending', label: 'Kutilmoqda', color: 'var(--text-secondary)', gradientId: null },
 ];
 
@@ -48,16 +48,16 @@ function DepartmentDonutCard({ row }) {
             <PieChart>
               <defs>
                 <linearGradient id="dept-grad-success" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--success-grad-from)" />
-                  <stop offset="100%" stopColor="var(--success-grad-to)" />
+                  <stop offset="0%" stopColor="var(--dept-success-grad-from)" />
+                  <stop offset="100%" stopColor="var(--dept-success)" />
                 </linearGradient>
                 <linearGradient id="dept-grad-warning" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--warning-grad-from)" />
-                  <stop offset="100%" stopColor="var(--warning-grad-to)" />
+                  <stop offset="0%" stopColor="var(--dept-warning-grad-from)" />
+                  <stop offset="100%" stopColor="var(--dept-warning)" />
                 </linearGradient>
                 <linearGradient id="dept-grad-error" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--error-grad-from)" />
-                  <stop offset="100%" stopColor="var(--error-grad-to)" />
+                  <stop offset="0%" stopColor="var(--dept-error-grad-from)" />
+                  <stop offset="100%" stopColor="var(--dept-error)" />
                 </linearGradient>
               </defs>
               <Pie

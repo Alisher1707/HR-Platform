@@ -60,16 +60,16 @@
   /* Semantic */
   --success: #10b981;
   --success-bg: rgba(16, 185, 129, 0.12);
-  --success-grad-from: #34d399;
-  --success-grad-to: #059669;
+  --dept-success: #10b981;
+  --dept-success-grad-from: #34d399;
+  --dept-warning: #f59e0b;
+  --dept-warning-grad-from: #fbbf24;
+  --dept-error: #f43f5e;
+  --dept-error-grad-from: #fb7185;
   --error: #ef4444;
   --error-bg: rgba(239, 68, 68, 0.12);
-  --error-grad-from: #f87171;
-  --error-grad-to: #dc2626;
   --warning: #f59e0b;
   --warning-bg: rgba(245, 158, 11, 0.12);
-  --warning-grad-from: #fbbf24;
-  --warning-grad-to: #d97706;
   --info: #3b82f6;
   --info-bg: rgba(59, 130, 246, 0.12);
   --notes: #8b5cf6;
@@ -154,16 +154,16 @@
 
   --success: #34d399;
   --success-bg: rgba(52, 211, 153, 0.15);
-  --success-grad-from: #5eead4;
-  --success-grad-to: #10b981;
+  --dept-success: #10b981;
+  --dept-success-grad-from: #34d399;
+  --dept-warning: #f59e0b;
+  --dept-warning-grad-from: #fbbf24;
+  --dept-error: #f43f5e;
+  --dept-error-grad-from: #fb7185;
   --error: #f87171;
   --error-bg: rgba(248, 113, 113, 0.15);
-  --error-grad-from: #fca5a5;
-  --error-grad-to: #ef4444;
   --warning: #fbbf24;
   --warning-bg: rgba(251, 191, 36, 0.15);
-  --warning-grad-from: #fde047;
-  --warning-grad-to: #f59e0b;
   --info: #60a5fa;
   --info-bg: rgba(96, 165, 250, 0.15);
   --notes: #a78bfa;
