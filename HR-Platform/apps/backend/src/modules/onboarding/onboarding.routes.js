@@ -30,6 +30,7 @@ const stepSchema = Joi.object({
 const planSchema = Joi.object({
   name: Joi.string().trim().min(1).max(200).required(),
   description: Joi.string().trim().max(2000).allow('', null),
+  department: Joi.string().trim().max(100).allow('', null),
   steps: Joi.array().items(stepSchema).default([]),
 });
 

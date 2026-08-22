@@ -46,6 +46,7 @@ import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import Input from '../../components/ui/Input';
 import Textarea from '../../components/ui/Textarea';
 import Modal from '../../components/ui/Modal';
+import Select from '../../components/ui/Select';
 
 const TABS = [
   { value: 'rejalar', label: 'Rejalar', icon: BookOpen },
@@ -75,7 +76,7 @@ const DOCUMENT_MIME_TYPES = [
 ];
 
 function emptyPlanForm() {
-  return { name: '', description: '', steps: [emptyStep()], employeeIds: [] };
+  return { name: '', description: '', department: '', steps: [emptyStep()], employeeIds: [] };
 }
 
 function getPublicLink(token) {
@@ -270,6 +271,31 @@ export function OnboardingPage() {
     return Object.entries(groups).map(([name, employeeIds]) => ({ name, employeeIds }));
   }, [employees]);
 
+  // Reja "Bo'lim" tanlovi uchun — faqat xodimlarda haqiqatan mavjud
+  // bo'lim nomlari, "Bo'limsiz" guruhi bundan mustasno.
+  const departmentSelectOptions = useMemo(() => (
+    [...new Set(employees.map((e) => e.department).filter(Boolean))]
+      .sort()
+      .map((name) => ({ value: name, label: name }))
+  ), [employees]);
+
+  // Rejalar tabidagi filtr chiplari — faqat haqiqatan reja mavjud
+  // bo'limlar, plus "Umumiy" (agar shunday reja bo'lsa).
+  const planDeptFilterOptions = useMemo(() => {
+    const names = [...new Set(plans.map((p) => p.department).filter(Boolean))].sort();
+    const hasGeneral = plans.some((p) => !p.department);
+    return [...names, ...(hasGeneral ? ['__umumiy__'] : [])];
+  }, [plans]);
+
+  const filteredPlans = useMemo(() => {
+    if (!planDeptFilter) return plans;
+    if (planDeptFilter === '__umumiy__') return plans.filter((p) => !p.department);
+    return plans.filter((p) => p.department === planDeptFilter);
+  }, [plans, planDeptFilter]);
+
+  // Rejalar tabidagi bo'lim filtri — null = hammasi
+  const [planDeptFilter, setPlanDeptFilter] = useState(null);
+
   // --- Plan create/edit ---
   const [isPlanPanelOpen, setIsPlanPanelOpen] = useState(false);
   const [planForm, setPlanForm] = useState(emptyPlanForm());
@@ -313,6 +339,7 @@ export function OnboardingPage() {
     setPlanForm({
       name: plan.name,
       description: plan.description || '',
+      department: plan.department || '',
       steps: plan.steps.length > 0
         ? plan.steps.map((s) => ({
             id: s.id,
@@ -382,9 +409,17 @@ export function OnboardingPage() {
 
   const filteredEmployeesForPicker = useMemo(() => {
     const q = employeeSearch.trim().toLowerCase();
-    if (!q) return employees;
-    return employees.filter((e) => `${e.first_name} ${e.last_name}`.toLowerCase().includes(q));
-  }, [employees, employeeSearch]);
+    return employees
+      .filter((e) => !planForm.department || e.department === planForm.department)
+      .filter((e) => !q || `${e.first_name} ${e.last_name}`.toLowerCase().includes(q));
+  }, [employees, employeeSearch, planForm.department]);
+
+  // "Bo'limlar (Kimlar uchun?)" ro'yxati ham reja bo'limiga mos xodimlar
+  // guruhinigina ko'rsatadi — reja bo'limga bog'langan bo'lsa.
+  const pickerDepartmentGroups = useMemo(() => {
+    if (!planForm.department) return departmentGroups;
+    return departmentGroups.filter((d) => d.name === planForm.department);
+  }, [departmentGroups, planForm.department]);
 
   const handleSavePlan = async () => {
     if (!planForm.name.trim()) {
@@ -422,6 +457,7 @@ export function OnboardingPage() {
       const payload = {
         name: planForm.name.trim(),
         description: planForm.description.trim(),
+        department: planForm.department || '',
         steps: validSteps,
       };
       let planId = editingPlanId;
@@ -509,8 +545,11 @@ export function OnboardingPage() {
     const q = assignSearch.trim().toLowerCase();
     return employees
       .filter((e) => !alreadyAssignedToPlan.has(e.id))
+      // Bo'limga bog'langan reja faqat o'sha bo'lim xodimlariga taklif
+      // qilinadi — "Umumiy" (department=null) reja esa hammaga.
+      .filter((e) => !assignPlan?.department || e.department === assignPlan.department)
       .filter((e) => !q || `${e.first_name} ${e.last_name}`.toLowerCase().includes(q));
-  }, [employees, assignSearch, alreadyAssignedToPlan]);
+  }, [employees, assignSearch, alreadyAssignedToPlan, assignPlan]);
 
   const handleAssign = async () => {
     if (assignEmployeeIds.length === 0) {
@@ -696,11 +735,31 @@ export function OnboardingPage() {
               placeholder="Reja haqida qisqacha ma'lumot"
               rows={3}
             />
+            <Select
+              label="Bo'lim"
+              name="planDepartment"
+              value={planForm.department}
+              onChange={(e) => {
+                const department = e.target.value;
+                setPlanForm((f) => ({
+                  ...f,
+                  department,
+                  // Boshqa bo'limdan avval tanlangan xodimlar endi mos
+                  // kelmaydi — ro'yxatdan yashirin qolib ketmasin uchun
+                  // tanlovdan ham olib tashlanadi.
+                  employeeIds: department
+                    ? f.employeeIds.filter((id) => employees.find((emp) => emp.id === id)?.department === department)
+                    : f.employeeIds,
+                }));
+              }}
+              options={departmentSelectOptions}
+              placeholder="Umumiy (barcha bo'limlar uchun)"
+            />
 
             <div className="onboarding-picker-section">
               <label className="form-label">Bo'limlar (Kimlar uchun?)</label>
               <div className="onboarding-department-list">
-                {departmentGroups.map((dept) => (
+                {pickerDepartmentGroups.map((dept) => (
                   <label key={dept.name} className="onboarding-checkbox-row">
                     <input
                       type="checkbox"
@@ -931,8 +990,30 @@ export function OnboardingPage() {
             }
           />
         ) : (
-          <div className="onboarding-plans-grid">
-            {plans.map((plan) => (
+          <>
+            {planDeptFilterOptions.length > 0 && (
+              <div className="onboarding-dept-filter-row">
+                <button
+                  type="button"
+                  className={`onboarding-dept-filter-chip ${!planDeptFilter ? 'active' : ''}`}
+                  onClick={() => setPlanDeptFilter(null)}
+                >
+                  Hammasi
+                </button>
+                {planDeptFilterOptions.map((name) => (
+                  <button
+                    key={name}
+                    type="button"
+                    className={`onboarding-dept-filter-chip ${planDeptFilter === name ? 'active' : ''}`}
+                    onClick={() => setPlanDeptFilter(name)}
+                  >
+                    {name === '__umumiy__' ? 'Umumiy' : name}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="onboarding-plans-grid">
+            {filteredPlans.map((plan) => (
               <Card key={plan.id} className="onboarding-plan-card">
                 <div className="onboarding-plan-card-header">
                   <span className="onboarding-plan-icon"><BookOpen size={18} strokeWidth={2.25} /></span>
@@ -940,6 +1021,9 @@ export function OnboardingPage() {
                     <h3>{plan.name}</h3>
                     {plan.description && <p>{plan.description}</p>}
                   </div>
+                  <Badge variant={plan.department ? 'info' : 'notes'} className="onboarding-plan-dept-badge">
+                    {plan.department || 'Umumiy'}
+                  </Badge>
                 </div>
                 <div className="onboarding-plan-stats">
                   <span><ListChecks size={14} strokeWidth={2.25} /> {plan.stepCount} bosqich, {plan.taskCount} vazifa</span>
@@ -960,7 +1044,8 @@ export function OnboardingPage() {
                 </div>
               </Card>
             ))}
-          </div>
+            </div>
+          </>
         )
       )}
 

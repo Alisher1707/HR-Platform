@@ -49,6 +49,7 @@ function mapPlan(row) {
     id: row.id,
     name: row.name,
     description: row.description,
+    department: row.department,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     stepCount: Number(row.step_count) || 0,
@@ -157,8 +158,8 @@ export async function createPlan(data, userId) {
   try {
     await client.query('BEGIN');
     const insertResult = await client.query(
-      `INSERT INTO onboarding_plans (name, description, created_by) VALUES ($1, $2, $3) RETURNING id`,
-      [data.name, data.description || null, userId]
+      `INSERT INTO onboarding_plans (name, description, department, created_by) VALUES ($1, $2, $3, $4) RETURNING id`,
+      [data.name, data.description || null, data.department || null, userId]
     );
     const planId = insertResult.rows[0].id;
     await replaceSteps(client, planId, data.steps);
@@ -179,8 +180,8 @@ export async function updatePlan(id, data) {
   try {
     await client.query('BEGIN');
     await client.query(
-      `UPDATE onboarding_plans SET name = $1, description = $2, updated_at = NOW() WHERE id = $3`,
-      [data.name, data.description || null, id]
+      `UPDATE onboarding_plans SET name = $1, description = $2, department = $3, updated_at = NOW() WHERE id = $4`,
+      [data.name, data.description || null, data.department || null, id]
     );
     await replaceSteps(client, id, data.steps);
     await client.query('COMMIT');
