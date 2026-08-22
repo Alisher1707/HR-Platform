@@ -3,7 +3,9 @@ import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import Card from '../ui/Card';
 import LoadingSpinner from '../ui/LoadingSpinner';
 import EmptyState from '../ui/EmptyState';
-import { Building2 } from 'lucide-react';
+import { Building2, Download } from 'lucide-react';
+import { format } from 'date-fns';
+import { exportDepartmentAttendanceToPdf } from '../../utils/exportDepartmentAttendance';
 
 const SEGMENTS = [
   { key: 'onTime', label: 'Vaqtida keldi', color: 'var(--dept-success)', gradientId: 'dept-grad-success' },
@@ -98,6 +100,10 @@ function DepartmentDonutCard({ row }) {
 export function DepartmentAttendanceChart({ data, loading }) {
   const hasData = data && data.length > 0;
 
+  const handleExportPdf = () => {
+    exportDepartmentAttendanceToPdf(data, `bolimlar-davomat-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+  };
+
   return (
     <Card className="mb-6 dept-attendance-card">
       <div className="dept-attendance-header">
@@ -105,13 +111,20 @@ export function DepartmentAttendanceChart({ data, loading }) {
           <Building2 size={17} strokeWidth={2.25} />
           <h3>Bo'limlar bo'yicha bugungi davomat</h3>
         </div>
-        <div className="dept-attendance-legend">
-          {SEGMENTS.map((seg) => (
-            <span key={seg.key} className="dept-attendance-legend-item">
-              <span className="dept-attendance-legend-dot" style={{ background: seg.color }} />
-              {seg.label}
-            </span>
-          ))}
+        <div className="dept-attendance-header-right">
+          <div className="dept-attendance-legend">
+            {SEGMENTS.map((seg) => (
+              <span key={seg.key} className="dept-attendance-legend-item">
+                <span className="dept-attendance-legend-dot" style={{ background: seg.color }} />
+                {seg.label}
+              </span>
+            ))}
+          </div>
+          {hasData && (
+            <button type="button" className="fine-appeals-export-btn" onClick={handleExportPdf}>
+              <Download size={13} strokeWidth={2.25} /> PDF
+            </button>
+          )}
         </div>
       </div>
 

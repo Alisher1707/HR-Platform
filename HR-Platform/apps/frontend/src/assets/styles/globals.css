@@ -8551,6 +8551,13 @@ tr.finance-debt-row td {
   font-weight: 700;
 }
 
+.dept-attendance-header-right {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.875rem;
+}
+
 .dept-attendance-legend {
   display: flex;
   align-items: center;
