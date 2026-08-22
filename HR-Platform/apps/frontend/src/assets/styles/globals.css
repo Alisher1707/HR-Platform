@@ -2121,38 +2121,80 @@ button.header-pill {
   gap: 1.25rem;
 }
 
-.onboarding-dept-filter-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 1.25rem;
+.onboarding-dept-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
 }
 
-.onboarding-dept-filter-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.4375rem 0.875rem;
-  border-radius: 999px;
+.onboarding-dept-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.625rem;
+  padding: 1.25rem;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border);
   background: var(--bg-secondary);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: var(--transition-fast);
+}
+
+.onboarding-dept-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.onboarding-dept-card.general {
+  border-style: dashed;
+}
+
+.onboarding-dept-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.onboarding-dept-card-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-transform: capitalize;
+}
+
+.onboarding-dept-card-meta {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.onboarding-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: none;
+  border: none;
   color: var(--text-secondary);
   font-size: 0.8125rem;
   font-weight: 600;
   font-family: inherit;
-  white-space: nowrap;
   cursor: pointer;
-  transition: var(--transition-fast);
+  padding: 0;
+  margin-bottom: 0.5rem;
 }
 
-.onboarding-dept-filter-chip:hover {
-  border-color: var(--accent);
+.onboarding-back-btn:hover {
   color: var(--accent);
-}
-
-.onboarding-dept-filter-chip.active {
-  background: var(--accent);
-  color: #ffffff;
-  border-color: var(--accent);
 }
 
 .onboarding-plan-card {

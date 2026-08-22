@@ -181,8 +181,6 @@ export function OnboardingPage() {
   const [employees, setEmployees] = useState([]);
   const [isLoadingPlans, setIsLoadingPlans] = useState(false);
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
-  const [stats, setStats] = useState(null);
-  const [isLoadingStats, setIsLoadingStats] = useState(false);
 
   const refreshPlans = async () => {
     setIsLoadingPlans(true);
@@ -233,22 +231,9 @@ export function OnboardingPage() {
     }));
   }, [assignments]);
 
-  const refreshStats = async () => {
-    setIsLoadingStats(true);
-    try {
-      const data = await onboardingService.getStats();
-      setStats(data);
-    } catch (err) {
-      toast.error('Statistikani yuklashda xatolik');
-    } finally {
-      setIsLoadingStats(false);
-    }
-  };
-
   useEffect(() => {
     refreshPlans();
     refreshAssignments();
-    refreshStats();
     (async () => {
       try {
         const response = await employeeService.getEmployees({ limit: 100 });
@@ -279,22 +264,98 @@ export function OnboardingPage() {
       .map((name) => ({ value: name, label: name }))
   ), [employees]);
 
-  // Rejalar tabidagi bo'lim filtri — null = hammasi
-  const [planDeptFilter, setPlanDeptFilter] = useState(null);
+  // Onboarding sahifasi endi bo'lim bo'yicha navigatsiya bilan ishlaydi:
+  // null = bosh sahifa (bo'lim kartalari), '__umumiy__' = umumiy (barcha
+  // bo'limlar uchun) rejalar, aks holda tanlangan bo'lim nomi — shu holatda
+  // Rejalar/Progress/Statistika faqat o'sha bo'limga tegishli ma'lumotni
+  // ko'rsatadi.
+  const [selectedDepartment, setSelectedDepartment] = useState(null);
 
-  // Rejalar tabidagi filtr chiplari — faqat haqiqatan reja mavjud
-  // bo'limlar, plus "Umumiy" (agar shunday reja bo'lsa).
-  const planDeptFilterOptions = useMemo(() => {
-    const names = [...new Set(plans.map((p) => p.department).filter(Boolean))].sort();
-    const hasGeneral = plans.some((p) => !p.department);
-    return [...names, ...(hasGeneral ? ['__umumiy__'] : [])];
-  }, [plans]);
+  const employeeDeptMap = useMemo(
+    () => Object.fromEntries(employees.map((e) => [e.id, e.department || null])),
+    [employees]
+  );
+  const planDeptMap = useMemo(
+    () => Object.fromEntries(plans.map((p) => [p.id, p.department || null])),
+    [plans]
+  );
 
+  // Bosh sahifadagi bo'lim kartalari — har bo'lim uchun reja/xodim soni,
+  // plus "Umumiy" (barcha bo'limlar uchun umumiy rejalar) kartasi.
+  const departmentCards = useMemo(() => {
+    const cards = departmentGroups
+      .filter((d) => d.name !== "Bo'limsiz")
+      .map((d) => ({
+        key: d.name,
+        label: d.name,
+        employeeCount: d.employeeIds.length,
+        planCount: plans.filter((p) => p.department === d.name).length,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+
+    const generalPlanCount = plans.filter((p) => !p.department).length;
+    return [
+      ...cards,
+      { key: '__umumiy__', label: 'Umumiy', employeeCount: employees.length, planCount: generalPlanCount },
+    ];
+  }, [departmentGroups, plans, employees]);
+
+  // Tanlangan bo'lim uchun rejalar — o'ziga tegishli + "Umumiy" rejalar
+  // (Umumiy bo'lim tanlangan bo'lsa, faqat umumiy rejalar).
   const filteredPlans = useMemo(() => {
-    if (!planDeptFilter) return plans;
-    if (planDeptFilter === '__umumiy__') return plans.filter((p) => !p.department);
-    return plans.filter((p) => p.department === planDeptFilter);
-  }, [plans, planDeptFilter]);
+    if (!selectedDepartment) return plans;
+    if (selectedDepartment === '__umumiy__') return plans.filter((p) => !p.department);
+    return plans.filter((p) => !p.department || p.department === selectedDepartment);
+  }, [plans, selectedDepartment]);
+
+  // Progress tabi — tanlangan bo'limga tegishli xodimlargina (Umumiy
+  // tanlansa, faqat umumiy rejadan topshirilgan vazifalar hisoblanadi).
+  const filteredEmployeeProgressGroups = useMemo(() => {
+    if (!selectedDepartment) return employeeProgressGroups;
+    if (selectedDepartment === '__umumiy__') {
+      return employeeProgressGroups
+        .map((g) => {
+          const generalAssignments = g.assignments.filter((a) => !planDeptMap[a.planId]);
+          if (generalAssignments.length === 0) return null;
+          const totalTasks = generalAssignments.reduce((sum, a) => sum + a.totalSteps, 0);
+          const completedTasks = generalAssignments.reduce((sum, a) => sum + a.completedSteps, 0);
+          return {
+            ...g,
+            assignments: generalAssignments,
+            totalTasks,
+            completedTasks,
+            progress: totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0,
+            allCompleted: generalAssignments.every((a) => a.status === 'completed'),
+          };
+        })
+        .filter(Boolean);
+    }
+    return employeeProgressGroups.filter((g) => employeeDeptMap[g.employeeId] === selectedDepartment);
+  }, [employeeProgressGroups, selectedDepartment, employeeDeptMap, planDeptMap]);
+
+  // Statistika tabi — tanlangan bo'lim doirasida qayta hisoblanadi
+  // (backenddagi global /stats o'rniga, allaqachon yuklangan
+  // assignments'dan mijoz tomonida).
+  const departmentStats = useMemo(() => {
+    if (!selectedDepartment) return null;
+    const groups = filteredEmployeeProgressGroups;
+    const relevantAssignments = groups.flatMap((g) => g.assignments);
+    const totalAssignments = relevantAssignments.length;
+    const completedCount = relevantAssignments.filter((a) => a.status === 'completed').length;
+    const within7DaysCount = relevantAssignments.filter((a) => {
+      if (a.status !== 'completed' || !a.completedAt) return false;
+      const days = (new Date(a.completedAt) - new Date(a.createdAt)) / (1000 * 60 * 60 * 24);
+      return days <= 7;
+    }).length;
+    return {
+      totalPlans: filteredPlans.length,
+      totalAssignments,
+      completedCount,
+      completionRate: totalAssignments > 0 ? Math.round((completedCount / totalAssignments) * 100) : 0,
+      within7DaysCount,
+      within7DaysRate: totalAssignments > 0 ? Math.round((within7DaysCount / totalAssignments) * 100) : 0,
+    };
+  }, [selectedDepartment, filteredEmployeeProgressGroups, filteredPlans]);
 
   // --- Plan create/edit ---
   const [isPlanPanelOpen, setIsPlanPanelOpen] = useState(false);
@@ -325,8 +386,8 @@ export function OnboardingPage() {
     }
   };
 
-  const openCreatePlan = () => {
-    setPlanForm(emptyPlanForm());
+  const openCreatePlan = (presetDepartment) => {
+    setPlanForm({ ...emptyPlanForm(), department: typeof presetDepartment === 'string' ? presetDepartment : '' });
     setEditingPlanId(null);
     setEmployeeSearch('');
     setIsPlanPanelOpen(true);
@@ -489,7 +550,6 @@ export function OnboardingPage() {
       setIsPlanPanelOpen(false);
       refreshPlans();
       refreshAssignments();
-      refreshStats();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Rejani saqlashda xatolik');
     } finally {
@@ -508,7 +568,6 @@ export function OnboardingPage() {
       toast.success("Reja o'chirildi");
       refreshPlans();
       refreshAssignments();
-      refreshStats();
     } catch (err) {
       toast.error(err.response?.data?.message || "Rejani o'chirishda xatolik");
     }
@@ -569,7 +628,6 @@ export function OnboardingPage() {
       }
       refreshPlans();
       refreshAssignments();
-      refreshStats();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Biriktirishda xatolik');
     } finally {
@@ -623,7 +681,6 @@ export function OnboardingPage() {
   const applyReviewedAssignment = (updated) => {
     setViewAssignments((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
     refreshAssignments();
-    refreshStats();
   };
 
   const handleApproveTask = async (assignment, task) => {
@@ -680,7 +737,6 @@ export function OnboardingPage() {
       });
       refreshAssignments();
       refreshPlans();
-      refreshStats();
     } catch (err) {
       toast.error(err.response?.data?.message || "Bekor qilishda xatolik");
     }
@@ -944,18 +1000,72 @@ export function OnboardingPage() {
     );
   }
 
+  if (selectedDepartment === null) {
+    return (
+      <div className="animate-fade-in">
+        <div className="page-header">
+          <div className="page-header-left">
+            <h2 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+              <span className="onboarding-title-icon"><Rocket size={20} strokeWidth={2.25} /></span>
+              Onboarding tizimi
+            </h2>
+            <p className="page-subtitle">Bo'limni tanlang — har bir bo'limning o'z rejalari, progressi va statistikasi alohida</p>
+          </div>
+        </div>
+
+        {departmentCards.length === 0 ? (
+          <EmptyState
+            icon={<Users size={44} strokeWidth={1.5} />}
+            title="Xodimlar mavjud emas"
+            text="Xodimlar qo'shilgach, ularning bo'limlari shu yerda kartalar sifatida ko'rinadi"
+          />
+        ) : (
+          <div className="onboarding-dept-card-grid">
+            {departmentCards.map((d) => (
+              <button
+                key={d.key}
+                type="button"
+                className={`onboarding-dept-card ${d.key === '__umumiy__' ? 'general' : ''}`}
+                onClick={() => setSelectedDepartment(d.key)}
+              >
+                <span className="onboarding-dept-card-icon">
+                  {d.key === '__umumiy__' ? <Rocket size={20} strokeWidth={2.25} /> : <Users size={20} strokeWidth={2.25} />}
+                </span>
+                <span className="onboarding-dept-card-name">{d.label}</span>
+                <span className="onboarding-dept-card-meta">
+                  <span>{d.planCount} reja</span>
+                  <span>{d.employeeCount} xodim</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const selectedDepartmentLabel = selectedDepartment === '__umumiy__' ? 'Umumiy' : selectedDepartment;
+
   return (
     <div className="animate-fade-in">
       <div className="page-header">
         <div className="page-header-left">
+          <button type="button" className="onboarding-back-btn" onClick={() => setSelectedDepartment(null)}>
+            <ChevronLeft size={16} strokeWidth={2.5} /> Bo'limlar
+          </button>
           <h2 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
             <span className="onboarding-title-icon"><Rocket size={20} strokeWidth={2.25} /></span>
-            Onboarding tizimi
+            {selectedDepartmentLabel}
           </h2>
-          <p className="page-subtitle">Yangi xodimlar uchun moslashuv rejalarini yarating va kuzating</p>
+          <p className="page-subtitle">Bu bo'lim uchun moslashuv rejalarini yarating va kuzating</p>
         </div>
         <div className="page-header-right">
-          <Button variant="primary" className="onboarding-btn-wide" icon={<Plus size={16} strokeWidth={2.5} />} onClick={openCreatePlan}>
+          <Button
+            variant="primary"
+            className="onboarding-btn-wide"
+            icon={<Plus size={16} strokeWidth={2.5} />}
+            onClick={() => openCreatePlan(selectedDepartment === '__umumiy__' ? '' : selectedDepartment)}
+          >
             Yangi reja
           </Button>
         </div>
@@ -978,40 +1088,23 @@ export function OnboardingPage() {
       {activeTab === 'rejalar' && (
         isLoadingPlans ? (
           <div style={{ padding: '2rem' }}><LoadingSpinner /></div>
-        ) : plans.length === 0 ? (
+        ) : filteredPlans.length === 0 ? (
           <EmptyState
             icon={<Rocket size={44} strokeWidth={1.5} />}
             title="Rejalar mavjud emas"
-            text="Yangi xodimlar uchun birinchi onboarding rejangizni yarating"
+            text="Bu bo'lim uchun birinchi onboarding rejangizni yarating"
             action={
-              <Button variant="primary" className="onboarding-btn-wide" onClick={openCreatePlan} icon={<Plus size={16} strokeWidth={2.5} />}>
+              <Button
+                variant="primary"
+                className="onboarding-btn-wide"
+                onClick={() => openCreatePlan(selectedDepartment === '__umumiy__' ? '' : selectedDepartment)}
+                icon={<Plus size={16} strokeWidth={2.5} />}
+              >
                 Qo'shish
               </Button>
             }
           />
         ) : (
-          <>
-            {planDeptFilterOptions.length > 0 && (
-              <div className="onboarding-dept-filter-row">
-                <button
-                  type="button"
-                  className={`onboarding-dept-filter-chip ${!planDeptFilter ? 'active' : ''}`}
-                  onClick={() => setPlanDeptFilter(null)}
-                >
-                  Hammasi
-                </button>
-                {planDeptFilterOptions.map((name) => (
-                  <button
-                    key={name}
-                    type="button"
-                    className={`onboarding-dept-filter-chip ${planDeptFilter === name ? 'active' : ''}`}
-                    onClick={() => setPlanDeptFilter(name)}
-                  >
-                    {name === '__umumiy__' ? 'Umumiy' : name}
-                  </button>
-                ))}
-              </div>
-            )}
             <div className="onboarding-plans-grid">
             {filteredPlans.map((plan) => (
               <Card key={plan.id} className="onboarding-plan-card">
@@ -1045,7 +1138,6 @@ export function OnboardingPage() {
               </Card>
             ))}
             </div>
-          </>
         )
       )}
 
@@ -1062,9 +1154,9 @@ export function OnboardingPage() {
                   <th></th>
                 </tr>
               </thead>
-              {isLoadingAssignments ? null : employeeProgressGroups.length > 0 && (
+              {isLoadingAssignments ? null : filteredEmployeeProgressGroups.length > 0 && (
                 <tbody>
-                  {employeeProgressGroups.map((g) => (
+                  {filteredEmployeeProgressGroups.map((g) => (
                     <tr key={g.employeeId} className="onboarding-progress-row" onClick={() => openViewSubmissions(g)}>
                       <td>
                         <div className="attendance-employee-cell">
@@ -1117,49 +1209,49 @@ export function OnboardingPage() {
           </div>
           {isLoadingAssignments ? (
             <div style={{ padding: '2rem' }}><LoadingSpinner /></div>
-          ) : employeeProgressGroups.length === 0 && (
+          ) : filteredEmployeeProgressGroups.length === 0 && (
             <p className="onboarding-progress-empty">Progress ma'lumotlari mavjud emas</p>
           )}
         </Card>
       )}
 
       {activeTab === 'statistika' && (
-        isLoadingStats ? (
+        isLoadingAssignments ? (
           <div style={{ padding: '2rem' }}><LoadingSpinner /></div>
-        ) : !stats || stats.totalAssignments === 0 ? (
+        ) : !departmentStats || departmentStats.totalAssignments === 0 ? (
           <EmptyState
             icon={<Percent size={44} strokeWidth={1.5} />}
             title="Statistika mavjud emas"
-            text="Xodimlarga reja biriktirilgach, umumiy statistika shu yerda ko'rinadi"
+            text="Xodimlarga reja biriktirilgach, shu bo'lim statistikasi shu yerda ko'rinadi"
           />
         ) : (
           <div className="onboarding-stats-grid">
             <div className="onboarding-stat-card">
               <span className="onboarding-stat-icon"><BookOpen size={20} strokeWidth={2.25} /></span>
               <div>
-                <span className="onboarding-stat-value">{stats.totalPlans}</span>
+                <span className="onboarding-stat-value">{departmentStats.totalPlans}</span>
                 <span className="onboarding-stat-label">Jami rejalar</span>
               </div>
             </div>
             <div className="onboarding-stat-card">
               <span className="onboarding-stat-icon"><Users size={20} strokeWidth={2.25} /></span>
               <div>
-                <span className="onboarding-stat-value">{stats.totalAssignments}</span>
+                <span className="onboarding-stat-value">{departmentStats.totalAssignments}</span>
                 <span className="onboarding-stat-label">Biriktirilgan xodimlar</span>
               </div>
             </div>
             <div className="onboarding-stat-card">
               <span className="onboarding-stat-icon"><CheckCircle2 size={20} strokeWidth={2.25} /></span>
               <div>
-                <span className="onboarding-stat-value">{stats.completionRate}%</span>
-                <span className="onboarding-stat-label">{stats.completedCount} / {stats.totalAssignments} yakunlagan</span>
+                <span className="onboarding-stat-value">{departmentStats.completionRate}%</span>
+                <span className="onboarding-stat-label">{departmentStats.completedCount} / {departmentStats.totalAssignments} yakunlagan</span>
               </div>
             </div>
             <div className="onboarding-stat-card">
               <span className="onboarding-stat-icon"><CalendarCheck size={20} strokeWidth={2.25} /></span>
               <div>
-                <span className="onboarding-stat-value">{stats.within7DaysRate}%</span>
-                <span className="onboarding-stat-label">7 kun ichida yakunlagan ({stats.within7DaysCount} xodim)</span>
+                <span className="onboarding-stat-value">{departmentStats.within7DaysRate}%</span>
+                <span className="onboarding-stat-label">7 kun ichida yakunlagan ({departmentStats.within7DaysCount} xodim)</span>
               </div>
             </div>
           </div>
