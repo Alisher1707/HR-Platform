@@ -1,5 +1,5 @@
 import React from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import Card from '../ui/Card';
 import LoadingSpinner from '../ui/LoadingSpinner';
 import EmptyState from '../ui/EmptyState';
@@ -12,36 +12,98 @@ const SEGMENTS = [
   { key: 'pending', label: 'Kutilmoqda', color: 'var(--text-secondary)' },
 ];
 
-function CustomTooltip({ active, payload, label }) {
-  if (!active || !payload || payload.length === 0) return null;
-  const row = payload[0].payload;
+const DEPARTMENT_HUES = ['#6366f1', '#0ea5e9', '#d946ef', '#14b8a6', '#f97316', '#8b5cf6', '#22c55e', '#ec4899'];
 
+function departmentColor(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return DEPARTMENT_HUES[Math.abs(hash) % DEPARTMENT_HUES.length];
+}
+
+function CustomTooltip({ active, payload }) {
+  if (!active || !payload || payload.length === 0) return null;
+  const item = payload[0];
   return (
     <div className="dept-attendance-tooltip">
-      <div className="dept-attendance-tooltip-title">{label}</div>
-      <div className="dept-attendance-tooltip-total">Jami: {row.total} xodim</div>
-      {SEGMENTS.map((seg) => (
-        row[seg.key] > 0 && (
-          <div key={seg.key} className="dept-attendance-tooltip-row">
-            <span className="dept-attendance-tooltip-dot" style={{ background: seg.color }} />
-            <span>{seg.label}</span>
-            <strong>{row[seg.key]}</strong>
+      <div className="dept-attendance-tooltip-row">
+        <span className="dept-attendance-tooltip-dot" style={{ background: item.payload.color }} />
+        <span>{item.name}</span>
+        <strong>{item.value}</strong>
+      </div>
+    </div>
+  );
+}
+
+function DepartmentDonutCard({ row }) {
+  const segments = SEGMENTS.map((seg) => ({ ...seg, name: seg.label, value: row[seg.key] })).filter((s) => s.value > 0);
+  const accent = departmentColor(row.department);
+  const onTimePct = row.total > 0 ? Math.round((row.onTime / row.total) * 100) : 0;
+
+  return (
+    <div className="dept-card">
+      <div className="dept-card-header">
+        <span className="dept-card-icon" style={{ background: `${accent}22`, color: accent }}>
+          <Building2 size={16} strokeWidth={2.25} />
+        </span>
+        <div className="dept-card-header-text">
+          <span className="dept-card-name">{row.department}</span>
+          <span className="dept-card-total">{row.total} xodim</span>
+        </div>
+      </div>
+
+      <div className="dept-card-body">
+        <div className="dept-card-donut">
+          <ResponsiveContainer width={104} height={104}>
+            <PieChart>
+              <Pie
+                data={segments}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                innerRadius={36}
+                outerRadius={50}
+                startAngle={90}
+                endAngle={-270}
+                paddingAngle={segments.length > 1 ? 3 : 0}
+                stroke="none"
+              >
+                {segments.map((s) => (
+                  <Cell key={s.key} fill={s.color} />
+                ))}
+              </Pie>
+              <Tooltip content={<CustomTooltip />} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="dept-card-donut-center">
+            <span className="dept-card-donut-value">{onTimePct}%</span>
+            <span className="dept-card-donut-label">vaqtida</span>
           </div>
-        )
-      ))}
+        </div>
+
+        <div className="dept-card-breakdown">
+          {SEGMENTS.map((seg) => (
+            row[seg.key] > 0 && (
+              <div key={seg.key} className="dept-card-breakdown-row">
+                <span className="dept-card-breakdown-dot" style={{ background: seg.color }} />
+                <span className="dept-card-breakdown-label">{seg.label}</span>
+                <span className="dept-card-breakdown-count">{row[seg.key]}</span>
+              </div>
+            )
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
 
 /**
  * Bo'limlar kesimida BUGUNGI kunning jonli davomat holati — har bo'lim
- * o'zining jami xodimlar soniga nisbatan 100% sifatida ko'rsatiladi
- * (stackOffset="expand"), shu 100% ichida Vaqtida/Kech/Kelmagan/Kutilmoqda
- * ulushlari qanday taqsimlanganini ko'rsatadi.
+ * o'zining alohida donut-diagrammasida Vaqtida/Kech/Kelmagan/Kutilmoqda
+ * ulushlarini ko'rsatadi (markazda "vaqtida kelganlar" foizi).
  */
 export function DepartmentAttendanceChart({ data, loading }) {
   const hasData = data && data.length > 0;
-  const chartHeight = Math.max(160, (data?.length || 0) * 44 + 40);
 
   return (
     <Card className="mb-6 dept-attendance-card">
@@ -69,36 +131,11 @@ export function DepartmentAttendanceChart({ data, loading }) {
           text="Xodimlarga bo'lim biriktirilgach, bu yerda bugungi davomat diagrammasi ko'rinadi"
         />
       ) : (
-        <ResponsiveContainer width="100%" height={chartHeight}>
-          <BarChart
-            data={data}
-            layout="vertical"
-            stackOffset="expand"
-            margin={{ top: 4, right: 24, bottom: 4, left: 4 }}
-            barCategoryGap={14}
-          >
-            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" />
-            <XAxis
-              type="number"
-              tickFormatter={(v) => `${Math.round(v * 100)}%`}
-              tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
-              axisLine={{ stroke: 'var(--border)' }}
-              tickLine={false}
-            />
-            <YAxis
-              type="category"
-              dataKey="department"
-              width={150}
-              tick={{ fill: 'var(--text-primary)', fontSize: 13 }}
-              axisLine={{ stroke: 'var(--border)' }}
-              tickLine={false}
-            />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'var(--bg-secondary)' }} />
-            {SEGMENTS.map((seg) => (
-              <Bar key={seg.key} dataKey={seg.key} stackId="a" fill={seg.color} name={seg.label} radius={0} />
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
+        <div className="dept-card-grid">
+          {data.map((row) => (
+            <DepartmentDonutCard key={row.department} row={row} />
+          ))}
+        </div>
       )}
     </Card>
   );
