@@ -1562,6 +1562,11 @@ button.header-pill {
 .stats-icon.blue { background: rgba(59, 130, 246, 0.12); color: #3b82f6; }
 .stats-icon.rose { background: rgba(244, 63, 94, 0.12); color: #f43f5e; }
 
+/* Davomat sahifasidagi bo'lim diagrammasi bilan bir xil ranglar */
+.stats-icon.dept-success { background: rgba(4, 120, 87, 0.16); color: var(--dept-success); }
+.stats-icon.dept-warning { background: rgba(180, 83, 9, 0.16); color: var(--dept-warning); }
+.stats-icon.dept-error { background: rgba(190, 18, 60, 0.16); color: var(--dept-error); }
+
 /* Brand palette variants — used on HR Dashboard only */
 .stats-icon.brand-gold { background: rgba(255, 184, 0, 0.14); color: #b87d00; }
 .stats-icon.brand-orange { background: rgba(255, 128, 80, 0.16); color: #d9532b; }
@@ -8712,48 +8717,3 @@ tr.finance-debt-row td {
   font-variant-numeric: tabular-nums;
 }
 
-.dept-attendance-tooltip {
-  background: var(--card-bg, var(--bg-secondary));
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 0.625rem 0.75rem;
-  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.18));
-  min-width: 160px;
-}
-
-.dept-attendance-tooltip-title {
-  font-size: 0.8125rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin-bottom: 0.25rem;
-}
-
-.dept-attendance-tooltip-total {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  margin-bottom: 0.375rem;
-  padding-bottom: 0.375rem;
-  border-bottom: 1px solid var(--border);
-}
-
-.dept-attendance-tooltip-row {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  padding: 0.125rem 0;
-}
-
-.dept-attendance-tooltip-row strong {
-  margin-left: auto;
-  color: var(--text-primary);
-  font-variant-numeric: tabular-nums;
-}
-
-.dept-attendance-tooltip-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}

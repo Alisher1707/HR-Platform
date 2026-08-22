@@ -2944,10 +2944,10 @@ export function AttendancePage() {
         <>
           {/* Stats */}
           <div className="stats-grid attendance-stats-grid mb-6">
-            <StatsCard label="Barchasi" value={isCategoricalFilterActive ? filteredEmployees.length : total} icon={<Briefcase size={20} strokeWidth={2} />} iconColor="emerald" />
-            <StatsCard label="Ishda" value={attendanceStats.ishda} icon={<Briefcase size={20} strokeWidth={2} />} iconColor="blue" />
-            <StatsCard label="Kech kelgan" value={attendanceStats.kechKelgan} icon={<Briefcase size={20} strokeWidth={2} />} iconColor="amber" />
-            <StatsCard label="Ishda emas" value={attendanceStats.ishdaEmas} icon={<Briefcase size={20} strokeWidth={2} />} iconColor="rose" />
+            <StatsCard label="Barchasi" value={isCategoricalFilterActive ? filteredEmployees.length : total} icon={<Briefcase size={20} strokeWidth={2} />} iconColor="indigo" />
+            <StatsCard label="Ishda" value={attendanceStats.ishda} icon={<Briefcase size={20} strokeWidth={2} />} iconColor="dept-success" />
+            <StatsCard label="Kech kelgan" value={attendanceStats.kechKelgan} icon={<Briefcase size={20} strokeWidth={2} />} iconColor="dept-warning" />
+            <StatsCard label="Ishda emas" value={attendanceStats.ishdaEmas} icon={<Briefcase size={20} strokeWidth={2} />} iconColor="dept-error" />
           </div>
 
           <DepartmentAttendanceChart data={departmentSummary} loading={departmentSummaryLoading} />

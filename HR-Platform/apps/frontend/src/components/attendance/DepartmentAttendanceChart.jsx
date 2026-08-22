@@ -1,5 +1,5 @@
 import React from 'react';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import Card from '../ui/Card';
 import LoadingSpinner from '../ui/LoadingSpinner';
 import EmptyState from '../ui/EmptyState';
@@ -11,20 +11,6 @@ const SEGMENTS = [
   { key: 'absent', label: 'Kelmagan', color: 'var(--dept-error)', gradientId: 'dept-grad-error' },
   { key: 'pending', label: 'Kutilmoqda', color: 'var(--text-secondary)', gradientId: null },
 ];
-
-function CustomTooltip({ active, payload }) {
-  if (!active || !payload || payload.length === 0) return null;
-  const item = payload[0];
-  return (
-    <div className="dept-attendance-tooltip">
-      <div className="dept-attendance-tooltip-row">
-        <span className="dept-attendance-tooltip-dot" style={{ background: item.payload.color }} />
-        <span>{item.name}</span>
-        <strong>{item.value}</strong>
-      </div>
-    </div>
-  );
-}
 
 function DepartmentDonutCard({ row }) {
   const segments = SEGMENTS.map((seg) => ({ ...seg, name: seg.label, value: row[seg.key] })).filter((s) => s.value > 0);
@@ -77,7 +63,6 @@ function DepartmentDonutCard({ row }) {
                   <Cell key={s.key} fill={s.gradientId ? `url(#${s.gradientId})` : s.color} />
                 ))}
               </Pie>
-              <Tooltip content={<CustomTooltip />} />
             </PieChart>
           </ResponsiveContainer>
           <div className="dept-card-donut-center">
