@@ -279,6 +279,9 @@ export function OnboardingPage() {
       .map((name) => ({ value: name, label: name }))
   ), [employees]);
 
+  // Rejalar tabidagi bo'lim filtri — null = hammasi
+  const [planDeptFilter, setPlanDeptFilter] = useState(null);
+
   // Rejalar tabidagi filtr chiplari — faqat haqiqatan reja mavjud
   // bo'limlar, plus "Umumiy" (agar shunday reja bo'lsa).
   const planDeptFilterOptions = useMemo(() => {
@@ -292,9 +295,6 @@ export function OnboardingPage() {
     if (planDeptFilter === '__umumiy__') return plans.filter((p) => !p.department);
     return plans.filter((p) => p.department === planDeptFilter);
   }, [plans, planDeptFilter]);
-
-  // Rejalar tabidagi bo'lim filtri — null = hammasi
-  const [planDeptFilter, setPlanDeptFilter] = useState(null);
 
   // --- Plan create/edit ---
   const [isPlanPanelOpen, setIsPlanPanelOpen] = useState(false);
