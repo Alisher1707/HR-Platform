@@ -1,7 +1,8 @@
 import { query } from '../../config/database.js';
 import { HTTP_STATUS } from '../../config/constants.js';
-import { computeLateness, computeEarlyLeave, computeShiftLimit } from '../schedules/schedules.service.js';
+import { computeLateness, computeEarlyLeave, computeShiftLimit, timeStringToMinutes, DEFAULT_START_TIME } from '../schedules/schedules.service.js';
 import { checkLateArrivalFine, checkEarlyLeaveFine } from '../../services/autoFineService.js';
+import { businessDayStart, businessDateOnly, businessMinutesSinceMidnight } from '../../shared/utils/timezone.js';
 
 /**
  * Attendance Service
@@ -177,6 +178,96 @@ export async function getAttendanceReport({ startDate, endDate, branches, depart
     totalHours: Math.round(Number(row.total_hours) * 10) / 10,
     overtimeHours: Math.round(Number(row.overtime_hours) * 10) / 10,
   }));
+}
+
+/**
+ * Bugungi kunning bo'lim kesimidagi jonli holati — Davomat sahifasi
+ * tepasidagi diagramma uchun. Har bir xodim to'rtta holatdan biriga
+ * tushadi:
+ *  - "onTime" — bugun keldi, kech qolmadi (yoki jadval turi "gibrid"/
+ *    "erkin" bo'lgani uchun kech qolish tushunchasi umuman qo'llanmaydi)
+ *  - "late" — bugun keldi, lekin moslashuvchan jadval bo'yicha kech qoldi
+ *  - "absent" — jadvalining boshlanish vaqti allaqachon o'tgan, lekin
+ *    hali kelmagan
+ *  - "pending" — jadvalining boshlanish vaqti hali kelmagan (na kelgan,
+ *    na "kelmagan" deb belgilash uchun vaqt o'tgan) — foizga kiritilmaydi,
+ *    ertalab butun bo'lim soxta "qizil" bo'lib ko'rinishining oldini oladi
+ * Dam olish kuni bo'lgan xodimlar butunlay hisobdan tashqarida qoladi —
+ * ular uchun "kelmagan" tushunchasi ma'nosiz.
+ */
+export async function getDepartmentAttendanceSummary() {
+  const now = new Date();
+  const todayStart = businessDayStart(now);
+  const todayDate = businessDateOnly(now);
+  const nowMinutes = businessMinutesSinceMidnight(now);
+
+  const { rows } = await query(
+    `WITH employee_schedule AS (
+       SELECT DISTINCT ON (wse.employee_id)
+         wse.employee_id, wse.schedule_id, ws.type AS schedule_type,
+         ws.start_date, GREATEST(ws.cycle_days, 1) AS cycle_days
+       FROM work_schedule_employees wse
+       JOIN work_schedules ws ON ws.id = wse.schedule_id
+       ORDER BY wse.employee_id, wse.created_at DESC
+     ),
+     schedule_today AS (
+       SELECT
+         es.employee_id, es.schedule_type,
+         wsd.is_work_day, wsd.start_time
+       FROM employee_schedule es
+       LEFT JOIN work_schedule_days wsd
+         ON wsd.schedule_id = es.schedule_id
+         AND wsd.day_number = ((($2::date - es.start_date) % es.cycle_days + es.cycle_days) % es.cycle_days) + 1
+     ),
+     first_scan AS (
+       SELECT DISTINCT ON (employee_id) employee_id, is_late
+       FROM attendance_records
+       WHERE type = 'keldi' AND recorded_at >= $1 AND recorded_at < NOW()
+       ORDER BY employee_id, recorded_at ASC
+     )
+     SELECT
+       e.department,
+       st.schedule_type,
+       st.is_work_day,
+       st.start_time,
+       (fs.employee_id IS NOT NULL) AS has_scan,
+       fs.is_late
+     FROM employees e
+     LEFT JOIN schedule_today st ON st.employee_id = e.id
+     LEFT JOIN first_scan fs ON fs.employee_id = e.id
+     WHERE e.department IS NOT NULL AND e.department <> ''`,
+    [todayStart, todayDate]
+  );
+
+  const byDepartment = new Map();
+
+  for (const row of rows) {
+    if (row.is_work_day === false) continue; // dam olish kuni — hisobdan tashqari
+
+    if (!byDepartment.has(row.department)) {
+      byDepartment.set(row.department, { department: row.department, total: 0, onTime: 0, late: 0, absent: 0, pending: 0 });
+    }
+    const bucket = byDepartment.get(row.department);
+    bucket.total++;
+
+    if (row.has_scan) {
+      const isLateApplicable = !row.schedule_type || row.schedule_type === 'moslashuvchan';
+      if (isLateApplicable && row.is_late === true) {
+        bucket.late++;
+      } else {
+        bucket.onTime++;
+      }
+    } else {
+      const startMinutes = timeStringToMinutes(row.start_time || DEFAULT_START_TIME);
+      if (nowMinutes > startMinutes) {
+        bucket.absent++;
+      } else {
+        bucket.pending++;
+      }
+    }
+  }
+
+  return [...byDepartment.values()].sort((a, b) => a.department.localeCompare(b.department));
 }
 
 /**

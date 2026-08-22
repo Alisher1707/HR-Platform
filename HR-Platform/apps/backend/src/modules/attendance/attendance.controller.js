@@ -55,6 +55,25 @@ export async function getAttendanceReport(req, res) {
 }
 
 /**
+ * GET /api/v1/attendance/department-summary
+ * Bo'lim kesimida bugungi kunning jonli holati (Vaqtida/Kech/Kelmagan) —
+ * Davomat sahifasi tepasidagi diagramma uchun.
+ */
+export async function getDepartmentSummary(req, res) {
+  try {
+    const rows = await attendanceService.getDepartmentAttendanceSummary();
+    return successResponse(res, rows, "Bo'limlar bo'yicha bugungi davomat olindi");
+  } catch (error) {
+    console.error('Get department attendance summary error:', error);
+    return errorResponse(
+      res,
+      error.message || "Bo'limlar bo'yicha davomatni olishda xatolik",
+      error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR
+    );
+  }
+}
+
+/**
  * POST /api/v1/attendance
  */
 export async function createAttendance(req, res) {

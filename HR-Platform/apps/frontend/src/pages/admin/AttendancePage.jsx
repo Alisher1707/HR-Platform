@@ -76,6 +76,7 @@ import attendanceService from '../../services/attendanceService';
 import workScheduleService from '../../services/workScheduleService';
 import devicesService from '../../services/devicesService';
 import fineService from '../../services/fineService';
+import DepartmentAttendanceChart from '../../components/attendance/DepartmentAttendanceChart';
 import payrollService from '../../services/payrollService';
 import { exportAttendanceReportToExcel } from '../../utils/exportExcel';
 import { exportAppealsToExcel, exportAppealsToPdf } from '../../utils/exportAppeals';
@@ -1494,6 +1495,8 @@ export function AttendancePage() {
   const [detailEmployee, setDetailEmployee] = useState(null);
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const [departmentSummary, setDepartmentSummary] = useState([]);
+  const [departmentSummaryLoading, setDepartmentSummaryLoading] = useState(false);
   const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
   const [taskForm, setTaskForm] = useState(getDefaultTaskForm());
   const [taskPriorityFilter, setTaskPriorityFilter] = useState(null);
@@ -2631,6 +2634,26 @@ export function AttendancePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDateKey]);
 
+  // Bo'limlar kesimidagi bugungi kunning jonli holati (Vaqtida/Kech/Kelmagan)
+  // — tanlangan sanadan qat'iy nazar, har doim BUGUNGI kunni ko'rsatadi.
+  const refreshDepartmentSummary = async () => {
+    setDepartmentSummaryLoading(true);
+    try {
+      const rows = await attendanceService.getDepartmentSummary();
+      setDepartmentSummary(rows || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDepartmentSummaryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSection !== 'davomat') return;
+    refreshDepartmentSummary();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSection]);
+
   // Kameradan hodisalar istalgan vaqt kelishi mumkin — sahifa ochiq turganda
   // Davomat bo'limi o'zi vaqti-vaqti bilan yangilanib tursin, foydalanuvchi
   // har safar qo'lda yangilashi shart bo'lmasin.
@@ -2638,6 +2661,7 @@ export function AttendancePage() {
     if (activeSection !== 'davomat') return;
     const intervalId = setInterval(() => {
       refreshAttendance();
+      refreshDepartmentSummary();
     }, 20000);
     return () => clearInterval(intervalId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2925,6 +2949,8 @@ export function AttendancePage() {
             <StatsCard label="Kech kelgan" value={attendanceStats.kechKelgan} icon={<Briefcase size={20} strokeWidth={2} />} iconColor="amber" />
             <StatsCard label="Ishda emas" value={attendanceStats.ishdaEmas} icon={<Briefcase size={20} strokeWidth={2} />} iconColor="rose" />
           </div>
+
+          <DepartmentAttendanceChart data={departmentSummary} loading={departmentSummaryLoading} />
 
           {/* Arizalar — Telegram bot orqali kelgan jarima tushuntirish xatlari */}
           <Card className="mb-6" style={{ padding: 0 }}>

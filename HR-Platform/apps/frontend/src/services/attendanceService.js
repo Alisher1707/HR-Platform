@@ -33,6 +33,15 @@ export const attendanceService = {
   },
 
   /**
+   * Bo'lim kesimida bugungi kunning jonli holati (Vaqtida/Kech/Kelmagan) —
+   * Davomat sahifasi tepasidagi diagramma uchun.
+   */
+  async getDepartmentSummary() {
+    const response = await api.get('/attendance/department-summary');
+    return response.data.data;
+  },
+
+  /**
    * Per-employee attendance summary for a date range — Monitoring > Hisobotlar.
    * branches/departments/positions are arrays; the backend expects comma-joined strings.
    */

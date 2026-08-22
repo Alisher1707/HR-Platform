@@ -61,6 +61,14 @@ router.get(
   attendanceController.getAttendanceReport
 );
 
+// GET /api/v1/attendance/department-summary - Bugungi kunning bo'lim kesimidagi holati (ADMIN, SUPER_ADMIN, HR)
+router.get(
+  '/department-summary',
+  authenticate,
+  authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.HR),
+  attendanceController.getDepartmentSummary
+);
+
 // POST /api/v1/attendance - Create manual attendance record (ADMIN, SUPER_ADMIN, HR)
 router.post(
   '/',
