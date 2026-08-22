@@ -6,19 +6,11 @@ import EmptyState from '../ui/EmptyState';
 import { Building2 } from 'lucide-react';
 
 const SEGMENTS = [
-  { key: 'onTime', label: 'Vaqtida keldi', color: 'var(--success)' },
-  { key: 'late', label: 'Kech keldi', color: 'var(--warning)' },
-  { key: 'absent', label: 'Kelmagan', color: 'var(--error)' },
-  { key: 'pending', label: 'Kutilmoqda', color: 'var(--text-secondary)' },
+  { key: 'onTime', label: 'Vaqtida keldi', color: 'var(--success)', gradientId: 'dept-grad-success' },
+  { key: 'late', label: 'Kech keldi', color: 'var(--warning)', gradientId: 'dept-grad-warning' },
+  { key: 'absent', label: 'Kelmagan', color: 'var(--error)', gradientId: 'dept-grad-error' },
+  { key: 'pending', label: 'Kutilmoqda', color: 'var(--text-secondary)', gradientId: null },
 ];
-
-const DEPARTMENT_HUES = ['#6366f1', '#0ea5e9', '#d946ef', '#14b8a6', '#f97316', '#8b5cf6', '#22c55e', '#ec4899'];
-
-function departmentColor(name) {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return DEPARTMENT_HUES[Math.abs(hash) % DEPARTMENT_HUES.length];
-}
 
 function CustomTooltip({ active, payload }) {
   if (!active || !payload || payload.length === 0) return null;
@@ -36,13 +28,12 @@ function CustomTooltip({ active, payload }) {
 
 function DepartmentDonutCard({ row }) {
   const segments = SEGMENTS.map((seg) => ({ ...seg, name: seg.label, value: row[seg.key] })).filter((s) => s.value > 0);
-  const accent = departmentColor(row.department);
   const onTimePct = row.total > 0 ? Math.round((row.onTime / row.total) * 100) : 0;
 
   return (
     <div className="dept-card">
       <div className="dept-card-header">
-        <span className="dept-card-icon" style={{ background: `${accent}22`, color: accent }}>
+        <span className="dept-card-icon">
           <Building2 size={16} strokeWidth={2.25} />
         </span>
         <div className="dept-card-header-text">
@@ -55,6 +46,20 @@ function DepartmentDonutCard({ row }) {
         <div className="dept-card-donut">
           <ResponsiveContainer width={104} height={104}>
             <PieChart>
+              <defs>
+                <linearGradient id="dept-grad-success" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--success-grad-from)" />
+                  <stop offset="100%" stopColor="var(--success-grad-to)" />
+                </linearGradient>
+                <linearGradient id="dept-grad-warning" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--warning-grad-from)" />
+                  <stop offset="100%" stopColor="var(--warning-grad-to)" />
+                </linearGradient>
+                <linearGradient id="dept-grad-error" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--error-grad-from)" />
+                  <stop offset="100%" stopColor="var(--error-grad-to)" />
+                </linearGradient>
+              </defs>
               <Pie
                 data={segments}
                 dataKey="value"
@@ -69,7 +74,7 @@ function DepartmentDonutCard({ row }) {
                 stroke="none"
               >
                 {segments.map((s) => (
-                  <Cell key={s.key} fill={s.color} />
+                  <Cell key={s.key} fill={s.gradientId ? `url(#${s.gradientId})` : s.color} />
                 ))}
               </Pie>
               <Tooltip content={<CustomTooltip />} />
@@ -100,7 +105,10 @@ function DepartmentDonutCard({ row }) {
 /**
  * Bo'limlar kesimida BUGUNGI kunning jonli davomat holati — har bo'lim
  * o'zining alohida donut-diagrammasida Vaqtida/Kech/Kelmagan/Kutilmoqda
- * ulushlarini ko'rsatadi (markazda "vaqtida kelganlar" foizi).
+ * ulushlarini ko'rsatadi (markazda "vaqtida kelganlar" foizi). Diagramma
+ * ranglari — mavjud "Kech keldi"/"Ichkarida"/"Tashqarida" belgilaridagi
+ * bilan bir xil (--success/--warning/--error), faqat halqada chuqurlik
+ * hissi uchun gradient qo'shilgan.
  */
 export function DepartmentAttendanceChart({ data, loading }) {
   const hasData = data && data.length > 0;
