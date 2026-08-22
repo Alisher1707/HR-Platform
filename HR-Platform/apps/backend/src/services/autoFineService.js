@@ -247,3 +247,97 @@ export function startAutoFineCron() {
     }
   }, INTERVAL);
 }
+
+/**
+ * A ketdi from a moslashuvchan-schedule employee is inserted with
+ * day_boundary='pending' (see devices.controller#recordAttendance) because
+ * at scan time we can't know if the employee is gone for the day or just
+ * stepping out — they might come back before their shift ends. This sweep
+ * resolves every still-pending ketdi once it's actually decidable:
+ *  - a later keldi exists for that day → it was a mid-day break, not the
+ *    final checkout (normally already resolved instantly when that later
+ *    keldi was recorded — this is just a safety net for any that slipped
+ *    through, e.g. a manual DB edit or a missed real-time update).
+ *  - the schedule's end_time for that business day has passed with no
+ *    later keldi → this WAS the day's real final checkout; is_early_leave
+ *    is computed now (scan time vs. end_time) and the early-leave fine (if
+ *    any) fires now, for the first time — this is the only place it ever
+ *    does for a device-sourced ketdi, since recordAttendance no longer
+ *    evaluates earliness synchronously.
+ *  - schedule still exists but end_time for that day hasn't passed yet →
+ *    left as 'pending', re-checked on the next run.
+ */
+export async function resolveFinalCheckouts() {
+  const { rows: pending } = await query(
+    `SELECT id, employee_id, recorded_at FROM attendance_records
+     WHERE type = 'ketdi' AND day_boundary = 'pending'`
+  );
+
+  let resolved = 0;
+  for (const record of pending) {
+    try {
+      const schedule = await getActiveScheduleForEmployee(record.employee_id);
+      if (!schedule || schedule.type !== 'moslashuvchan') {
+        // Schedule was changed/removed since the scan — nothing left to wait on.
+        await query(`UPDATE attendance_records SET day_boundary = 'boundary' WHERE id = $1`, [record.id]);
+        continue;
+      }
+
+      const recordedAt = new Date(record.recorded_at);
+      const day = await getScheduleDay(schedule.id, getDayNumberForDate(schedule, recordedAt));
+      const endMinutes = timeStringToMinutes(day?.end_time || DEFAULT_END_TIME);
+
+      const isPastDay = businessDateOnly(recordedAt).getTime() < businessDateOnly(new Date()).getTime();
+      const endTimeHasPassed = isPastDay || businessMinutesSinceMidnight(new Date()) >= endMinutes;
+      if (!endTimeHasPassed) continue;
+
+      const { rows: laterKeldi } = await query(
+        `SELECT 1 FROM attendance_records WHERE employee_id = $1 AND type = 'keldi' AND recorded_at > $2 LIMIT 1`,
+        [record.employee_id, recordedAt]
+      );
+
+      if (laterKeldi.length > 0) {
+        await query(`UPDATE attendance_records SET day_boundary = 'mid_day' WHERE id = $1`, [record.id]);
+        continue;
+      }
+
+      const isEarly = businessMinutesSinceMidnight(recordedAt) < endMinutes;
+      await query(
+        `UPDATE attendance_records SET day_boundary = 'boundary', is_early_leave = $1 WHERE id = $2`,
+        [isEarly, record.id]
+      );
+      await checkEarlyLeaveFine(record.employee_id, recordedAt, isEarly);
+      resolved++;
+    } catch (err) {
+      console.error(`Checkout resolution failed for attendance record ${record.id}:`, err.message);
+    }
+  }
+
+  return { resolved, checked: pending.length };
+}
+
+/**
+ * Tighter interval than the fine-policy cron (10 vs 30 minutes) — schedule
+ * end_times vary per employee, so this needs to catch each one reasonably
+ * soon after it actually passes, not just once a day.
+ */
+export function startCheckoutResolutionCron() {
+  const INTERVAL = 10 * 60 * 1000;
+
+  console.log('🚀 Starting checkout-resolution cron job (runs every 10 minutes)');
+
+  resolveFinalCheckouts()
+    .then((result) => {
+      if (result.resolved > 0) console.log(`✅ Initial scan: ${result.resolved} ta chiqish yakuniy deb belgilandi`);
+    })
+    .catch((err) => console.error('❌ Initial checkout resolution failed:', err));
+
+  setInterval(async () => {
+    try {
+      const result = await resolveFinalCheckouts();
+      if (result.resolved > 0) console.log(`✅ Cron: ${result.resolved} ta chiqish yakuniy deb belgilandi`);
+    } catch (error) {
+      console.error('❌ Cron checkout resolution failed:', error);
+    }
+  }, INTERVAL);
+}

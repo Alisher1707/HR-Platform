@@ -3032,7 +3032,11 @@ export function AttendancePage() {
                               <td>{record.type === 'keldi' ? 'Keldi' : 'Ketdi'}</td>
                               <td>
                                 {record.type === 'keldi' ? (
-                                  record.is_late === null || record.is_late === undefined ? (
+                                  record.day_boundary === 'mid_day' ? (
+                                    <Badge variant="info" title="Xodim kun davomida qaytib keldi — bu kunning birinchi kelishi emas, kech qolish baholanmaydi">
+                                      <DoorOpen size={12} strokeWidth={2.25} /> Ichkarida
+                                    </Badge>
+                                  ) : record.is_late === null || record.is_late === undefined ? (
                                     record.schedule_type === 'gibrid' || record.schedule_type === 'erkin' ? (
                                       <Badge variant="info" title="Bu jadvalda qat'iy boshlanish vaqti yo'q — smena limiti asosida ishlaydi">
                                         <Zap size={12} strokeWidth={2.25} /> Erkin jadval
@@ -3052,7 +3056,11 @@ export function AttendancePage() {
                                     </Badge>
                                   )
                                 ) : (
-                                  record.is_early_leave === null || record.is_early_leave === undefined ? (
+                                  record.day_boundary === 'mid_day' || record.day_boundary === 'pending' ? (
+                                    <Badge variant="info" title="Xodim kun davomida chiqdi — hali kunning yakuniy chiqishi tasdiqlanmagan, ish jadvali tugash vaqti kelgach aniqlanadi">
+                                      <DoorClosed size={12} strokeWidth={2.25} /> Tashqarida
+                                    </Badge>
+                                  ) : record.is_early_leave === null || record.is_early_leave === undefined ? (
                                     record.is_over_shift_limit === null || record.is_over_shift_limit === undefined ? (
                                       <Badge variant="info" title="Xodimning biriktirilgan jadvali bu kunni dam olish kuni deb belgilagan">
                                         <CalendarOff size={12} strokeWidth={2.25} /> Dam olish kuni

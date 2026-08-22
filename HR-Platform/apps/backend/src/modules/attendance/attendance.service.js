@@ -39,7 +39,7 @@ export async function listAttendance({ date, startDate, endDate, employeeId } = 
     `SELECT
        ar.id, ar.employee_id, ar.type, ar.recorded_at, ar.source, ar.notes,
        ar.device_token, ar.created_at, ar.is_late, ar.is_after_hours, ar.is_early_leave,
-       ar.is_over_shift_limit, ar.schedule_id, ws.type AS schedule_type,
+       ar.is_over_shift_limit, ar.day_boundary, ar.schedule_id, ws.type AS schedule_type,
        e.first_name, e.last_name, e.position, e.branch, e.photo_url
      FROM attendance_records ar
      JOIN employees e ON e.id = ar.employee_id

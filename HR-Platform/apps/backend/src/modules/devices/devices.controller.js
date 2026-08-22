@@ -2,9 +2,9 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { query } from '../../config/database.js';
-import { computeLateness, computeEarlyLeave, computeShiftLimit } from '../schedules/schedules.service.js';
+import { computeLateness, computeShiftLimit, getActiveScheduleForEmployee } from '../schedules/schedules.service.js';
 import { recomputeEmployeePresence } from '../attendance/attendance.service.js';
-import { checkLateArrivalFine, checkEarlyLeaveFine } from '../../services/autoFineService.js';
+import { checkLateArrivalFine } from '../../services/autoFineService.js';
 import { generateRandomString } from '../../shared/utils/crypto.js';
 import { businessDayStart } from '../../shared/utils/timezone.js';
 
@@ -282,7 +282,7 @@ async function recordAttendance(employeeId, deviceToken, rawPersonId, explicitTy
   // tartibsiz kelib qolsa ham, har bir hodisa o'zidan oldingi haqiqiy
   // holatga nisbatan to'g'ri baholanishini ta'minlaydi.
   const { rows } = await query(
-    `SELECT type, recorded_at FROM attendance_records
+    `SELECT id, type, recorded_at FROM attendance_records
      WHERE employee_id = $1 AND recorded_at >= $2 AND recorded_at < $3
      ORDER BY recorded_at DESC
      LIMIT 1`,
@@ -298,32 +298,68 @@ async function recordAttendance(employeeId, deviceToken, rawPersonId, explicitTy
 
   const lastType = rows.length > 0 ? rows[0].type : null;
   const type = explicitType || (lastType === 'keldi' ? 'ketdi' : 'keldi');
+  const isFirstScanToday = rows.length === 0;
 
-  const { isLate, isAfterHours, isEarly, isOverShiftLimit, scheduleId } = type === 'keldi'
-    ? { ...(await computeLateness(employeeId, recordedAt)), isEarly: null, isOverShiftLimit: null }
-    : {
-        isLate: null,
-        isAfterHours: null,
-        ...(await computeEarlyLeave(employeeId, recordedAt)),
-        ...(await computeShiftLimit(employeeId, recordedAt)),
-      };
+  // "Kech keldi"/"Erta ketdi" faqat kunning HAQIQIY chegara skanlariga
+  // tegishli — tushlik uchun chiqib-kirish kabi oraliq skanlar "Ichkarida"/
+  // "Tashqarida" deb ko'rsatiladi (frontend, day_boundary orqali). Bu faqat
+  // moslashuvchan jadval uchun ma'noli — boshqa turlarda eski xulq-atvor
+  // (is_late/is_early_leave doim null, faqat is_over_shift_limit) saqlanadi.
+  const schedule = await getActiveScheduleForEmployee(employeeId);
+  const isMoslashuvchan = !!(schedule && schedule.type === 'moslashuvchan');
+
+  let isLate = null;
+  let isAfterHours = null;
+  let isEarly = null;
+  let isOverShiftLimit = null;
+  let scheduleId = null;
+  let dayBoundary = null;
+
+  if (type === 'keldi') {
+    // Bu keldi shu kun uchun oldin "pending" (hali yakuniy chiqishmi yoki
+    // yo'qmi noaniq) qolgan ketdi'ni bor deb topsa — demak xodim qaytib
+    // keldi, o'sha ketdi endi kunning yakuniy chiqishi EMASLIGI aniq
+    // bo'ldi. Kutish (deferred sweep) o'rniga shu yerda darhol hal qilamiz.
+    if (isMoslashuvchan && lastType === 'ketdi') {
+      await query(
+        `UPDATE attendance_records SET day_boundary = 'mid_day' WHERE id = $1 AND day_boundary = 'pending'`,
+        [rows[0].id]
+      );
+    }
+
+    if (!isMoslashuvchan) {
+      ({ isLate, isAfterHours, scheduleId } = await computeLateness(employeeId, recordedAt));
+    } else if (isFirstScanToday) {
+      ({ isLate, isAfterHours, scheduleId } = await computeLateness(employeeId, recordedAt));
+      dayBoundary = 'boundary';
+    } else {
+      dayBoundary = 'mid_day';
+    }
+  } else {
+    ({ isOverShiftLimit, scheduleId } = await computeShiftLimit(employeeId, recordedAt));
+    // is_early_leave hisoblanmaydi — bu ketdi kunning oxirgisi bo'ladimi
+    // hali noma'lum (xodim qaytib kelishi mumkin). Jadval tugash vaqti
+    // o'tgach, autoFineService#resolveFinalCheckouts uni hal qiladi.
+    if (isMoslashuvchan) dayBoundary = 'pending';
+  }
 
   await query(
     `INSERT INTO attendance_records
-       (employee_id, type, device_token, raw_person_id, recorded_at, is_late, is_after_hours, is_early_leave, is_over_shift_limit, schedule_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-    [employeeId, type, deviceToken, rawPersonId, recordedAt, isLate, isAfterHours, isEarly, isOverShiftLimit, scheduleId]
+       (employee_id, type, device_token, raw_person_id, recorded_at, is_late, is_after_hours, is_early_leave, is_over_shift_limit, schedule_id, day_boundary)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+    [employeeId, type, deviceToken, rawPersonId, recordedAt, isLate, isAfterHours, isEarly, isOverShiftLimit, scheduleId, dayBoundary]
   );
 
   await recomputeEmployeePresence(employeeId);
 
   if (type === 'keldi') {
     await checkLateArrivalFine(employeeId, recordedAt, isLate);
-  } else {
-    await checkEarlyLeaveFine(employeeId, recordedAt, isEarly);
   }
+  // ketdi uchun erta-ketish jarimasi endi shu yerda emas — kutilayotgan
+  // (pending) chiqish yakuniy deb tasdiqlangandagina, resolveFinalCheckouts
+  // ichida chaqiriladi.
 
-  return { skipped: false, type, isLate, isEarly };
+  return { skipped: false, type, isLate, isEarly, dayBoundary };
 }
 
 /**

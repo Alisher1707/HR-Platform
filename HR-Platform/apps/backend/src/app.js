@@ -9,7 +9,7 @@ import { testConnection } from './config/database.js';
 import { generalLimiter } from './shared/middleware/rateLimiter.js';
 import { errorHandler, notFoundHandler } from './shared/middleware/errorHandler.js';
 import { startAutoPromotionCron } from './services/autoPromotionService.js';
-import { startAutoFineCron } from './services/autoFineService.js';
+import { startAutoFineCron, startCheckoutResolutionCron } from './services/autoFineService.js';
 
 // Import routes
 import authRoutes from './modules/auth/auth.routes.js';
@@ -226,6 +226,10 @@ async function startServer() {
 
     // Start auto-fine cron job (kelmagan_kun / chiqish_yoq daily sweep)
     startAutoFineCron();
+
+    // Resolve "pending" ketdi scans into a real Erta ketdi/boundary verdict
+    // once each employee's own schedule end time has passed with no return
+    startCheckoutResolutionCron();
 
     // Register the Telegram webhook (no-op if not configured, e.g. local dev)
     ensureWebhookRegistered();
