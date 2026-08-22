@@ -3033,7 +3033,7 @@ export function AttendancePage() {
                               <td>
                                 {record.type === 'keldi' ? (
                                   record.day_boundary === 'mid_day' ? (
-                                    <Badge variant="info" title="Xodim kun davomida qaytib keldi — bu kunning birinchi kelishi emas, kech qolish baholanmaydi">
+                                    <Badge variant="success" title="Xodim kun davomida qaytib keldi — bu kunning birinchi kelishi emas, kech qolish baholanmaydi">
                                       <DoorOpen size={12} strokeWidth={2.25} /> Ichkarida
                                     </Badge>
                                   ) : record.is_late === null || record.is_late === undefined ? (
@@ -3057,7 +3057,7 @@ export function AttendancePage() {
                                   )
                                 ) : (
                                   record.day_boundary === 'mid_day' || record.day_boundary === 'pending' ? (
-                                    <Badge variant="info" title="Xodim kun davomida chiqdi — hali kunning yakuniy chiqishi tasdiqlanmagan, ish jadvali tugash vaqti kelgach aniqlanadi">
+                                    <Badge variant="error" title="Xodim kun davomida chiqdi — hali kunning yakuniy chiqishi tasdiqlanmagan, ish jadvali tugash vaqti kelgach aniqlanadi">
                                       <DoorClosed size={12} strokeWidth={2.25} /> Tashqarida
                                     </Badge>
                                   ) : record.is_early_leave === null || record.is_early_leave === undefined ? (
