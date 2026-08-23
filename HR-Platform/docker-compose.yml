@@ -7,7 +7,9 @@ services:
     environment:
       POSTGRES_DB: hr_platform
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
+      # .env da albatta belgilanishi kerak — bu yerda zaif standart qiymat
+      # atayin qoldirilmagan (ilgari "password" edi).
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD .env faylida belgilanishi shart}
     ports:
       - "127.0.0.1:5435:5432"
     volumes:
@@ -25,18 +27,30 @@ services:
     build: ./apps/backend
     container_name: hr_platform_backend
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"
     environment:
       NODE_ENV: ${NODE_ENV:-production}
-      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:password@postgres:5432/hr_platform}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL .env faylida belgilanishi shart}
       PORT: ${PORT:-5000}
-      FRONTEND_URL: ${FRONTEND_URL:-http://158.220.111.34:5173}
+      FRONTEND_URL: ${FRONTEND_URL:?FRONTEND_URL .env faylida belgilanishi shart}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET .env faylida belgilanishi shart}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET .env faylida belgilanishi shart}
+      JWT_ACCESS_EXPIRES: ${JWT_ACCESS_EXPIRES:-15m}
+      JWT_REFRESH_EXPIRES: ${JWT_REFRESH_EXPIRES:-7d}
+      INVITE_TOKEN_EXPIRES_DAYS: ${INVITE_TOKEN_EXPIRES_DAYS:-7}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
+      TELEGRAM_WEBHOOK_BASE_URL: ${TELEGRAM_WEBHOOK_BASE_URL:-}
     depends_on:
       postgres:
         condition: service_healthy
+    # Butun manba kodi ENDI image ichida qotib qoladi (rebuild/rollback
+    # ma'noli bo'ladi) — faqat haqiqatan HOLAT bo'lgan narsa (yuklangan
+    # fayllar: rasm, rezyume, jarima dalillari, EJM hujjatlari va h.k.)
+    # host'da saqlanadi, deploy'lar orasida yo'qolmasligi uchun.
     volumes:
-      - ./apps/backend:/app
-      - /app/node_modules
+      - ./apps/backend/uploads:/app/uploads
     networks:
       - hr_network
     restart: unless-stopped
@@ -48,10 +62,7 @@ services:
         VITE_API_URL: ${VITE_API_URL:-/api/v1}
     container_name: hr_platform_frontend
     ports:
-      - "5173:5173"
-    volumes:
-      - ./apps/frontend:/app
-      - /app/node_modules
+      - "127.0.0.1:5173:5173"
     networks:
       - hr_network
     restart: unless-stopped
