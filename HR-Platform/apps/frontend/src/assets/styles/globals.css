@@ -2128,6 +2128,7 @@ button.header-pill {
 }
 
 .onboarding-dept-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -2150,6 +2151,46 @@ button.header-pill {
 
 .onboarding-dept-card.general {
   border-style: dashed;
+}
+
+.onboarding-dept-card-tools {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: flex;
+  gap: 0.25rem;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.onboarding-dept-card:hover .onboarding-dept-card-tools {
+  opacity: 1;
+}
+
+.onboarding-dept-card-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-card-solid);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.onboarding-dept-card-tool:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-light);
+}
+
+.onboarding-dept-card-tool.danger:hover {
+  border-color: var(--dept-error);
+  color: var(--dept-error);
+  background: rgba(190, 18, 60, 0.12);
 }
 
 .onboarding-dept-card.add {

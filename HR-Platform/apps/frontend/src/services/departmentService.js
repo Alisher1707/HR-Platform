@@ -16,6 +16,16 @@ export const departmentService = {
     const response = await api.post('/departments', { name });
     return response.data.data;
   },
+
+  async updateDepartment(id, name) {
+    const response = await api.put(`/departments/${id}`, { name });
+    return response.data.data;
+  },
+
+  async deleteDepartment(id) {
+    const response = await api.delete(`/departments/${id}`);
+    return response.data;
+  },
 };
 
 export default departmentService;

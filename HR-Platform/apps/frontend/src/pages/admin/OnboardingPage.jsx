@@ -294,8 +294,15 @@ export function OnboardingPage() {
   const [isAddDeptOpen, setIsAddDeptOpen] = useState(false);
   const [newDeptName, setNewDeptName] = useState('');
   const [isSavingDept, setIsSavingDept] = useState(false);
+  const [editingDept, setEditingDept] = useState(null); // null = "yaratish" rejimi, aks holda {id, name}
 
-  const handleCreateDepartment = async () => {
+  const openEditDepartment = (dept) => {
+    setEditingDept(dept);
+    setNewDeptName(dept.name);
+    setIsAddDeptOpen(true);
+  };
+
+  const handleSaveDepartment = async () => {
     const name = newDeptName.trim();
     if (!name) {
       toast.error("Bo'lim nomini kiriting");
@@ -303,15 +310,43 @@ export function OnboardingPage() {
     }
     setIsSavingDept(true);
     try {
-      await departmentService.createDepartment(name);
-      await refreshDepartments();
-      toast.success("Bo'lim yaratildi");
+      if (editingDept) {
+        await departmentService.updateDepartment(editingDept.id, name);
+        await Promise.all([refreshDepartments(), refreshPlans()]);
+        const response = await employeeService.getEmployees({ limit: 100 });
+        setEmployees(response.data || []);
+        toast.success("Bo'lim yangilandi");
+        if (selectedDepartment === editingDept.name) setSelectedDepartment(name);
+      } else {
+        await departmentService.createDepartment(name);
+        await refreshDepartments();
+        toast.success("Bo'lim yaratildi");
+      }
       setIsAddDeptOpen(false);
+      setEditingDept(null);
       setNewDeptName('');
     } catch (err) {
-      toast.error(err.response?.data?.message || "Bo'lim yaratishda xatolik");
+      toast.error(err.response?.data?.message || "Bo'limni saqlashda xatolik");
     } finally {
       setIsSavingDept(false);
+    }
+  };
+
+  const handleDeleteDepartment = async (dept) => {
+    const confirmed = await confirm({
+      title: "Bo'limni o'chirish",
+      message: `"${dept.name}" bo'limini o'chirmoqchimisiz? Bu faqat bo'lim ro'yxatidan olib tashlaydi — unga biriktirilgan xodimlar va rejalar saqlanib qoladi.`,
+      confirmLabel: "O'chirish",
+    });
+    if (!confirmed) return;
+
+    try {
+      await departmentService.deleteDepartment(dept.id);
+      await refreshDepartments();
+      toast.success("Bo'lim o'chirildi");
+      if (selectedDepartment === dept.name) setSelectedDepartment(null);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Bo'limni o'chirishda xatolik");
     }
   };
 
@@ -331,11 +366,16 @@ export function OnboardingPage() {
     const employeeCountByDept = Object.fromEntries(
       departmentGroups.filter((d) => d.name !== "Bo'limsiz").map((d) => [d.name, d.employeeIds.length])
     );
+    const deptByName = Object.fromEntries(departments.map((d) => [d.name, d]));
 
     const cards = allDepartmentNames
       .map((name) => ({
         key: name,
         label: name,
+        // Faqat "departments" jadvalida haqiqiy qatori bor bo'limlargina
+        // tahrirlash/o'chirish tugmalariga ega bo'ladi (faqat xodimlar
+        // orqali mavjud bo'lim hali rasmiylashtirilmagan).
+        id: deptByName[name]?.id || null,
         employeeCount: employeeCountByDept[name] || 0,
         planCount: plans.filter((p) => p.department === name).length,
       }))
@@ -346,7 +386,7 @@ export function OnboardingPage() {
       ...cards,
       { key: '__umumiy__', label: 'Umumiy', employeeCount: employees.length, planCount: generalPlanCount },
     ];
-  }, [allDepartmentNames, departmentGroups, plans, employees]);
+  }, [allDepartmentNames, departmentGroups, plans, employees, departments]);
 
   // Tanlangan bo'lim uchun rejalar — o'ziga tegishli + "Umumiy" rejalar
   // (Umumiy bo'lim tanlangan bo'lsa, faqat umumiy rejalar).
@@ -1064,7 +1104,7 @@ export function OnboardingPage() {
               variant="primary"
               className="onboarding-btn-wide"
               icon={<Plus size={16} strokeWidth={2.5} />}
-              onClick={() => setIsAddDeptOpen(true)}
+              onClick={() => { setEditingDept(null); setNewDeptName(''); setIsAddDeptOpen(true); }}
             >
               Bo'lim qo'shish
             </Button>
@@ -1073,12 +1113,36 @@ export function OnboardingPage() {
 
         <div className="onboarding-dept-card-grid">
           {departmentCards.map((d) => (
-            <button
+            <div
               key={d.key}
-              type="button"
+              role="button"
+              tabIndex={0}
               className={`onboarding-dept-card ${d.key === '__umumiy__' ? 'general' : ''}`}
               onClick={() => setSelectedDepartment(d.key)}
+              onKeyDown={(e) => { if (e.key === 'Enter') setSelectedDepartment(d.key); }}
             >
+              {d.id && (
+                <div className="onboarding-dept-card-tools">
+                  <button
+                    type="button"
+                    className="onboarding-dept-card-tool"
+                    title="Tahrirlash"
+                    onClick={(e) => { e.stopPropagation(); openEditDepartment(d); }}
+                  >
+                    <Pencil size={13} strokeWidth={2.25} />
+                  </button>
+                  {canDeletePlan && (
+                    <button
+                      type="button"
+                      className="onboarding-dept-card-tool danger"
+                      title="O'chirish"
+                      onClick={(e) => { e.stopPropagation(); handleDeleteDepartment(d); }}
+                    >
+                      <Trash2 size={13} strokeWidth={2.25} />
+                    </button>
+                  )}
+                </div>
+              )}
               <span className="onboarding-dept-card-icon">
                 {d.key === '__umumiy__' ? <Rocket size={20} strokeWidth={2.25} /> : <Users size={20} strokeWidth={2.25} />}
               </span>
@@ -1087,9 +1151,13 @@ export function OnboardingPage() {
                 <span>{d.planCount} reja</span>
                 <span>{d.employeeCount} xodim</span>
               </span>
-            </button>
+            </div>
           ))}
-          <button type="button" className="onboarding-dept-card add" onClick={() => setIsAddDeptOpen(true)}>
+          <button
+            type="button"
+            className="onboarding-dept-card add"
+            onClick={() => { setEditingDept(null); setNewDeptName(''); setIsAddDeptOpen(true); }}
+          >
             <span className="onboarding-dept-card-icon add">
               <Plus size={20} strokeWidth={2.5} />
             </span>
@@ -1101,13 +1169,13 @@ export function OnboardingPage() {
         <Modal
           isOpen={isAddDeptOpen}
           onClose={() => setIsAddDeptOpen(false)}
-          title="Yangi bo'lim qo'shish"
+          title={editingDept ? "Bo'limni tahrirlash" : "Yangi bo'lim qo'shish"}
           size="sm"
           footer={
             <>
               <Button variant="ghost" className="onboarding-btn-wide" onClick={() => setIsAddDeptOpen(false)}>Bekor qilish</Button>
-              <Button variant="primary" className="onboarding-btn-wide" onClick={handleCreateDepartment} disabled={isSavingDept}>
-                {isSavingDept ? 'Saqlanmoqda...' : 'Qo\'shish'}
+              <Button variant="primary" className="onboarding-btn-wide" onClick={handleSaveDepartment} disabled={isSavingDept}>
+                {isSavingDept ? 'Saqlanmoqda...' : editingDept ? 'Saqlash' : 'Qo\'shish'}
               </Button>
             </>
           }
@@ -1122,6 +1190,8 @@ export function OnboardingPage() {
             required
           />
         </Modal>
+
+        <ConfirmDialog {...confirmProps} />
       </div>
     );
   }
