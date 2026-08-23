@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import onboardingService from '../../services/onboardingService';
 import employeeService from '../../services/employeeService';
+import departmentService from '../../services/departmentService';
 import { useAuthStore } from '../../store/authStore';
 import { isValidYouTubeInput } from '../../utils/youtube';
 import useToast from '../../hooks/useToast';
@@ -179,8 +180,18 @@ export function OnboardingPage() {
   const [plans, setPlans] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [isLoadingPlans, setIsLoadingPlans] = useState(false);
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
+
+  const refreshDepartments = async () => {
+    try {
+      const data = await departmentService.getDepartments();
+      setDepartments(data);
+    } catch (err) {
+      toast.error("Bo'limlarni yuklashda xatolik");
+    }
+  };
 
   const refreshPlans = async () => {
     setIsLoadingPlans(true);
@@ -234,6 +245,7 @@ export function OnboardingPage() {
   useEffect(() => {
     refreshPlans();
     refreshAssignments();
+    refreshDepartments();
     (async () => {
       try {
         const response = await employeeService.getEmployees({ limit: 100 });
@@ -256,13 +268,20 @@ export function OnboardingPage() {
     return Object.entries(groups).map(([name, employeeIds]) => ({ name, employeeIds }));
   }, [employees]);
 
-  // Reja "Bo'lim" tanlovi uchun — faqat xodimlarda haqiqatan mavjud
-  // bo'lim nomlari, "Bo'limsiz" guruhi bundan mustasno.
-  const departmentSelectOptions = useMemo(() => (
-    [...new Set(employees.map((e) => e.department).filter(Boolean))]
-      .sort()
-      .map((name) => ({ value: name, label: name }))
-  ), [employees]);
+  // Barcha mavjud bo'lim nomlari — departments jadvali (xodimsiz ham
+  // yaratilgan bo'lishi mumkin) + xodimlarda haqiqatan ishlatilayotgan
+  // nomlar birlashtirilgan, "Bo'limsiz" bundan mustasno.
+  const allDepartmentNames = useMemo(() => {
+    const fromTable = departments.map((d) => d.name);
+    const fromEmployees = employees.map((e) => e.department).filter(Boolean);
+    return [...new Set([...fromTable, ...fromEmployees])].sort();
+  }, [departments, employees]);
+
+  // Reja "Bo'lim" tanlovi uchun.
+  const departmentSelectOptions = useMemo(
+    () => allDepartmentNames.map((name) => ({ value: name, label: name })),
+    [allDepartmentNames]
+  );
 
   // Onboarding sahifasi endi bo'lim bo'yicha navigatsiya bilan ishlaydi:
   // null = bosh sahifa (bo'lim kartalari), '__umumiy__' = umumiy (barcha
@@ -270,6 +289,31 @@ export function OnboardingPage() {
   // Rejalar/Progress/Statistika faqat o'sha bo'limga tegishli ma'lumotni
   // ko'rsatadi.
   const [selectedDepartment, setSelectedDepartment] = useState(null);
+
+  // --- Yangi bo'lim qo'shish ---
+  const [isAddDeptOpen, setIsAddDeptOpen] = useState(false);
+  const [newDeptName, setNewDeptName] = useState('');
+  const [isSavingDept, setIsSavingDept] = useState(false);
+
+  const handleCreateDepartment = async () => {
+    const name = newDeptName.trim();
+    if (!name) {
+      toast.error("Bo'lim nomini kiriting");
+      return;
+    }
+    setIsSavingDept(true);
+    try {
+      await departmentService.createDepartment(name);
+      await refreshDepartments();
+      toast.success("Bo'lim yaratildi");
+      setIsAddDeptOpen(false);
+      setNewDeptName('');
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Bo'lim yaratishda xatolik");
+    } finally {
+      setIsSavingDept(false);
+    }
+  };
 
   const employeeDeptMap = useMemo(
     () => Object.fromEntries(employees.map((e) => [e.id, e.department || null])),
@@ -280,16 +324,20 @@ export function OnboardingPage() {
     [plans]
   );
 
-  // Bosh sahifadagi bo'lim kartalari — har bo'lim uchun reja/xodim soni,
-  // plus "Umumiy" (barcha bo'limlar uchun umumiy rejalar) kartasi.
+  // Bosh sahifadagi bo'lim kartalari — har bo'lim uchun reja/xodim soni
+  // (xodimsiz yaratilgan yangi bo'lim ham 0 xodim bilan ko'rinadi), plus
+  // "Umumiy" (barcha bo'limlar uchun umumiy rejalar) kartasi.
   const departmentCards = useMemo(() => {
-    const cards = departmentGroups
-      .filter((d) => d.name !== "Bo'limsiz")
-      .map((d) => ({
-        key: d.name,
-        label: d.name,
-        employeeCount: d.employeeIds.length,
-        planCount: plans.filter((p) => p.department === d.name).length,
+    const employeeCountByDept = Object.fromEntries(
+      departmentGroups.filter((d) => d.name !== "Bo'limsiz").map((d) => [d.name, d.employeeIds.length])
+    );
+
+    const cards = allDepartmentNames
+      .map((name) => ({
+        key: name,
+        label: name,
+        employeeCount: employeeCountByDept[name] || 0,
+        planCount: plans.filter((p) => p.department === name).length,
       }))
       .sort((a, b) => a.label.localeCompare(b.label));
 
@@ -298,7 +346,7 @@ export function OnboardingPage() {
       ...cards,
       { key: '__umumiy__', label: 'Umumiy', employeeCount: employees.length, planCount: generalPlanCount },
     ];
-  }, [departmentGroups, plans, employees]);
+  }, [allDepartmentNames, departmentGroups, plans, employees]);
 
   // Tanlangan bo'lim uchun rejalar — o'ziga tegishli + "Umumiy" rejalar
   // (Umumiy bo'lim tanlangan bo'lsa, faqat umumiy rejalar).
@@ -1011,35 +1059,69 @@ export function OnboardingPage() {
             </h2>
             <p className="page-subtitle">Bo'limni tanlang — har bir bo'limning o'z rejalari, progressi va statistikasi alohida</p>
           </div>
+          <div className="page-header-right">
+            <Button
+              variant="primary"
+              className="onboarding-btn-wide"
+              icon={<Plus size={16} strokeWidth={2.5} />}
+              onClick={() => setIsAddDeptOpen(true)}
+            >
+              Bo'lim qo'shish
+            </Button>
+          </div>
         </div>
 
-        {departmentCards.length === 0 ? (
-          <EmptyState
-            icon={<Users size={44} strokeWidth={1.5} />}
-            title="Xodimlar mavjud emas"
-            text="Xodimlar qo'shilgach, ularning bo'limlari shu yerda kartalar sifatida ko'rinadi"
+        <div className="onboarding-dept-card-grid">
+          {departmentCards.map((d) => (
+            <button
+              key={d.key}
+              type="button"
+              className={`onboarding-dept-card ${d.key === '__umumiy__' ? 'general' : ''}`}
+              onClick={() => setSelectedDepartment(d.key)}
+            >
+              <span className="onboarding-dept-card-icon">
+                {d.key === '__umumiy__' ? <Rocket size={20} strokeWidth={2.25} /> : <Users size={20} strokeWidth={2.25} />}
+              </span>
+              <span className="onboarding-dept-card-name">{d.label}</span>
+              <span className="onboarding-dept-card-meta">
+                <span>{d.planCount} reja</span>
+                <span>{d.employeeCount} xodim</span>
+              </span>
+            </button>
+          ))}
+          <button type="button" className="onboarding-dept-card add" onClick={() => setIsAddDeptOpen(true)}>
+            <span className="onboarding-dept-card-icon add">
+              <Plus size={20} strokeWidth={2.5} />
+            </span>
+            <span className="onboarding-dept-card-name">Yangi bo'lim</span>
+            <span className="onboarding-dept-card-meta">Bo'lim qo'shish</span>
+          </button>
+        </div>
+
+        <Modal
+          isOpen={isAddDeptOpen}
+          onClose={() => setIsAddDeptOpen(false)}
+          title="Yangi bo'lim qo'shish"
+          size="sm"
+          footer={
+            <>
+              <Button variant="ghost" className="onboarding-btn-wide" onClick={() => setIsAddDeptOpen(false)}>Bekor qilish</Button>
+              <Button variant="primary" className="onboarding-btn-wide" onClick={handleCreateDepartment} disabled={isSavingDept}>
+                {isSavingDept ? 'Saqlanmoqda...' : 'Qo\'shish'}
+              </Button>
+            </>
+          }
+        >
+          <Input
+            label="Bo'lim nomi"
+            name="newDeptName"
+            value={newDeptName}
+            onChange={(e) => setNewDeptName(e.target.value)}
+            placeholder="Masalan: Marketing"
+            autoFocus
+            required
           />
-        ) : (
-          <div className="onboarding-dept-card-grid">
-            {departmentCards.map((d) => (
-              <button
-                key={d.key}
-                type="button"
-                className={`onboarding-dept-card ${d.key === '__umumiy__' ? 'general' : ''}`}
-                onClick={() => setSelectedDepartment(d.key)}
-              >
-                <span className="onboarding-dept-card-icon">
-                  {d.key === '__umumiy__' ? <Rocket size={20} strokeWidth={2.25} /> : <Users size={20} strokeWidth={2.25} />}
-                </span>
-                <span className="onboarding-dept-card-name">{d.label}</span>
-                <span className="onboarding-dept-card-meta">
-                  <span>{d.planCount} reja</span>
-                  <span>{d.employeeCount} xodim</span>
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
+        </Modal>
       </div>
     );
   }

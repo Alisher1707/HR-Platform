@@ -22,6 +22,7 @@ import attendanceRoutes from './modules/attendance/attendance.routes.js';
 import schedulesRoutes from './modules/schedules/schedules.routes.js';
 import finesRoutes from './modules/fines/fines.routes.js';
 import onboardingRoutes from './modules/onboarding/onboarding.routes.js';
+import departmentsRoutes from './modules/departments/departments.routes.js';
 import payrollRoutes from './modules/payroll/payroll.routes.js';
 import telegramRoutes from './modules/telegram/telegram.routes.js';
 import { ensureWebhookRegistered } from './modules/telegram/telegramApi.js';
@@ -178,6 +179,7 @@ app.use(`${API_PREFIX}/attendance`, attendanceRoutes);
 app.use(`${API_PREFIX}/schedules`, schedulesRoutes);
 app.use(`${API_PREFIX}/fines`, finesRoutes);
 app.use(`${API_PREFIX}/onboarding`, onboardingRoutes);
+app.use(`${API_PREFIX}/departments`, departmentsRoutes);
 app.use(`${API_PREFIX}/payroll`, payrollRoutes);
 app.use(`${API_PREFIX}/telegram`, telegramRoutes);
 

@@ -2152,6 +2152,28 @@ button.header-pill {
   border-style: dashed;
 }
 
+.onboarding-dept-card.add {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border-style: dashed;
+  background: transparent;
+  min-height: 132px;
+}
+
+.onboarding-dept-card.add:hover {
+  background: var(--accent-light);
+}
+
+.onboarding-dept-card.add .onboarding-dept-card-name {
+  color: var(--text-secondary);
+  text-transform: none;
+}
+
+.onboarding-dept-card.add:hover .onboarding-dept-card-name {
+  color: var(--accent);
+}
+
 .onboarding-dept-card-icon {
   display: inline-flex;
   align-items: center;
@@ -2161,6 +2183,12 @@ button.header-pill {
   border-radius: var(--radius-md);
   background: var(--accent-light);
   color: var(--accent);
+}
+
+.onboarding-dept-card-icon.add {
+  border-radius: 50%;
+  border: 1.5px dashed var(--accent);
+  background: transparent;
 }
 
 .onboarding-dept-card-name {
