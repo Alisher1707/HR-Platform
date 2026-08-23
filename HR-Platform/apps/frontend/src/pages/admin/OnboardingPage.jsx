@@ -1050,8 +1050,9 @@ export function OnboardingPage() {
     <div className="animate-fade-in">
       <div className="page-header">
         <div className="page-header-left">
-          <button type="button" className="onboarding-back-btn" onClick={() => setSelectedDepartment(null)}>
-            <ChevronLeft size={16} strokeWidth={2.5} /> Bo'limlar
+          <button type="button" className="onboarding-dept-back-btn" onClick={() => setSelectedDepartment(null)}>
+            <ChevronLeft size={16} strokeWidth={2.5} />
+            Bo'limlar
           </button>
           <h2 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
             <span className="onboarding-title-icon"><Rocket size={20} strokeWidth={2.25} /></span>
