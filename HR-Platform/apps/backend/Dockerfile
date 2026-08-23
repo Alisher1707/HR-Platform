@@ -6,11 +6,13 @@ WORKDIR /app
 # Install pnpm
 RUN npm install -g pnpm
 
-# Copy package files
-COPY package.json ./
+# Copy package files (lockfile ham — --frozen-lockfile shu fayl bilan
+# package.json mos kelmasa build'ni xato bilan toxtatadi, shunchaki
+# turlicha versiyalarni jimgina tortib olish o'rniga)
+COPY package.json pnpm-lock.yaml ./
 
 # Install dependencies
-RUN pnpm install
+RUN pnpm install --frozen-lockfile
 
 # Copy source code
 COPY . .
