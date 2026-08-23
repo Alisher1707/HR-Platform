@@ -10,6 +10,7 @@ import { generalLimiter } from './shared/middleware/rateLimiter.js';
 import { errorHandler, notFoundHandler } from './shared/middleware/errorHandler.js';
 import { startAutoPromotionCron } from './services/autoPromotionService.js';
 import { startAutoFineCron, startCheckoutResolutionCron } from './services/autoFineService.js';
+import { startDeviceEventsCleanupCron } from './services/deviceEventsCleanupService.js';
 
 // Import routes
 import authRoutes from './modules/auth/auth.routes.js';
@@ -232,6 +233,9 @@ async function startServer() {
     // Resolve "pending" ketdi scans into a real Erta ketdi/boundary verdict
     // once each employee's own schedule end time has passed with no return
     startCheckoutResolutionCron();
+
+    // Eski (heartbeat) qurilma hodisalarini 30 kundan keyin tozalash
+    startDeviceEventsCleanupCron();
 
     // Register the Telegram webhook (no-op if not configured, e.g. local dev)
     ensureWebhookRegistered();

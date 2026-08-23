@@ -1,0 +1,4 @@
+# Shell skriptlar doim LF (Unix) qator oxiri bilan saqlansin — production
+# server Linux, CRLF bo'lsa skript "bad interpreter" xatosi bilan ishlamay
+# qoladi.
+*.sh text eol=lf
