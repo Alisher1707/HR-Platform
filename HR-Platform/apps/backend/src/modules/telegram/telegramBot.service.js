@@ -535,8 +535,26 @@ export async function notifyFineCreated(employeeId, { amount, note }) {
   }
 }
 
-function buildManagerMessage(appeal) {
+/**
+ * Shu xodimning shu TUR (category) bo'yicha oxirgi 30 kunda nechta ariza
+ * yuborganini sanaydi — joriy ariza ham shu ichiga kiradi (u chaqirilish
+ * vaqtida allaqachon bazada, qarang sendAppealToManager izohi), shuning
+ * uchun natija to'g'ridan-to'g'ri "bu N-marta" degan ma'noni beradi, N-1
+ * emas.
+ */
+async function countRecentAppealsThisMonth(employeeId, category) {
+  const { rows } = await query(
+    `SELECT COUNT(*) AS count FROM fine_appeals
+     WHERE employee_id = $1 AND category = $2 AND created_at >= NOW() - INTERVAL '30 days'`,
+    [employeeId, category]
+  );
+  return Number(rows[0].count) || 1;
+}
+
+async function buildManagerMessage(appeal) {
   const categoryMeta = ARIZA_CATEGORIES.find((c) => c.value === appeal.category);
+  const monthlyCount = await countRecentAppealsThisMonth(appeal.employeeId, appeal.category);
+
   const lines = [
     "📨 <b>Yangi ariza — tasdiqlash so'raladi</b>",
     '',
@@ -556,6 +574,12 @@ function buildManagerMessage(appeal) {
   if (appeal.fileUrl) {
     lines.push("📎 Hujjat biriktirilgan (HR panelida ko'rish mumkin)");
   }
+
+  // 3+ marta — rahbarning e'tiborini alohida jalb qilish uchun ⚠️ bilan.
+  const monthlyLabel = monthlyCount === 1
+    ? "📊 Oxirgi 30 kunda: birinchi marta shu turdagi ariza"
+    : `${monthlyCount >= 3 ? '⚠️' : '📊'} Oxirgi 30 kunda: <b>${monthlyCount}-marta</b> shu turdagi ariza`;
+  lines.push('', monthlyLabel);
 
   return lines.join('\n');
 }
@@ -584,7 +608,8 @@ export async function sendAppealToManager(appeal) {
   };
 
   try {
-    await telegramApi.sendMessage(manager.telegram_chat_id, buildManagerMessage(appeal), {
+    const messageText = await buildManagerMessage(appeal);
+    await telegramApi.sendMessage(manager.telegram_chat_id, messageText, {
       replyMarkup: keyboard,
       parseMode: 'HTML',
     });
