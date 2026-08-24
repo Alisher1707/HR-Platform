@@ -536,24 +536,24 @@ export async function notifyFineCreated(employeeId, { amount, note }) {
 }
 
 /**
- * Shu xodimning shu TUR (category) bo'yicha oxirgi 30 kunda nechta ariza
- * yuborganini sanaydi — joriy ariza ham shu ichiga kiradi (u chaqirilish
- * vaqtida allaqachon bazada, qarang sendAppealToManager izohi), shuning
- * uchun natija to'g'ridan-to'g'ri "bu N-marta" degan ma'noni beradi, N-1
- * emas.
+ * Shu xodim oxirgi 30 kunda TURIDAN qatʼi nazar (Javob so'rash, Kechikib
+ * qolish va h.k. — barchasi birga) jami nechta ariza yuborganini sanaydi.
+ * Joriy ariza ham shu ichiga kiradi (u chaqirilish vaqtida allaqachon
+ * bazada, qarang sendAppealToManager izohi), shuning uchun natija
+ * to'g'ridan-to'g'ri "bu N-marta" degan ma'noni beradi, N-1 emas.
  */
-async function countRecentAppealsThisMonth(employeeId, category) {
+async function countRecentAppealsThisMonth(employeeId) {
   const { rows } = await query(
     `SELECT COUNT(*) AS count FROM fine_appeals
-     WHERE employee_id = $1 AND category = $2 AND created_at >= NOW() - INTERVAL '30 days'`,
-    [employeeId, category]
+     WHERE employee_id = $1 AND created_at >= NOW() - INTERVAL '30 days'`,
+    [employeeId]
   );
   return Number(rows[0].count) || 1;
 }
 
 async function buildManagerMessage(appeal) {
   const categoryMeta = ARIZA_CATEGORIES.find((c) => c.value === appeal.category);
-  const monthlyCount = await countRecentAppealsThisMonth(appeal.employeeId, appeal.category);
+  const monthlyCount = await countRecentAppealsThisMonth(appeal.employeeId);
 
   const lines = [
     "📨 <b>Yangi ariza — tasdiqlash so'raladi</b>",
@@ -577,8 +577,8 @@ async function buildManagerMessage(appeal) {
 
   // 3+ marta — rahbarning e'tiborini alohida jalb qilish uchun ⚠️ bilan.
   const monthlyLabel = monthlyCount === 1
-    ? "📊 Oxirgi 30 kunda: birinchi marta shu turdagi ariza"
-    : `${monthlyCount >= 3 ? '⚠️' : '📊'} Oxirgi 30 kunda: <b>${monthlyCount}-marta</b> shu turdagi ariza`;
+    ? "📊 Oxirgi 30 kunda: birinchi marta ariza yubordi"
+    : `${monthlyCount >= 3 ? '⚠️' : '📊'} Oxirgi 30 kunda: <b>${monthlyCount}-marta</b> ariza yubordi (barcha turlar bo'yicha)`;
   lines.push('', monthlyLabel);
 
   return lines.join('\n');
