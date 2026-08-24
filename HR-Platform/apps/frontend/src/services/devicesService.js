@@ -22,6 +22,12 @@ export const devicesService = {
     const response = await api.delete(`/devices/${id}`);
     return response.data;
   },
+
+  /** Removes an "unregistered" terminal (no devices.id — keyed by its raw token instead). */
+  async deleteUnregisteredDevice(token) {
+    const response = await api.delete(`/devices/by-token/${encodeURIComponent(token)}`);
+    return response.data;
+  },
 };
 
 export default devicesService;

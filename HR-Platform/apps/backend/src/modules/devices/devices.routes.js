@@ -1,9 +1,10 @@
 import express from 'express';
 import multer from 'multer';
 import Joi from 'joi';
-import { receiveDeviceEvent, getTerminals, createDevice, deleteDevice } from './devices.controller.js';
+import { receiveDeviceEvent, getTerminals, createDevice, deleteDevice, deleteUnregisteredDevice } from './devices.controller.js';
 import { authenticate, authorize } from '../auth/auth.middleware.js';
 import { validate, validateParams, commonSchemas } from '../../shared/middleware/validate.js';
+import { deviceEventLimiter } from '../../shared/middleware/rateLimiter.js';
 import { USER_ROLES } from '../../config/constants.js';
 
 const router = express.Router();
@@ -12,6 +13,7 @@ const createDeviceSchema = Joi.object({
   name: Joi.string().trim().min(1).max(150).required(),
 });
 const uuidParamSchema = Joi.object({ id: commonSchemas.uuid });
+const tokenParamSchema = Joi.object({ token: Joi.string().trim().min(1).max(200).required() });
 const canManage = authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.HR);
 
 // Memory storage — files are only inspected/saved manually in the controller,
@@ -60,8 +62,10 @@ function captureDeviceEvent(req, res, next) {
 // ANY /api/v1/devices/:token/events - camera pushes face-recognition events here.
 // Method is intentionally unrestricted (Hikvision has been seen using PUT for some
 // pushes) while we're still confirming what this device actually sends. No auth:
-// the device can't do our cookie/JWT auth.
-router.all('/:token/events', captureDeviceEvent, receiveDeviceEvent);
+// the device can't do our cookie/JWT auth. deviceEventLimiter (keyed by token,
+// not IP — see rateLimiter.js) replaces the general limiter here so several
+// cameras sharing one branch's public IP don't compete for the same quota.
+router.all('/:token/events', deviceEventLimiter, captureDeviceEvent, receiveDeviceEvent);
 
 // GET /api/v1/devices/terminals - real device activity for Monitoring > Terminallar
 // (dashboard-facing, so it needs auth — unlike the camera-facing route above).
@@ -77,6 +81,21 @@ router.delete(
   authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
   validateParams(uuidParamSchema),
   deleteDevice
+);
+
+// DELETE /api/v1/devices/by-token/:token - remove an "unregistered" terminal
+// (a device_token seen in real camera traffic that was never created via
+// "Qurilma yaratish", so it has no devices.id to delete by). There's no
+// device row for these — the only thing making them show up in Terminallar
+// is their device_events history, so removing one here purges that history
+// for good (stale/test tokens, e.g. "test-token", never come back once
+// deleted — unless the same token pushes a new event later).
+router.delete(
+  '/by-token/:token',
+  authenticate,
+  authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  validateParams(tokenParamSchema),
+  deleteUnregisteredDevice
 );
 
 // Catches anything under /api/v1/devices/* that doesn't match the route above —

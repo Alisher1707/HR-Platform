@@ -2875,13 +2875,20 @@ export function AttendancePage() {
   };
 
   const handleDeleteDevice = async (device) => {
+    const isRegistered = !!device.id;
     const ok = await confirm({
       title: 'Qurilmani o\'chirish',
-      message: `"${device.name}" qurilmasini o'chirmoqchimisiz? Kamera bu tokendan foydalanishni to'xtatadi.`,
+      message: isRegistered
+        ? `"${device.name}" qurilmasini o'chirmoqchimisiz? Kamera bu tokendan foydalanishni to'xtatadi.`
+        : "Ro'yxatdan o'tmagan bu terminalni o'chirmoqchimisiz? Uning barcha hodisalar tarixi butunlay o'chiriladi — bu token qayta faollashmaguncha ro'yxatga qaytmaydi.",
     });
     if (!ok) return;
     try {
-      await devicesService.deleteDevice(device.id);
+      if (isRegistered) {
+        await devicesService.deleteDevice(device.id);
+      } else {
+        await devicesService.deleteUnregisteredDevice(device.deviceToken);
+      }
       toast.success("Qurilma o'chirildi");
       refreshTerminals();
     } catch (err) {
@@ -3938,11 +3945,9 @@ export function AttendancePage() {
                           <td>{t.matchedEmployees}</td>
                           <td>
                             <div className="table-actions" style={{ justifyContent: 'flex-end' }}>
-                              {t.id ? (
-                                <Button variant="ghost" size="sm" className="btn-icon" onClick={() => handleDeleteDevice(t)} title="O'chirish">
-                                  <Trash2 size={16} strokeWidth={2} />
-                                </Button>
-                              ) : '-'}
+                              <Button variant="ghost" size="sm" className="btn-icon" onClick={() => handleDeleteDevice(t)} title="O'chirish">
+                                <Trash2 size={16} strokeWidth={2} />
+                              </Button>
                             </div>
                           </td>
                         </tr>

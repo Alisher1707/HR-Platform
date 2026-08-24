@@ -601,3 +601,43 @@ export async function deleteDevice(req, res) {
     res.status(500).json({ success: false, message: "Qurilmani o'chirishda xatolik", timestamp: new Date().toISOString() });
   }
 }
+
+/**
+ * DELETE /api/v1/devices/by-token/:token — removes an "unregistered"
+ * terminal (a device_token seen in camera traffic but never created via
+ * "Qurilma yaratish", so there's no devices row to delete by id — see
+ * getTerminals' `unregistered` CTE). There's nothing to key this by
+ * except device_events.device_token itself, so removing one purges that
+ * token's whole event history — this is a deliberate cleanup action for
+ * stale/test tokens, not something that happens as a side effect of
+ * anything else.
+ */
+export async function deleteUnregisteredDevice(req, res) {
+  try {
+    const { token } = req.params;
+
+    const registeredCheck = await query('SELECT id FROM devices WHERE token = $1', [token]);
+    if (registeredCheck.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Bu token ro'yxatdan o'tgan qurilmaga tegishli — uni id orqali o'chiring",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const result = await query('DELETE FROM device_events WHERE device_token = $1 RETURNING id', [token]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Qurilma topilmadi', timestamp: new Date().toISOString() });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Qurilma o'chirildi",
+      data: { deviceToken: token, deletedEvents: result.rows.length },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('Delete unregistered device error:', err.message);
+    res.status(500).json({ success: false, message: "Qurilmani o'chirishda xatolik", timestamp: new Date().toISOString() });
+  }
+}
