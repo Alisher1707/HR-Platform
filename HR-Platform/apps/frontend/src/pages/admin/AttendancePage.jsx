@@ -2597,9 +2597,9 @@ export function AttendancePage() {
     const fetchEmployees = async () => {
       setLoading(true);
       try {
-        const response = await employeeService.getEmployees({ limit: 100 });
-        setEmployees(response.data || []);
-        setTotal(response.pagination?.total ?? (response.data || []).length);
+        const allEmployees = await employeeService.getAllEmployees();
+        setEmployees(allEmployees);
+        setTotal(allEmployees.length);
       } catch (err) {
         console.error(err);
       } finally {

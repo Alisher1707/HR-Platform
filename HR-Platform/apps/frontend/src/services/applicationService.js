@@ -1,4 +1,4 @@
-import api from './api';
+import api, { withAuthToken } from './api';
 
 /**
  * Application Service
@@ -117,11 +117,14 @@ export const applicationService = {
   },
 
   /**
-   * Build absolute URL for a candidate resume path
+   * Build absolute URL for a candidate resume path.
+   * /uploads/resumes now requires auth (see app.js) — withAuthToken
+   * attaches the current access token as a query param.
    */
   getResumeUrl(resumeUrl) {
     if (!resumeUrl) return null;
-    return resumeUrl.startsWith('http') ? resumeUrl : `${API_ORIGIN}${resumeUrl}`;
+    const absolute = resumeUrl.startsWith('http') ? resumeUrl : `${API_ORIGIN}${resumeUrl}`;
+    return withAuthToken(absolute);
   },
 };
 

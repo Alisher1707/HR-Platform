@@ -57,3 +57,23 @@ export const inviteLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+/**
+ * Onboarding public-submission limiter (30 requests per hour per IP).
+ * This route needs its own, tighter limiter — unlike the rest of the
+ * onboarding API it takes no auth token at all (an employee reaches it via
+ * a bare link), so the general limiter's much higher ceiling was the only
+ * thing standing between it and someone using it to fill a disk with
+ * 15MB uploads.
+ */
+export const onboardingSubmitLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 30,
+  message: {
+    success: false,
+    message: 'Juda ko\'p urinish. Birozdan so\'ng qayta urinib ko\'ring.',
+  },
+  skip: () => process.env.NODE_ENV === 'development',
+  standardHeaders: true,
+  legacyHeaders: false,
+});

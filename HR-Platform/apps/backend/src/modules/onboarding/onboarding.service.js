@@ -66,8 +66,8 @@ const SELECT_PLANS = `
     COUNT(DISTINCT t.id) AS task_count,
     COUNT(DISTINCT a.id) AS assignment_count
   FROM onboarding_plans p
-  LEFT JOIN onboarding_plan_steps s ON s.plan_id = p.id
-  LEFT JOIN onboarding_step_tasks t ON t.step_id = s.id
+  LEFT JOIN onboarding_plan_steps s ON s.plan_id = p.id AND s.archived_at IS NULL
+  LEFT JOIN onboarding_step_tasks t ON t.step_id = s.id AND t.archived_at IS NULL
   LEFT JOIN onboarding_assignments a ON a.plan_id = p.id
 `;
 
@@ -78,19 +78,26 @@ const SELECT_PLANS = `
  * editing a plan straight from the list (as the frontend does, reusing
  * already-loaded data instead of a fresh per-plan fetch) would silently
  * see zero steps and overwrite the real ones on save.
+ *
+ * Only ACTIVE (non-archived) steps/tasks are shown here — this is the
+ * admin-facing "current shape of the plan" view. A step/task that was
+ * removed by an HR edit but still has employee submissions tied to it is
+ * archived, not deleted (see syncSteps below), and intentionally does not
+ * reappear in this editor view; it stays visible only in the specific
+ * assignment(s) that already completed it (attachStepsAndCompletions).
  */
 async function attachStepsToPlans(plans) {
   if (plans.length === 0) return plans;
 
   const stepsResult = await query(
-    'SELECT * FROM onboarding_plan_steps WHERE plan_id = ANY($1) ORDER BY plan_id, order_index',
+    'SELECT * FROM onboarding_plan_steps WHERE plan_id = ANY($1) AND archived_at IS NULL ORDER BY plan_id, order_index',
     [plans.map((p) => p.id)]
   );
   const steps = stepsResult.rows.map((row) => ({ ...mapStep(row), planId: row.plan_id }));
 
   if (steps.length > 0) {
     const tasksResult = await query(
-      'SELECT * FROM onboarding_step_tasks WHERE step_id = ANY($1) ORDER BY step_id, order_index',
+      'SELECT * FROM onboarding_step_tasks WHERE step_id = ANY($1) AND archived_at IS NULL ORDER BY step_id, order_index',
       [steps.map((s) => s.id)]
     );
     const tasksByStep = {};
@@ -162,6 +169,8 @@ export async function createPlan(data, userId) {
       [data.name, data.description || null, data.department || null, userId]
     );
     const planId = insertResult.rows[0].id;
+    // A brand-new plan has no existing steps to preserve — a plain insert
+    // (replaceSteps) is correct and simpler than the diffing syncSteps does.
     await replaceSteps(client, planId, data.steps);
     await client.query('COMMIT');
     return getPlanById(planId);
@@ -170,6 +179,155 @@ export async function createPlan(data, userId) {
     throw error;
   } finally {
     client.release();
+  }
+}
+
+/**
+ * Reconciles a plan's steps/tasks with the edited form, in place —
+ * matching by id instead of the old delete-everything-and-reinsert
+ * approach. That approach was a real production bug: onboarding_step_
+ * completions references onboarding_step_tasks(id) ON DELETE CASCADE, so
+ * recreating every row on every save silently deleted every employee's
+ * submitted work (text, files, HR review decisions) each time a plan was
+ * edited — even for a one-word title fix untouched by the actual change.
+ *
+ * Rules:
+ *  - An incoming step/task with an `id` matching an existing active row is
+ *    UPDATEd in place (order preserved via its position in the array).
+ *  - An incoming step/task without an id (or whose id doesn't match an
+ *    existing active row) is a genuinely new one — INSERTed.
+ *  - An existing active step/task that the incoming payload no longer
+ *    contains was removed by the HR user in the editor. If nothing has
+ *    ever been submitted against it, it's safe to DELETE outright. If it
+ *    already has employee completions, deleting it would cascade-delete
+ *    that history — so instead it's ARCHIVED (archived_at set), which
+ *    hides it from the plan editor and from future assignments while
+ *    keeping it visible in the specific assignment(s) that already
+ *    completed it (see attachStepsAndCompletions).
+ */
+async function syncSteps(client, planId, incomingSteps) {
+  const existingStepsResult = await client.query(
+    'SELECT id FROM onboarding_plan_steps WHERE plan_id = $1 AND archived_at IS NULL',
+    [planId]
+  );
+  const existingStepIds = new Set(existingStepsResult.rows.map((r) => r.id));
+  const keptStepIds = new Set();
+
+  const steps = incomingSteps || [];
+  for (let stepIdx = 0; stepIdx < steps.length; stepIdx += 1) {
+    const step = steps[stepIdx];
+    const matchesExisting = step.id && existingStepIds.has(step.id);
+
+    let stepId;
+    if (matchesExisting) {
+      stepId = step.id;
+      keptStepIds.add(stepId);
+      await client.query(
+        'UPDATE onboarding_plan_steps SET order_index = $1 WHERE id = $2',
+        [stepIdx, stepId]
+      );
+    } else {
+      const inserted = await client.query(
+        'INSERT INTO onboarding_plan_steps (plan_id, order_index) VALUES ($1, $2) RETURNING id',
+        [planId, stepIdx]
+      );
+      stepId = inserted.rows[0].id;
+    }
+
+    await syncTasks(client, stepId, step.tasks || [], matchesExisting);
+  }
+
+  // Steps that existed before but are no longer in the incoming list —
+  // the HR user removed them in the editor.
+  const removedStepIds = [...existingStepIds].filter((id) => !keptStepIds.has(id));
+  if (removedStepIds.length > 0) {
+    const referencedResult = await client.query(
+      `SELECT DISTINCT s.id FROM onboarding_plan_steps s
+       JOIN onboarding_step_tasks t ON t.step_id = s.id
+       JOIN onboarding_step_completions c ON c.task_id = t.id
+       WHERE s.id = ANY($1)`,
+      [removedStepIds]
+    );
+    const referencedStepIds = new Set(referencedResult.rows.map((r) => r.id));
+
+    const toArchive = removedStepIds.filter((id) => referencedStepIds.has(id));
+    const toDelete = removedStepIds.filter((id) => !referencedStepIds.has(id));
+
+    if (toArchive.length > 0) {
+      await client.query(
+        'UPDATE onboarding_plan_steps SET archived_at = NOW() WHERE id = ANY($1)',
+        [toArchive]
+      );
+      await client.query(
+        'UPDATE onboarding_step_tasks SET archived_at = NOW() WHERE step_id = ANY($1) AND archived_at IS NULL',
+        [toArchive]
+      );
+    }
+    if (toDelete.length > 0) {
+      // No completions anywhere under these steps — safe to hard-delete
+      // (cascades to their tasks, which are equally unreferenced).
+      await client.query('DELETE FROM onboarding_plan_steps WHERE id = ANY($1)', [toDelete]);
+    }
+  }
+}
+
+/**
+ * Same reconciliation as syncSteps, one level down. `stepIsExisting` is
+ * false for a brand-new step — in that case every task is necessarily new
+ * too (an id on it, if present, cannot refer to a task under this step).
+ */
+async function syncTasks(client, stepId, incomingTasks, stepIsExisting) {
+  let existingTaskIds = new Set();
+  if (stepIsExisting) {
+    const existingResult = await client.query(
+      'SELECT id FROM onboarding_step_tasks WHERE step_id = $1 AND archived_at IS NULL',
+      [stepId]
+    );
+    existingTaskIds = new Set(existingResult.rows.map((r) => r.id));
+  }
+  const keptTaskIds = new Set();
+
+  for (let taskIdx = 0; taskIdx < incomingTasks.length; taskIdx += 1) {
+    const t = incomingTasks[taskIdx];
+    const matchesExisting = stepIsExisting && t.id && existingTaskIds.has(t.id);
+
+    if (matchesExisting) {
+      keptTaskIds.add(t.id);
+      await client.query(
+        `UPDATE onboarding_step_tasks
+         SET type = $1, title = $2, video_url = $3, document_url = $4, document_name = $5, description = $6, order_index = $7
+         WHERE id = $8`,
+        [t.type, t.title, t.videoUrl || null, t.documentUrl || null, t.documentName || null, t.description || null, taskIdx, t.id]
+      );
+    } else {
+      await client.query(
+        `INSERT INTO onboarding_step_tasks (step_id, type, title, video_url, document_url, document_name, description, order_index)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [stepId, t.type, t.title, t.videoUrl || null, t.documentUrl || null, t.documentName || null, t.description || null, taskIdx]
+      );
+    }
+  }
+
+  const removedTaskIds = [...existingTaskIds].filter((id) => !keptTaskIds.has(id));
+  if (removedTaskIds.length > 0) {
+    const referencedResult = await client.query(
+      'SELECT DISTINCT task_id FROM onboarding_step_completions WHERE task_id = ANY($1)',
+      [removedTaskIds]
+    );
+    const referencedTaskIds = new Set(referencedResult.rows.map((r) => r.task_id));
+
+    const toArchive = removedTaskIds.filter((id) => referencedTaskIds.has(id));
+    const toDelete = removedTaskIds.filter((id) => !referencedTaskIds.has(id));
+
+    if (toArchive.length > 0) {
+      await client.query(
+        'UPDATE onboarding_step_tasks SET archived_at = NOW() WHERE id = ANY($1)',
+        [toArchive]
+      );
+    }
+    if (toDelete.length > 0) {
+      await client.query('DELETE FROM onboarding_step_tasks WHERE id = ANY($1)', [toDelete]);
+    }
   }
 }
 
@@ -183,7 +341,7 @@ export async function updatePlan(id, data) {
       `UPDATE onboarding_plans SET name = $1, description = $2, department = $3, updated_at = NOW() WHERE id = $4`,
       [data.name, data.description || null, data.department || null, id]
     );
-    await replaceSteps(client, id, data.steps);
+    await syncSteps(client, id, data.steps);
     await client.query('COMMIT');
     return getPlanById(id);
   } catch (error) {
@@ -227,10 +385,20 @@ const SELECT_ASSIGNMENTS = `
     a.*,
     p.name AS plan_name,
     e.first_name, e.last_name, e.photo_url,
+    -- "Visible to this assignment" = still active in the plan, OR archived
+    -- but this specific assignment already has a completion against it
+    -- (an edit that removed a task must not retroactively shrink an
+    -- employee's already-earned progress denominator). A brand-new
+    -- assignment never has completions yet, so it only ever sees active
+    -- tasks — exactly the plan's current shape.
     (
       SELECT COUNT(*) FROM onboarding_step_tasks t
       JOIN onboarding_plan_steps s ON s.id = t.step_id
       WHERE s.plan_id = a.plan_id
+        AND (t.archived_at IS NULL OR EXISTS (
+          SELECT 1 FROM onboarding_step_completions c
+          WHERE c.task_id = t.id AND c.assignment_id = a.id
+        ))
     ) AS total_tasks,
     -- Faqat HR tomonidan qabul qilingan ("approved") vazifalar "bajarildi"
     -- hisoblanadi — shunchaki topshirilgani hali yetarli emas.
@@ -246,6 +414,10 @@ const SELECT_ASSIGNMENTS = `
       SELECT t.title FROM onboarding_step_tasks t
       JOIN onboarding_plan_steps s ON s.id = t.step_id
       WHERE s.plan_id = a.plan_id
+        AND (t.archived_at IS NULL OR EXISTS (
+          SELECT 1 FROM onboarding_step_completions c2
+          WHERE c2.task_id = t.id AND c2.assignment_id = a.id
+        ))
         AND t.id NOT IN (
           SELECT task_id FROM onboarding_step_completions
           WHERE assignment_id = a.id AND review_status = 'approved'
@@ -325,18 +497,42 @@ export async function getStats() {
  * Bitta biriktirish uchun bosqich/vazifa daraxti va topshirilgan
  * vazifalarni birga yig'ib beradi — public token orqali (xodim) va admin
  * id orqali (Progress jadvalidagi "Ko'rish") ikkalasida ham ishlatiladi.
+ *
+ * Shows active steps/tasks, PLUS any archived one this specific assignment
+ * already has a completion against — so editing a plan later never makes
+ * an employee's already-submitted work vanish from their own history, while
+ * a fresh assignment to the edited plan only ever sees its current shape.
  */
 async function attachStepsAndCompletions(assignmentRow) {
   const stepsResult = await query(
-    'SELECT * FROM onboarding_plan_steps WHERE plan_id = $1 ORDER BY order_index',
-    [assignmentRow.plan_id]
+    `SELECT s.* FROM onboarding_plan_steps s
+     WHERE s.plan_id = $1
+       AND (
+         s.archived_at IS NULL
+         OR EXISTS (
+           SELECT 1 FROM onboarding_step_tasks t
+           JOIN onboarding_step_completions c ON c.task_id = t.id
+           WHERE t.step_id = s.id AND c.assignment_id = $2
+         )
+       )
+     ORDER BY s.order_index`,
+    [assignmentRow.plan_id, assignmentRow.id]
   );
   const steps = stepsResult.rows.map(mapStep);
 
   if (steps.length > 0) {
     const tasksResult = await query(
-      'SELECT * FROM onboarding_step_tasks WHERE step_id = ANY($1) ORDER BY step_id, order_index',
-      [steps.map((s) => s.id)]
+      `SELECT t.* FROM onboarding_step_tasks t
+       WHERE t.step_id = ANY($1)
+         AND (
+           t.archived_at IS NULL
+           OR EXISTS (
+             SELECT 1 FROM onboarding_step_completions c
+             WHERE c.task_id = t.id AND c.assignment_id = $2
+           )
+         )
+       ORDER BY t.step_id, t.order_index`,
+      [steps.map((s) => s.id), assignmentRow.id]
     );
     const tasksByStep = {};
     for (const row of tasksResult.rows) {
@@ -358,7 +554,7 @@ async function attachStepsAndCompletions(assignmentRow) {
  */
 export async function getAssignmentByToken(token) {
   const [assignment] = (await query(`${SELECT_ASSIGNMENTS} WHERE a.public_token = $1`, [token])).rows;
-  if (!assignment) {
+  if (!assignment || (assignment.expires_at && new Date(assignment.expires_at) <= new Date())) {
     const error = new Error('Havola topilmadi yoki eskirgan');
     error.statusCode = HTTP_STATUS.NOT_FOUND;
     throw error;
@@ -396,11 +592,21 @@ export async function getAssignmentById(id) {
 }
 
 async function recomputeAssignmentCompletion(assignmentId) {
+  // "total" must count the same set of tasks as SELECT_ASSIGNMENTS.total_tasks
+  // (active tasks, plus any archived one this assignment already completed)
+  // — otherwise an edited plan could leave completed_at permanently unset
+  // (denominator counts a task the employee can no longer see or submit)
+  // or, conversely, mark an assignment "complete" against tasks it never saw.
   const result = await query(
     `SELECT
        (SELECT COUNT(*) FROM onboarding_step_tasks t
           JOIN onboarding_plan_steps s ON s.id = t.step_id
-          JOIN onboarding_assignments a ON a.plan_id = s.plan_id WHERE a.id = $1) AS total,
+          JOIN onboarding_assignments a ON a.plan_id = s.plan_id
+          WHERE a.id = $1
+            AND (t.archived_at IS NULL OR EXISTS (
+              SELECT 1 FROM onboarding_step_completions c
+              WHERE c.task_id = t.id AND c.assignment_id = $1
+            ))) AS total,
        (SELECT COUNT(*) FROM onboarding_step_completions WHERE assignment_id = $1 AND review_status = 'approved') AS done`,
     [assignmentId]
   );
@@ -419,20 +625,23 @@ async function recomputeAssignmentCompletion(assignmentId) {
  */
 export async function submitTask(token, taskId, submission) {
   const assignmentResult = await query(
-    'SELECT id, plan_id FROM onboarding_assignments WHERE public_token = $1',
+    'SELECT id, plan_id, expires_at FROM onboarding_assignments WHERE public_token = $1',
     [token]
   );
-  if (assignmentResult.rows.length === 0) {
+  const assignment = assignmentResult.rows[0];
+  if (!assignment || (assignment.expires_at && new Date(assignment.expires_at) <= new Date())) {
     const error = new Error('Havola topilmadi yoki eskirgan');
     error.statusCode = HTTP_STATUS.NOT_FOUND;
     throw error;
   }
-  const assignment = assignmentResult.rows[0];
 
+  // archived_at IS NULL — a task HR has removed from the plan should not
+  // accept new (or resubmitted) work, even if the employee still has the
+  // old link open; it stays visible read-only via their existing completion.
   const taskCheck = await query(
     `SELECT t.id FROM onboarding_step_tasks t
      JOIN onboarding_plan_steps s ON s.id = t.step_id
-     WHERE t.id = $1 AND s.plan_id = $2`,
+     WHERE t.id = $1 AND s.plan_id = $2 AND t.archived_at IS NULL`,
     [taskId, assignment.plan_id]
   );
   if (taskCheck.rows.length === 0) {

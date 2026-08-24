@@ -4,6 +4,7 @@ import * as onboardingController from './onboarding.controller.js';
 import { authenticate, authorize } from '../auth/auth.middleware.js';
 import { validate, validateParams, commonSchemas } from '../../shared/middleware/validate.js';
 import { uploadOnboardingDocument, uploadOnboardingSubmission, handleMulterError } from '../../shared/middleware/upload.js';
+import { onboardingSubmitLimiter } from '../../shared/middleware/rateLimiter.js';
 import { USER_ROLES } from '../../config/constants.js';
 
 const router = express.Router();
@@ -13,6 +14,11 @@ const router = express.Router();
 const YOUTUBE_URL_PATTERN = /^([a-zA-Z0-9_-]{11}|https?:\/\/(www\.)?(youtube\.com\/(watch\?v=|embed\/|shorts\/)|youtu\.be\/)[a-zA-Z0-9_-]{11}(&\S*|\?\S*)?)$/;
 
 const taskSchema = Joi.object({
+  // Present only when editing an existing task (the frontend never invents
+  // one for a task added in the current editing session) — lets the
+  // backend match "same task as before" instead of recreating it from
+  // scratch on every save. See onboarding.service.js#syncSteps.
+  id: Joi.string().uuid().optional(),
   type: Joi.string().valid('video', 'hujjat', 'harakat').default('video'),
   title: Joi.string().trim().min(1).max(200).required(),
   videoUrl: Joi.string().trim().max(500).allow('', null).pattern(YOUTUBE_URL_PATTERN).messages({
@@ -24,6 +30,7 @@ const taskSchema = Joi.object({
 });
 
 const stepSchema = Joi.object({
+  id: Joi.string().uuid().optional(),
   tasks: Joi.array().items(taskSchema).default([]),
 });
 
@@ -125,9 +132,10 @@ router.delete(
 );
 
 // Ommaviy (login talab qilinmaydi - xodim shaxsiy token orqali kiradi)
-router.get('/public/:token', onboardingController.getPublicAssignment);
+router.get('/public/:token', onboardingSubmitLimiter, onboardingController.getPublicAssignment);
 router.post(
   '/public/:token/tasks/:taskId/submit',
+  onboardingSubmitLimiter,
   uploadOnboardingSubmission,
   handleMulterError,
   validate(submissionSchema),

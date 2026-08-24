@@ -3,17 +3,26 @@ import { config } from '../../config/env.js';
 
 /**
  * Global Error Handler Middleware
- * Catches all errors and sends standardized error responses
+ * Catches all errors and sends standardized error responses.
+ *
+ * Two things are kept strictly separate here, on purpose:
+ *  1. What gets LOGGED (server-side, always, every environment) — full
+ *     detail, so a real incident can actually be investigated afterwards.
+ *  2. What gets SENT to the client — an intentional business error (one our
+ *     own code threw with a statusCode, e.g. "Xodim topilmadi") is safe to
+ *     show as-is; an *unexpected* error (a real bug, a raw Postgres/driver
+ *     exception) is never shown verbatim, since its message can leak
+ *     internal schema/implementation details to whoever is calling the API.
  */
 export function errorHandler(err, req, res, next) {
-  // Log error in development
-  if (config.env === 'development') {
-    console.error('❌ Error:', err);
-  }
+  // Our own service code always sets statusCode on intentional errors
+  // ("Xodim topilmadi", "Invite already used", etc.) — that message is
+  // meant to be user-facing. Anything without one is an unanticipated
+  // exception (a bug, a raw driver/library error) and must not be echoed.
+  const isKnownError = typeof err.statusCode === 'number';
 
-  // Default error
   let statusCode = err.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR;
-  let message = err.message || MESSAGES.SERVER_ERROR;
+  let message = isKnownError ? err.message : MESSAGES.SERVER_ERROR;
   let errors = err.errors || null;
 
   // Joi validation error
@@ -54,6 +63,23 @@ export function errorHandler(err, req, res, next) {
     // Invalid text representation
     statusCode = HTTP_STATUS.BAD_REQUEST;
     message = 'Invalid data format';
+  }
+
+  // Always log server-side — every environment, not just development.
+  // A production 500 with no log trail is undebuggable; this is the
+  // difference between "a user reported an error" and "we know exactly
+  // which request, on which route, threw what".
+  const logPayload = {
+    method: req.method,
+    path: req.originalUrl,
+    statusCode,
+    message: err.message,
+    userId: req.user?.id,
+  };
+  if (statusCode >= 500) {
+    console.error('❌ Server error:', logPayload, '\n', err.stack);
+  } else if (config.env === 'development') {
+    console.error('❌ Request error:', logPayload);
   }
 
   // Send error response

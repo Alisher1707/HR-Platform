@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import ErrorBoundary from '../ErrorBoundary';
 
 /**
  * AppLayout Component
@@ -47,7 +48,13 @@ export function AppLayout() {
       <div className={`app-content ${showHeader ? '' : 'app-content--no-header'}`}>
         {showHeader && <Header onMenuClick={toggleSidebar} />}
         <main className="app-content-inner animate-fade-in-up">
-          <Outlet />
+          {/* Keyed by path so navigating away from a crashed page (sidebar
+              and header stay usable throughout) resets the boundary,
+              without requiring the full-page reload the root-level
+              boundary in main.jsx falls back to. */}
+          <ErrorBoundary key={location.pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
     </div>

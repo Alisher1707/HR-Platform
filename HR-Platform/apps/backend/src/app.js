@@ -5,12 +5,17 @@ import cookieParser from 'cookie-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { config, validateEnv } from './config/env.js';
-import { testConnection } from './config/database.js';
+import { testConnection, query } from './config/database.js';
 import { generalLimiter } from './shared/middleware/rateLimiter.js';
 import { errorHandler, notFoundHandler } from './shared/middleware/errorHandler.js';
+import { serveUploadedFile } from './shared/middleware/serveUploads.js';
+import { authenticateFromQuery, authorize } from './modules/auth/auth.middleware.js';
+import { USER_ROLES } from './config/constants.js';
 import { startAutoPromotionCron } from './services/autoPromotionService.js';
 import { startAutoFineCron, startCheckoutResolutionCron } from './services/autoFineService.js';
 import { startDeviceEventsCleanupCron } from './services/deviceEventsCleanupService.js';
+import { startRefreshTokenCleanupCron } from './modules/auth/refreshToken.service.js';
+import { pool } from './config/database.js';
 
 // Import routes
 import authRoutes from './modules/auth/auth.routes.js';
@@ -75,95 +80,115 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' })); // Parse URL-enc
 app.use(cookieParser());
 
 /**
- * Static Files - Employee photos (avatars)
- * CORP header is required because the frontend runs on a different origin
+ * Uploaded Files
+ *
+ * These used to be plain `express.static` mounts — reachable by anyone who
+ * had (or could guess) a URL, no login required. That meant employee
+ * photos, candidate resumes, fine evidence and Telegram-submitted appeal
+ * documents were all effectively public on the internet. Every one of
+ * those now requires a valid, still-active user session; only the
+ * onboarding directory stays unauthenticated, because that's the one
+ * genuinely public surface here — an employee fills out their onboarding
+ * checklist through a dedicated unauthenticated link (public_token), never
+ * logging in at all (see onboarding.service.js), so task documents/
+ * submissions must be reachable the same way.
+ *
+ * `authenticateFromQuery` (not the header-based `authenticate`) is used
+ * because these URLs are consumed directly by `<img src>`/`<a href>`,
+ * which can't attach an Authorization header — the same tradeoff the EJM
+ * download route already made. The access token still expires in minutes
+ * and every request still requires ADMIN/SUPER_ADMIN/HR, which is a world
+ * away from "no auth at all"; a fully header-based fetch+blob-URL scheme
+ * would close the token-in-URL surface entirely but touches every photo/
+ * file usage across the frontend, which is out of scope for this pass.
  */
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-app.use(
-  '/uploads/employees',
-  express.static(path.join(__dirname, '../uploads/employees'), {
-    setHeaders: (res) => {
-      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    },
-  })
+const canManageUploads = authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.HR);
+
+app.get(
+  '/uploads/employees/:filename',
+  authenticateFromQuery,
+  canManageUploads,
+  serveUploadedFile(path.join(__dirname, '../uploads/employees'))
+);
+
+app.get(
+  '/uploads/resumes/:filename',
+  authenticateFromQuery,
+  canManageUploads,
+  serveUploadedFile(path.join(__dirname, '../uploads/resumes'))
+);
+
+app.get(
+  '/uploads/device-events/:filename',
+  authenticateFromQuery,
+  canManageUploads,
+  serveUploadedFile(path.join(__dirname, '../uploads/device-events'))
+);
+
+app.get(
+  '/uploads/fines/:filename',
+  authenticateFromQuery,
+  canManageUploads,
+  serveUploadedFile(path.join(__dirname, '../uploads/fines'))
+);
+
+app.get(
+  '/uploads/appeals/:filename',
+  authenticateFromQuery,
+  canManageUploads,
+  serveUploadedFile(path.join(__dirname, '../uploads/appeals'))
 );
 
 /**
- * Static Files - Candidate resumes
- */
-app.use(
-  '/uploads/resumes',
-  express.static(path.join(__dirname, '../uploads/resumes'), {
-    setHeaders: (res) => {
-      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    },
-  })
-);
-
-/**
- * Static Files - Captured device event snapshots (diagnostic)
- */
-app.use(
-  '/uploads/device-events',
-  express.static(path.join(__dirname, '../uploads/device-events'), {
-    setHeaders: (res) => {
-      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    },
-  })
-);
-
-/**
- * Static Files - Onboarding task documents
+ * Static Files - Onboarding task documents & employee submissions
+ * Intentionally unauthenticated — see comment above.
  */
 app.use(
   '/uploads/onboarding',
   express.static(path.join(__dirname, '../uploads/onboarding'), {
     setHeaders: (res) => {
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
     },
   })
 );
 
 /**
- * Static Files - Employee fine evidence files
+ * Health Check Endpoint
+ *
+ * Docker's HEALTHCHECK (see Dockerfile) polls this every 30s to decide
+ * whether the container is "healthy" and should keep receiving traffic /
+ * not be restarted — deliberately mounted BEFORE the rate limiter below,
+ * so that frequent, legitimate polling can never itself get throttled.
+ * It used to return 200 unconditionally — meaning a fully dead database
+ * still left the container marked healthy, so nothing would ever trigger
+ * a restart even though every real request was failing. A quick
+ * `SELECT 1` actually exercises the connection pool the app depends on.
  */
-app.use(
-  '/uploads/fines',
-  express.static(path.join(__dirname, '../uploads/fines'), {
-    setHeaders: (res) => {
-      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    },
-  })
-);
-
-/**
- * Static Files - Fine-appeal documents submitted via the Telegram bot
- */
-app.use(
-  '/uploads/appeals',
-  express.static(path.join(__dirname, '../uploads/appeals'), {
-    setHeaders: (res) => {
-      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    },
-  })
-);
+app.get('/health', async (req, res) => {
+  try {
+    await query('SELECT 1');
+    res.status(200).json({
+      success: true,
+      message: 'HR Platform API is running',
+      timestamp: new Date().toISOString(),
+      environment: config.env,
+    });
+  } catch (error) {
+    res.status(503).json({
+      success: false,
+      message: 'Database unavailable',
+      timestamp: new Date().toISOString(),
+      environment: config.env,
+    });
+  }
+});
 
 /**
  * Rate Limiting
  */
 app.use(generalLimiter);
-
-/**
- * Health Check Endpoint
- */
-app.get('/health', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'HR Platform API is running',
-    timestamp: new Date().toISOString(),
-    environment: config.env,
-  });
-});
 
 /**
  * API Routes
@@ -236,6 +261,9 @@ async function startServer() {
 
     // Eski (heartbeat) qurilma hodisalarini 30 kundan keyin tozalash
     startDeviceEventsCleanupCron();
+
+    // Eskirgan/bekor qilingan refresh tokenlarni tozalash
+    startRefreshTokenCleanupCron(pool);
 
     // Register the Telegram webhook (no-op if not configured, e.g. local dev)
     ensureWebhookRegistered();

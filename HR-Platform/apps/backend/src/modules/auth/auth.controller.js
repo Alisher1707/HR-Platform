@@ -72,10 +72,15 @@ export const refresh = asyncHandler(async (req, res) => {
 
 /**
  * POST /api/v1/auth/logout
- * Logout user
+ * Logout user — revokes the refresh token itself (see auth.service.js),
+ * not just the cookie carrying it. Clearing only the cookie left the
+ * token cryptographically valid for up to 7 more days; anyone who'd
+ * copied it (XSS, a shared/compromised machine) could keep using it long
+ * after the user believed they'd logged out.
  */
 export const logout = asyncHandler(async (req, res) => {
-  // Clear refresh token cookie
+  await authService.logoutUser(req.cookies.refreshToken);
+
   res.clearCookie('refreshToken');
 
   return successResponse(res, null, 'Logged out successfully');

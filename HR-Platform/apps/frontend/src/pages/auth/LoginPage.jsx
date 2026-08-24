@@ -26,8 +26,13 @@ export function LoginPage() {
       const user = useAuthStore.getState().user;
       if (user?.role === 'HR') {
         navigate('/hr/dashboard');
-      } else {
+      } else if (user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') {
         navigate('/admin/dashboard');
+      } else {
+        // EMPLOYEE (or any future non-admin role) — has no admin/HR pages,
+        // sending it into '/admin/dashboard' bounced forever between here
+        // and ProtectedRoute's role check (see AppRouter.jsx).
+        navigate('/employee/dashboard');
       }
     }
   }, [isAuthenticated, navigate]);

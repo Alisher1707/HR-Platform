@@ -372,10 +372,18 @@ export async function receiveDeviceEvent(req, res) {
   const stamp = Date.now();
   const deviceToken = req.params.token;
 
+  // Token is masked before logging — it's a bearer credential (anyone who
+  // has it can post fake attendance events), and it also sits in the URL
+  // path itself, so an unmasked log line would duplicate that exposure
+  // into every log aggregator/backup that ingests these logs.
+  const maskedToken = deviceToken
+    ? `${deviceToken.slice(0, 4)}…${deviceToken.slice(-4)} (${deviceToken.length} belgi)`
+    : '(yo\'q)';
+
   console.log('\n========== DEVICE EVENT RECEIVED ==========');
   console.log('Time:', receivedAt);
   console.log('Method:', req.method);
-  console.log('Device token (URL param):', deviceToken);
+  console.log('Device token (URL param, maskalangan):', maskedToken);
   console.log('From IP:', req.ip);
   console.log('Content-Type:', req.headers['content-type']);
 

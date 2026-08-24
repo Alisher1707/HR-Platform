@@ -25,16 +25,6 @@ export function generateRefreshToken(payload) {
 }
 
 /**
- * Generate both tokens at once
- */
-export function generateTokenPair(payload) {
-  const accessToken = generateAccessToken(payload);
-  const refreshToken = generateRefreshToken(payload);
-
-  return { accessToken, refreshToken };
-}
-
-/**
  * Verify access token
  */
 export function verifyAccessToken(token) {

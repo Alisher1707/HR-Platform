@@ -139,8 +139,7 @@ export function KanbanPage() {
   useEffect(() => {
     const fetchEmployees = async () => {
       try {
-        const response = await employeeService.getEmployees({ limit: 100 });
-        const empList = response.data || [];
+        const empList = await employeeService.getAllEmployees();
         setAllEmployees(empList.map(e => ({
           value: e.id,
           label: `${e.firstName || e.first_name} ${e.lastName || e.last_name}`

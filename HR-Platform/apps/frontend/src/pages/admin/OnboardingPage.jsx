@@ -248,8 +248,8 @@ export function OnboardingPage() {
     refreshDepartments();
     (async () => {
       try {
-        const response = await employeeService.getEmployees({ limit: 100 });
-        setEmployees(response.data || []);
+        const allEmployees = await employeeService.getAllEmployees();
+        setEmployees(allEmployees);
       } catch (err) {
         toast.error("Xodimlar ro'yxatini yuklashda xatolik");
       }
@@ -313,8 +313,8 @@ export function OnboardingPage() {
       if (editingDept) {
         await departmentService.updateDepartment(editingDept.id, name);
         await Promise.all([refreshDepartments(), refreshPlans()]);
-        const response = await employeeService.getEmployees({ limit: 100 });
-        setEmployees(response.data || []);
+        const allEmployees = await employeeService.getAllEmployees();
+        setEmployees(allEmployees);
         toast.success("Bo'lim yangilandi");
         if (selectedDepartment === editingDept.name) setSelectedDepartment(name);
       } else {
@@ -585,9 +585,19 @@ export function OnboardingPage() {
 
     const validSteps = planForm.steps
       .map((s) => ({
+        // Real steps/tasks (loaded from the backend, being edited) carry
+        // their actual UUID; ones just added in this editing session carry
+        // a local "new-"/"newtask-" placeholder (see emptyStep/emptyTask
+        // above) that must never be sent as if it were a real id. Sending
+        // the real id back lets the backend match "this is the same step/
+        // task as before" instead of recreating everything from scratch —
+        // which is what used to silently wipe out every employee's already
+        // submitted/reviewed work on save (see onboarding.service.js#syncSteps).
+        ...(typeof s.id === 'string' && !s.id.startsWith('new-') ? { id: s.id } : {}),
         tasks: s.tasks
           .filter((t) => t.title.trim())
           .map((t) => ({
+            ...(typeof t.id === 'string' && !t.id.startsWith('newtask-') ? { id: t.id } : {}),
             type: t.type,
             title: t.title.trim(),
             videoUrl: t.videoUrl?.trim() || '',

@@ -74,9 +74,14 @@ export const MESSAGES = {
 };
 
 // Cookie Options
+// `secure` faqat NODE_ENV ga bog'liq — HTTPS nomli alohida env o'zgaruvchisi
+// hech qayerda o'rnatilmagani sababli avvalgi shart hech qachon true bo'lmasdi
+// va production'da ham cookie Secure bayrog'isiz yuborilardi. Production nginx
+// orqali doim HTTPS bilan xizmat qiladi, shuning uchun bu yerda qo'shimcha
+// shart shart emas.
 export const COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production' && process.env.HTTPS === 'true',
+  secure: process.env.NODE_ENV === 'production',
   sameSite: 'lax',
   path: '/',
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds

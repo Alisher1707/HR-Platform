@@ -500,13 +500,13 @@ export function IshJadvallariPage() {
 
     (async () => {
       try {
-        const [scheduleList, employeeResp] = await Promise.all([
+        const [scheduleList, allEmployees] = await Promise.all([
           workScheduleService.getSchedules(),
-          employeeService.getEmployees({ limit: 100 }),
+          employeeService.getAllEmployees(),
         ]);
         if (cancelled) return;
         setSchedules(scheduleList.map(apiScheduleToItem));
-        setEmployees(employeeResp.data || []);
+        setEmployees(allEmployees);
       } catch (err) {
         if (!cancelled) toast.error("Jadvallarni yuklashda xatolik yuz berdi");
       } finally {

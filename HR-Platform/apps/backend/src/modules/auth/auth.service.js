@@ -1,8 +1,8 @@
 import bcrypt from 'bcryptjs';
-import { query, getClient } from '../../config/database.js';
-import { generateTokenPair, verifyRefreshToken } from '../../shared/utils/token.js';
+import { query, getClient, pool } from '../../config/database.js';
 import { HTTP_STATUS, MESSAGES } from '../../config/constants.js';
 import { getNextAutoPersonId } from '../employees/employees.service.js';
+import { issueTokenPair, rotateRefreshToken, revokeRefreshToken } from './refreshToken.service.js';
 
 /**
  * Auth Service
@@ -37,9 +37,7 @@ export async function loginUser(email, password) {
   }
 
   // Verify password
-  console.log('Login attempt:', { email, password, hash: user.password_hash });
   const isPasswordValid = await bcrypt.compare(password, user.password_hash);
-  console.log('Password valid:', isPasswordValid);
 
   if (!isPasswordValid) {
     const error = new Error(MESSAGES.AUTH_FAILED);
@@ -47,8 +45,8 @@ export async function loginUser(email, password) {
     throw error;
   }
 
-  // Generate tokens
-  const tokens = generateTokenPair({
+  // Generate tokens (and record the refresh token so it can later be revoked)
+  const tokens = await issueTokenPair(pool, {
     userId: user.id,
     email: user.email,
     role: user.role,
@@ -178,14 +176,16 @@ export async function registerUser(inviteToken, userData) {
       [user.id, invite.id]
     );
 
-    await client.query('COMMIT');
-
-    // Generate tokens
-    const tokens = generateTokenPair({
+    // Issued inside the same transaction as the rest of registration, so
+    // a failure here rolls the whole registration back too, rather than
+    // leaving a user account committed with no valid session.
+    const tokens = await issueTokenPair(client, {
       userId: user.id,
       email: user.email,
       role: user.role,
     });
+
+    await client.query('COMMIT');
 
     return {
       user,
@@ -200,15 +200,21 @@ export async function registerUser(inviteToken, userData) {
 }
 
 /**
- * Refresh access token
+ * Refresh access token — rotates the refresh token too (old one revoked,
+ * new one issued+recorded) so a stolen-and-replayed refresh token gets
+ * rejected once the legitimate client has used it at least once. See
+ * refreshToken.service.js for the revocation model this relies on.
  */
 export async function refreshAccessToken(refreshToken) {
+  const client = await getClient();
   try {
-    // Verify refresh token
-    const decoded = verifyRefreshToken(refreshToken);
+    await client.query('BEGIN');
 
-    // Get user from database
-    const result = await query(
+    // Verifies signature/expiry AND checks+revokes the DB row atomically —
+    // throws 'Refresh token expired' / 'Invalid refresh token' either way.
+    const decoded = await rotateRefreshToken(client, refreshToken);
+
+    const result = await client.query(
       'SELECT id, email, role, is_active FROM users WHERE id = $1',
       [decoded.userId]
     );
@@ -229,14 +235,16 @@ export async function refreshAccessToken(refreshToken) {
     }
 
     // Generate new token pair
-    const tokens = generateTokenPair({
+    const tokens = await issueTokenPair(client, {
       userId: user.id,
       email: user.email,
       role: user.role,
     });
 
+    await client.query('COMMIT');
     return tokens;
   } catch (error) {
+    await client.query('ROLLBACK');
     if (error.message === 'Refresh token expired') {
       const err = new Error(MESSAGES.TOKEN_EXPIRED);
       err.statusCode = HTTP_STATUS.UNAUTHORIZED;
@@ -248,7 +256,18 @@ export async function refreshAccessToken(refreshToken) {
       throw err;
     }
     throw error;
+  } finally {
+    client.release();
   }
+}
+
+/**
+ * Logout — revokes the presented refresh token's DB row so it can never
+ * be used again, not just clears the cookie holding it (that part still
+ * happens separately in the controller).
+ */
+export async function logoutUser(refreshToken) {
+  await revokeRefreshToken(pool, refreshToken);
 }
 
 /**

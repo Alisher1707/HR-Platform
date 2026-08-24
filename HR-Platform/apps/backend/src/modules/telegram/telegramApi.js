@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { config } from '../../config/env.js';
+import { randomFilename } from '../../shared/utils/safeUpload.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const appealsDir = path.join(__dirname, '../../../uploads/appeals');
@@ -53,10 +54,26 @@ export async function answerCallbackQuery(callbackQueryId, text) {
   return callApi('answerCallbackQuery', { callback_query_id: callbackQueryId, text });
 }
 
+// Telegram documents keep whatever extension the sender's own file had —
+// exactly as unverified as a web upload's original filename. Without this
+// allow-list, someone chatting with the bot could hand it an "evil.html"
+// as their "tushuntirish xati" document, and it would later be served
+// back from /uploads/appeals/ (see app.js) with a browser-executable
+// Content-Type, purely on the strength of its extension. See safeUpload.js
+// for the same reasoning applied to the regular HTTP upload routes.
+const ALLOWED_APPEAL_EXTENSIONS = new Set(['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.webp']);
+
 /** Resolves a Telegram file_id to a downloadable path + fetches its bytes. */
 export async function downloadTelegramFile(fileId) {
   const file = await callApi('getFile', { file_id: fileId });
   if (!file || !file.file_path) return null;
+
+  const ext = (path.extname(file.file_path) || '').toLowerCase();
+  if (!ALLOWED_APPEAL_EXTENSIONS.has(ext)) {
+    const error = new Error('Fayl turi qo\'llab-quvvatlanmaydi. Faqat PDF, DOC, DOCX yoki rasm (JPG, PNG, WEBP) yuboring.');
+    error.isUnsupportedFileType = true;
+    throw error;
+  }
 
   const url = `https://api.telegram.org/file/bot${config.telegram.botToken}/${file.file_path}`;
   const res = await fetch(url);
@@ -65,8 +82,7 @@ export async function downloadTelegramFile(fileId) {
   }
   const buffer = Buffer.from(await res.arrayBuffer());
 
-  const ext = path.extname(file.file_path) || '';
-  const filename = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+  const filename = randomFilename(ext);
   fs.writeFileSync(path.join(appealsDir, filename), buffer);
 
   return { fileUrl: `/uploads/appeals/${filename}`, fileName: path.basename(file.file_path) };

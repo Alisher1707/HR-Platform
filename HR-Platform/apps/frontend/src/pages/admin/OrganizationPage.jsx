@@ -414,8 +414,8 @@ export function OrganizationPage() {
   const fetchEmployees = async () => {
     setLoading(true);
     try {
-      const response = await employeeService.getEmployees({ limit: 100 });
-      setEmployees(response.data || []);
+      const allEmployees = await employeeService.getAllEmployees();
+      setEmployees(allEmployees);
     } catch (err) {
       console.error(err);
     } finally {

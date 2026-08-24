@@ -1,4 +1,4 @@
-import api from './api';
+import api, { withAuthToken } from './api';
 
 /**
  * Employee Service
@@ -29,6 +29,29 @@ export const employeeService = {
       data: response.data.data,
       pagination: response.data.pagination
     };
+  },
+
+  /**
+   * Fetch every employee, regardless of count — for screens that build a
+   * lookup/filter/dropdown from the full roster rather than showing a
+   * paginated table. `getEmployees` alone caps at 100 per page (backend
+   * validation, `employees.routes.js`), so a single `{ limit: 100 }` call
+   * silently dropped anyone past the 100th employee with no error and no
+   * indication anything was missing. This loops pages until the backend's
+   * own `pagination.totalPages` says there are no more.
+   */
+  async getAllEmployees(extraParams = {}) {
+    const PAGE_SIZE = 100;
+    let page = 1;
+    let all = [];
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const { data, pagination } = await this.getEmployees({ ...extraParams, page, limit: PAGE_SIZE });
+      all = all.concat(data);
+      if (!pagination || page >= pagination.totalPages) break;
+      page += 1;
+    }
+    return all;
   },
 
   /**
@@ -82,19 +105,24 @@ export const employeeService = {
   },
 
   /**
-   * Build absolute URL for an employee photo path
+   * Build absolute URL for an employee photo path.
+   * /uploads/employees now requires auth (see app.js) — withAuthToken
+   * attaches the current access token as a query param since this URL is
+   * handed straight to <img src>.
    */
   getPhotoUrl(photoUrl) {
     if (!photoUrl) return null;
-    return photoUrl.startsWith('http') ? photoUrl : `${API_ORIGIN}${photoUrl}`;
+    const absolute = photoUrl.startsWith('http') ? photoUrl : `${API_ORIGIN}${photoUrl}`;
+    return withAuthToken(absolute);
   },
 
   /**
-   * Build absolute URL for an employee resume path
+   * Build absolute URL for an employee resume path (same auth note as above).
    */
   getResumeUrl(resumeUrl) {
     if (!resumeUrl) return null;
-    return resumeUrl.startsWith('http') ? resumeUrl : `${API_ORIGIN}${resumeUrl}`;
+    const absolute = resumeUrl.startsWith('http') ? resumeUrl : `${API_ORIGIN}${resumeUrl}`;
+    return withAuthToken(absolute);
   },
 };
 

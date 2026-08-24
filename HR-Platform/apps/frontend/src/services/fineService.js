@@ -1,4 +1,4 @@
-import api from './api';
+import api, { withAuthToken } from './api';
 
 // Backend origin (without /api/v1) — used for building fine evidence file URLs.
 const API_ORIGIN = (import.meta.env.VITE_API_URL || '/api/v1').replace(/\/api\/v1\/?$/, '');
@@ -112,11 +112,15 @@ export const fineService = {
   },
 
   /**
-   * Build absolute URL for an assigned fine's evidence file
+   * Build absolute URL for an assigned fine's (or fine appeal's) evidence
+   * file. Both /uploads/fines and /uploads/appeals now require auth (see
+   * app.js) — withAuthToken attaches the current access token as a query
+   * param since this URL is handed straight to <a href>.
    */
   getFileUrl(fileUrl) {
     if (!fileUrl) return null;
-    return fileUrl.startsWith('http') ? fileUrl : `${API_ORIGIN}${fileUrl}`;
+    const absolute = fileUrl.startsWith('http') ? fileUrl : `${API_ORIGIN}${fileUrl}`;
+    return withAuthToken(absolute);
   },
 };
 
