@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { UserPlus, Search, Users, Eye, Pencil, Trash2, BarChart3, AlertTriangle, CreditCard, Phone, Briefcase, Wallet, FileText } from 'lucide-react';
+import { UserPlus, Search, Users, Eye, Pencil, Trash2, BarChart3, AlertTriangle, CreditCard, Phone, Briefcase, Wallet, FileText, FileUp } from 'lucide-react';
 import employeeService from '../../services/employeeService';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
@@ -9,6 +9,7 @@ import Modal from '../../components/ui/Modal';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import EmptyState from '../../components/ui/EmptyState';
 import EmployeeForm from './EmployeeForm';
+import EmployeeImportWizard from '../../components/employees/EmployeeImportWizard';
 import useToast from '../../hooks/useToast';
 import { useAuthStore } from '../../store/authStore';
 
@@ -43,6 +44,7 @@ export function EmployeeList() {
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [isImportOpen, setIsImportOpen] = useState(false);
 
   const fetchEmployees = async (page = 1, searchQuery = '') => {
     setLoading(true);
@@ -188,7 +190,14 @@ export function EmployeeList() {
           <h2 className="page-title">Xodimlar bo'limi</h2>
           <p className="page-subtitle">Kompaniya xodimlari ro'yxati, qidiruv, yangi xodim qo'shish va tahrirlash.</p>
         </div>
-        <div className="page-header-right">
+        <div className="page-header-right" style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+          <Button
+            variant="outline"
+            onClick={() => setIsImportOpen(true)}
+            icon={<FileUp size={16} strokeWidth={2.25} />}
+          >
+            Excel'dan import
+          </Button>
           <Button
             variant="primary"
             className={isHR ? 'hr-dash-cta' : ''}
@@ -406,6 +415,13 @@ export function EmployeeList() {
           </>
         )}
       </Card>
+
+      {/* Excel'dan ommaviy import ustasi */}
+      <EmployeeImportWizard
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        onImported={() => fetchEmployees(1, search)}
+      />
 
       {/* Add / Edit Modal Overlay */}
       <Modal

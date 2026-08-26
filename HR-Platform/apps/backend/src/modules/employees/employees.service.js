@@ -127,6 +127,134 @@ export async function createEmployee(employeeData, createdBy) {
 }
 
 /**
+ * Ommaviy import — Excel'dan kelgan xodimlar ro'yxatini bazaga yozadi.
+ *
+ * `createEmployee`dan ikkita muhim farqi bor:
+ *
+ *  1. Kanban'ga ariza yozuvi YARATILMAYDI. Qo'lda qo'shilgan xodim "yangi
+ *     ishga olindi" hisoblanadi va Lead doskasida bir soat ko'rinadi. Import
+ *     esa boshqa narsa — bu allaqachon ishlab turgan jamoani tizimga
+ *     ko'chirish. 200 nafar xodim uchun 200 ta karta yaratilsa, doska bir
+ *     soatga ishlatib bo'lmas holga kelardi.
+ *
+ *  2. Har bir qator ALOHIDA tranzaksiyada yoziladi. Bitta noto'g'ri qator
+ *     butun importni bekor qilmasligi kerak — foydalanuvchi to'g'ri
+ *     qatorlarni oladi va faqat xatolarini tuzatib qayta yuklaydi.
+ *
+ * Takrorlanishni tekshirish ikki bosqichli:
+ *   1. JSHSHIR (pnfl) — O'zbekistonda xodimning tabiiy yagona identifikatori.
+ *   2. JSHSHIR bo'sh bo'lsa — telefon raqami bo'yicha.
+ *
+ * Ikkinchi bosqich zarur, chunki HR fayllarida JSHSHIR ko'pincha
+ * to'ldirilmagan bo'ladi. Faqat JSHSHIR bilan tekshirilganda bunday xodim
+ * har bir qayta importda yangidan qo'shilaverar edi — ya'ni foydalanuvchi
+ * faylni tuzatib qayta yuklasa, ikkinchi nusxalar paydo bo'lardi.
+ * Ism-familiya bo'yicha tekshirmaymiz: bir xil ismli ikki xodim mutlaqo
+ * normal holat, ularni birlashtirib yuborish esa haqiqiy ma'lumot yo'qotish.
+ */
+export async function bulkImportEmployees(rows, createdBy) {
+  const results = [];
+  let imported = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i];
+    // rowNumber — foydalanuvchi Excel'da ko'radigan qator raqami (1-qator
+    // sarlavha), shuning uchun xato xabari "5-qator" desa, u faylda aynan
+    // 5-qatorni ochadi.
+    const rowNumber = row.rowNumber || i + 2;
+
+    try {
+      let duplicateReason = null;
+      if (row.pnfl) {
+        const dupe = await query('SELECT id FROM employees WHERE pnfl = $1', [row.pnfl]);
+        if (dupe.rows.length > 0) duplicateReason = 'Bu JSHSHIR bilan xodim allaqachon mavjud';
+      } else if (row.phone) {
+        const dupe = await query('SELECT id FROM employees WHERE phone = $1', [row.phone]);
+        if (dupe.rows.length > 0) duplicateReason = 'Bu telefon raqami bilan xodim allaqachon mavjud';
+      }
+
+      if (duplicateReason) {
+        skipped += 1;
+        results.push({
+          rowNumber,
+          name: `${row.firstName} ${row.lastName}`,
+          status: 'skipped',
+          message: duplicateReason,
+        });
+        continue;
+      }
+
+      const client = await getClient();
+      try {
+        await client.query('BEGIN');
+        const personId = await getNextAutoPersonId(client);
+
+        await client.query(
+          `INSERT INTO employees (
+            employee_number, first_name, last_name, branch, department, position,
+            join_date, birth_date, pnfl, phone, email, address,
+            salary_type, salary_amount, status, experience, telegram_username,
+            contract_start_date, contract_end_date, person_id, created_by
+          )
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
+          [
+            row.employeeNumber || null,
+            row.firstName,
+            row.lastName,
+            row.branch || null,
+            row.department || null,
+            row.position || null,
+            row.joinDate || null,
+            row.birthDate || null,
+            row.pnfl || null,
+            row.phone || null,
+            row.email || null,
+            row.address || null,
+            row.salaryType || 'Oylik',
+            row.salaryAmount != null ? row.salaryAmount : null,
+            row.status || 'Faol',
+            row.experience || 0,
+            row.telegramUsername || null,
+            row.contractStartDate || null,
+            row.contractEndDate || null,
+            personId,
+            createdBy,
+          ]
+        );
+
+        await client.query('COMMIT');
+        imported += 1;
+        results.push({
+          rowNumber,
+          name: `${row.firstName} ${row.lastName}`,
+          status: 'imported',
+          personId,
+        });
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
+    } catch (err) {
+      failed += 1;
+      results.push({
+        rowNumber,
+        name: `${row.firstName || ''} ${row.lastName || ''}`.trim() || '—',
+        status: 'failed',
+        message: err.code === '23505'
+          ? 'Bunday yozuv allaqachon mavjud (takrorlanuvchi qiymat)'
+          : err.message || 'Nomaʼlum xatolik',
+      });
+    }
+  }
+
+  return { imported, skipped, failed, total: rows.length, results };
+}
+
+/**
  * Get all employees with pagination and filters
  */
 export async function getAllEmployees(filters = {}, pagination = {}) {

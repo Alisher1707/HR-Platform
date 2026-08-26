@@ -51,6 +51,22 @@ export const createEmployee = asyncHandler(async (req, res) => {
 });
 
 /**
+ * POST /api/v1/employees/bulk-import
+ * Excel'dan tayyorlangan xodimlar ro'yxatini bir yo'la yozadi. Fayl
+ * brauzerda o'qilib, ustunlar moslashtirilgandan keyin bu yerga tayyor
+ * JSON bo'lib keladi — server fayl formatlarini tahlil qilmaydi.
+ */
+export const bulkImportEmployees = asyncHandler(async (req, res) => {
+  const result = await employeesService.bulkImportEmployees(req.body.employees, req.user.id);
+
+  const summary = result.failed > 0
+    ? `${result.imported} ta xodim qo'shildi, ${result.failed} ta qatorda xatolik`
+    : `${result.imported} ta xodim muvaffaqiyatli qo'shildi`;
+
+  return successResponse(res, result, summary);
+});
+
+/**
  * GET /api/v1/employees
  * Get all employees with pagination
  */

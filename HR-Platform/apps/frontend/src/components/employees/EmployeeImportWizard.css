@@ -1,0 +1,262 @@
+/* =============================================================
+   XODIMLARNI EXCEL FAYLDAN IMPORT QILISH USTASI
+   -------------------------------------------------------------
+   Ranglar butunlay mavjud dizayn tokenlaridan olinadi (--accent,
+   --success, --error, --warning, --text-*, --bg-*), shuning uchun
+   qorongu mavzuga ham hech qanday qoshimcha kodsiz moslashadi.
+
+   Alohida fayl: globals.css allaqachon 8891 qator — yangi komponent
+   uslublarini oshanga qoshib borish uni yanada boshqarib bolmas
+   holga keltiradi. Bu fayl faqat komponent bilan birga yuklanadi.
+   ============================================================= */
+
+@keyframes imp-spin { to { transform: rotate(360deg); } }
+.imp-spin { animation: imp-spin 0.9s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .imp-spin { animation: none; } }
+
+.imp-pane { display: flex; flex-direction: column; gap: 1rem; }
+
+/* ---------- Bosqichlar chizigi ---------- */
+.imp-steps {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0 1.25rem;
+  margin-bottom: 0.25rem;
+  border-bottom: 1px solid var(--border);
+}
+.imp-step { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
+.imp-step-dot {
+  width: 30px; height: 30px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  border: 1.5px solid var(--border);
+  transition: all 0.2s ease;
+}
+.imp-step-label {
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.imp-step.active .imp-step-dot {
+  background: var(--accent); color: #fff; border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-light);
+}
+.imp-step.active .imp-step-label { color: var(--text-primary); }
+.imp-step.done .imp-step-dot { background: var(--success-bg); color: var(--success); border-color: transparent; }
+.imp-step.done .imp-step-label { color: var(--text-secondary); }
+.imp-step-line { flex: 1; height: 2px; background: var(--border); border-radius: 1px; min-width: 12px; }
+.imp-step-line.done { background: var(--success); opacity: 0.5; }
+
+@media (max-width: 640px) { .imp-step-label { display: none; } }
+
+/* ---------- Fayl tashlash maydoni ---------- */
+.imp-drop {
+  border: 2px dashed var(--border-hover);
+  border-radius: 14px;
+  padding: 2.75rem 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  background: var(--bg-secondary);
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+.imp-drop:hover, .imp-drop:focus-visible { border-color: var(--accent); background: var(--accent-light); }
+.imp-drop.dragging { border-color: var(--accent); background: var(--accent-light); transform: scale(1.01); }
+.imp-drop.busy { cursor: progress; opacity: 0.75; }
+.imp-drop-icon {
+  display: grid; place-items: center;
+  width: 62px; height: 62px;
+  margin: 0 auto 0.9rem;
+  border-radius: 16px;
+  background: var(--bg-card-solid);
+  color: var(--accent);
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.07);
+}
+.imp-drop-title { margin: 0 0 0.3rem; font-size: 1.02rem; font-weight: 700; color: var(--text-primary); }
+.imp-drop-sub { margin: 0; font-size: 0.88rem; color: var(--text-secondary); }
+.imp-link { color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+
+/* ---------- Maslahat bloki ---------- */
+.imp-tip {
+  display: flex; gap: 0.85rem;
+  padding: 1rem 1.1rem;
+  background: var(--accent-light);
+  border-radius: 12px;
+}
+.imp-tip-icon { color: var(--accent); flex-shrink: 0; margin-top: 2px; }
+.imp-tip strong { display: block; font-size: 0.9rem; color: var(--text-primary); margin-bottom: 0.3rem; }
+.imp-tip p { margin: 0 0 0.65rem; font-size: 0.86rem; color: var(--text-secondary); line-height: 1.55; }
+.imp-tip b { color: var(--text-primary); }
+
+.imp-template-btn {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  background: var(--bg-card-solid);
+  border: 1px solid var(--border-hover);
+  border-radius: 8px;
+  padding: 0.42rem 0.75rem;
+  font-size: 0.82rem; font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.imp-template-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ---------- Ogohlantirishlar ---------- */
+.imp-alert {
+  display: flex; align-items: flex-start; gap: 0.6rem;
+  padding: 0.8rem 1rem;
+  border-radius: 10px;
+  font-size: 0.87rem;
+  line-height: 1.5;
+}
+.imp-alert svg { flex-shrink: 0; margin-top: 1px; }
+.imp-alert.error { background: var(--error-bg); color: var(--error); }
+.imp-alert.warn  { background: var(--warning-bg); color: var(--warning); }
+.imp-alert b { font-weight: 700; }
+
+/* ---------- Fayl qatori ---------- */
+.imp-filebar {
+  display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
+  padding: 0.8rem 1rem;
+  background: var(--bg-secondary);
+  border-radius: 10px;
+}
+.imp-filebar-icon {
+  display: grid; place-items: center;
+  width: 36px; height: 36px; border-radius: 9px;
+  background: var(--success-bg); color: var(--success); flex-shrink: 0;
+}
+.imp-filebar-text { display: flex; flex-direction: column; min-width: 0; }
+.imp-filebar-text strong { font-size: 0.9rem; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imp-filebar-text span { font-size: 0.79rem; color: var(--text-muted); }
+.imp-badge {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  margin-left: auto;
+  padding: 0.3rem 0.65rem;
+  border-radius: 20px;
+  font-size: 0.76rem; font-weight: 600;
+  white-space: nowrap;
+}
+.imp-badge.auto { background: var(--accent-light); color: var(--accent); }
+
+/* ---------- Ustunlarni moslashtirish ---------- */
+.imp-map-list {
+  display: flex; flex-direction: column; gap: 0.5rem;
+  max-height: 380px; overflow-y: auto; padding-right: 0.25rem;
+}
+.imp-map-row {
+  display: grid;
+  grid-template-columns: 1fr 24px 220px;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-card-solid);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.imp-map-row.mapped { border-color: var(--accent); background: var(--accent-light); }
+.imp-map-source { display: flex; flex-direction: column; min-width: 0; }
+.imp-map-col { font-size: 0.88rem; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imp-map-col em { color: var(--text-muted); font-weight: 400; }
+.imp-map-sample { font-size: 0.76rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imp-map-arrow { color: var(--text-muted); display: grid; place-items: center; }
+
+/* Modal ichidagi select — form-group margin'ini bekor qilamiz */
+.imp-map-row .imp-map-select { margin: 0; font-size: 0.85rem; padding-top: 0.45rem; padding-bottom: 0.45rem; }
+
+@media (max-width: 640px) {
+  .imp-map-row { grid-template-columns: 1fr; gap: 0.4rem; }
+  .imp-map-arrow { display: none; }
+  .imp-map-row .imp-map-select { width: 100%; }
+}
+
+/* ---------- Tekshirish sarhisobi ---------- */
+.imp-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; }
+.imp-sum-card {
+  padding: 1rem 1.1rem;
+  border-radius: 12px;
+  display: flex; flex-direction: column; gap: 0.15rem;
+}
+.imp-sum-card.ok    { background: var(--success-bg); }
+.imp-sum-card.bad   { background: var(--error-bg); }
+.imp-sum-card.muted { background: var(--bg-secondary); }
+.imp-sum-n { font-size: 1.9rem; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.imp-sum-card.ok .imp-sum-n    { color: var(--success); }
+.imp-sum-card.bad .imp-sum-n   { color: var(--error); }
+.imp-sum-card.muted .imp-sum-n { color: var(--text-muted); }
+.imp-sum-l { font-size: 0.82rem; color: var(--text-secondary); font-weight: 500; }
+
+/* ---------- Jadval ---------- */
+.imp-table-wrap {
+  overflow-x: auto; overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  max-height: 300px;
+}
+.imp-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+.imp-table th {
+  position: sticky; top: 0; z-index: 1;
+  text-align: left;
+  padding: 0.6rem 0.8rem;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 0.75rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+.imp-table td { padding: 0.55rem 0.8rem; border-bottom: 1px solid var(--border); color: var(--text-primary); vertical-align: top; }
+.imp-table tr:last-child td { border-bottom: none; }
+.imp-num { font-variant-numeric: tabular-nums; color: var(--text-muted); font-weight: 600; }
+.imp-err-text { color: var(--error); font-size: 0.82rem; }
+.imp-empty { color: var(--text-muted); }
+.imp-more { margin: 0.5rem 0 0; padding: 0 0.8rem 0.6rem; font-size: 0.8rem; color: var(--text-muted); }
+.imp-preview-title { margin: 0.25rem 0 -0.35rem; font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); }
+
+.imp-pill {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 20px;
+  font-size: 0.72rem; font-weight: 700;
+  white-space: nowrap;
+}
+.imp-pill.skipped { background: var(--warning-bg); color: var(--warning); }
+.imp-pill.failed  { background: var(--error-bg); color: var(--error); }
+
+/* ---------- Natija ---------- */
+.imp-result-hero { text-align: center; padding: 0.5rem 0 0.25rem; }
+.imp-result-icon {
+  display: grid; place-items: center;
+  width: 66px; height: 66px;
+  margin: 0 auto 0.85rem;
+  border-radius: 18px;
+}
+.imp-result-icon.ok      { background: var(--success-bg); color: var(--success); }
+.imp-result-icon.partial { background: var(--warning-bg); color: var(--warning); }
+.imp-result-hero h4 { margin: 0 0 0.3rem; font-size: 1.15rem; font-weight: 700; color: var(--text-primary); }
+.imp-result-hero p { margin: 0; font-size: 0.9rem; color: var(--text-secondary); }
+
+.imp-result-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; }
+.imp-rstat {
+  display: flex; flex-direction: column; align-items: center; gap: 0.1rem;
+  padding: 0.85rem 0.5rem;
+  border-radius: 11px;
+  background: var(--bg-secondary);
+  text-align: center;
+}
+.imp-rstat.ok   { color: var(--success); }
+.imp-rstat.skip { color: var(--warning); }
+.imp-rstat.bad  { color: var(--error); }
+.imp-rstat-n { font-size: 1.5rem; font-weight: 800; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.imp-rstat-l { font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); }
+
+.imp-result-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; justify-content: center; }
+
+/* ---------- Modal pastki paneli ---------- */
+.imp-footer { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; width: 100%; flex-wrap: wrap; }
+.imp-footer-left, .imp-footer-right { display: flex; gap: 0.6rem; }
+.imp-footer-right { margin-left: auto; }

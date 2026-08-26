@@ -55,6 +55,32 @@ export const employeeService = {
   },
 
   /**
+   * Excel'dan tayyorlangan xodimlar ro'yxatini yuboradi. Backend bir
+   * so'rovda 500 tagacha qabul qiladi, shuning uchun kattaroq ro'yxat
+   * bo'laklarga bo'linadi — `onProgress` har bo'lakdan keyin chaqiriladi,
+   * shunda foydalanuvchi 400 nafarlik importda ham jarayonni ko'rib turadi.
+   */
+  async bulkImport(employees, onProgress) {
+    const CHUNK = 200;
+    const merged = { imported: 0, skipped: 0, failed: 0, total: employees.length, results: [] };
+
+    for (let i = 0; i < employees.length; i += CHUNK) {
+      const chunk = employees.slice(i, i + CHUNK);
+      const response = await api.post('/employees/bulk-import', { employees: chunk });
+      const part = response.data.data;
+
+      merged.imported += part.imported;
+      merged.skipped += part.skipped;
+      merged.failed += part.failed;
+      merged.results = merged.results.concat(part.results);
+
+      if (onProgress) onProgress(Math.min(i + CHUNK, employees.length), employees.length);
+    }
+
+    return merged;
+  },
+
+  /**
    * Get employee by ID
    */
   async getEmployeeById(id) {
