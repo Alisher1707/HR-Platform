@@ -86,6 +86,51 @@ function guessField(header, alreadyUsed) {
 }
 
 /**
+ * Haqiqiy HR fayllarida birinchi qator ko'pincha sarlavha ("XODIMLAR
+ * MA'LUMOTLARI REESTRI") yoki bo'sh ajratuvchi bo'ladi — ustun nomlari esa
+ * 2- yoki 3-qatorda. Birinchi qatorni har doim sarlavha deb hisoblash bunday
+ * fayllarda hamma narsani buzadi: haqiqiy ustun nomlari ("Ism", "Familiya")
+ * ma'lumot sifatida o'qilib qoladi, ular esa hech qanday maydonga mos
+ * kelmaydi.
+ *
+ * Shuning uchun birinchi 10 qatorni sinab ko'ramiz — har birida nechta
+ * katak bizning maydon nomlarimizga mos kelishini sanaymiz. Eng ko'p mos
+ * kelgan qator haqiqiy sarlavha deb olinadi. Hech qaysi qatorda mos
+ * kelmasa (ustun nomlari fayl tilida umuman boshqacha), xavfsiz holatga —
+ * birinchi qatorga — qaytiladi.
+ */
+function findHeaderRowIndex(matrix) {
+  const candidateCount = Math.min(10, matrix.length);
+  let bestIndex = 0;
+  let bestScore = -1;
+
+  for (let i = 0; i < candidateCount; i += 1) {
+    const row = matrix[i];
+    const nonEmpty = row.filter((c) => String(c ?? '').trim() !== '').length;
+    if (nonEmpty < 2) continue; // yagona katakli sarlavha qatori bo'lolmaydi
+
+    const used = new Set();
+    let matches = 0;
+    row.forEach((cell) => {
+      const guess = guessField(cell, used);
+      if (guess) {
+        matches += 1;
+        used.add(guess);
+      }
+    });
+
+    // Tenglik holida: ko'proq mos kelgan, so'ng ko'proq to'lgan, so'ng
+    // fayldagi birinchi qator g'olib chiqadi.
+    if (matches > bestScore || (matches === bestScore && nonEmpty > (matrix[bestIndex]?.filter((c) => String(c ?? '').trim() !== '').length || 0))) {
+      bestScore = matches;
+      bestIndex = i;
+    }
+  }
+
+  return bestScore > 0 ? bestIndex : 0;
+}
+
+/**
  * Excel sanasi uch xil ko'rinishda kelishi mumkin: haqiqiy Date (xlsx
  * cellDates bilan), matn ("15.03.2024") yoki Excel'ning ichki seriya raqami.
  * Uchalasini ham ISO (YYYY-MM-DD) ga keltiramiz — backend Joi shuni kutadi.
@@ -180,8 +225,11 @@ export function EmployeeImportWizard({ isOpen, onClose, onImported }) {
       const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: false, defval: '' });
       if (matrix.length < 2) throw new Error('Faylda sarlavha qatoridan boshqa maʼlumot yoʻq');
 
-      const headerRow = matrix[0].map((h) => String(h ?? '').trim());
-      const dataRows = matrix.slice(1).filter((r) => r.some((c) => String(c ?? '').trim() !== ''));
+      // Sarlavha qatori har doim ham birinchi qator emas — sarlavha
+      // matni yoki bo'sh ajratuvchi qator oldida kelishi mumkin.
+      const headerRowIndex = findHeaderRowIndex(matrix);
+      const headerRow = matrix[headerRowIndex].map((h) => String(h ?? '').trim());
+      const dataRows = matrix.slice(headerRowIndex + 1).filter((r) => r.some((c) => String(c ?? '').trim() !== ''));
       if (dataRows.length === 0) throw new Error('Faylda toʻldirilgan qator topilmadi');
 
       // Avtomatik moslashtirish
