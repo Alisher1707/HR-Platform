@@ -3,6 +3,7 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import employeeService from '../../services/employeeService';
 import useToast from '../../hooks/useToast';
+import { BRANCH_OPTIONS, DEPARTMENT_OPTIONS, POSITION_OPTIONS } from '../../constants/employeeOptions';
 
 /**
  * EmployeeForm Component
@@ -44,38 +45,11 @@ export function EmployeeForm({ employee = null, onSubmitSuccess, onCancel }) {
   const [submitting, setSubmitting] = useState(false);
   const [photoPreview, setPhotoPreview] = useState(null);
 
-  // Branch options
-  const branches = [
-    { value: '', label: 'Tanlang...' },
-    { value: 'sayxun', label: 'Sayxun' },
-    { value: "xalqlar do'stligi", label: "Xalqlar do'stligi" },
-    { value: 'tuman', label: 'Tuman' },
-  ];
-
-  // Department options (Bo'lim)
-  const departments = [
-    { value: '', label: 'Tanlang...' },
-    { value: 'moliya', label: 'Moliya' },
-    { value: 'HR', label: 'HR' },
-    { value: 'sotuv', label: 'Sotuv' },
-    { value: 'kassir', label: 'Kassir' },
-    { value: 'oquv', label: 'O\'quv' },
-    { value: 'boshqaruv', label: 'Boshqaruv' },
-    { value: 'texnik', label: 'Texnik bo\'lim' },
-  ];
-
-  // Position options (Lavozim)
-  const positions = [
-    { value: '', label: 'Tanlang...' },
-    { value: 'moliya', label: 'Moliya' },
-    { value: 'HR', label: 'HR' },
-    { value: 'sotuv', label: 'Sotuv' },
-    { value: 'kassir', label: 'Kassir' },
-    { value: 'call_operator', label: 'Call-operator' },
-    { value: 'mentor', label: 'Mentor' },
-    { value: 'boshqaruv', label: 'Boshqaruv' },
-    { value: 'texnik', label: 'Texnik bo\'lim' },
-  ];
+  // Ro'yxatlar umumiy manbadan — Excel'dan import ham aynan shu qiymatlarga
+  // moslashtiradi (constants/employeeOptions.js dagi izohga qarang).
+  const branches = [{ value: '', label: 'Tanlang...' }, ...BRANCH_OPTIONS];
+  const departments = [{ value: '', label: 'Tanlang...' }, ...DEPARTMENT_OPTIONS];
+  const positions = [{ value: '', label: 'Tanlang...' }, ...POSITION_OPTIONS];
 
   // Pre-fill form if editing
   useEffect(() => {

@@ -115,7 +115,23 @@
 .imp-alert svg { flex-shrink: 0; margin-top: 1px; }
 .imp-alert.error { background: var(--error-bg); color: var(--error); }
 .imp-alert.warn  { background: var(--warning-bg); color: var(--warning); }
+.imp-alert.info  { background: var(--accent-light); color: var(--text-secondary); }
+.imp-alert.info svg { color: var(--accent); }
+.imp-alert.info b { color: var(--text-primary); }
 .imp-alert b { font-weight: 700; }
+
+/* Ro'yxatga tushmagan Filial/Bo'lim/Lavozim qiymatlari */
+.imp-unmatched { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.55rem; }
+.imp-unmatched-chip {
+  background: var(--bg-card-solid);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.22rem 0.5rem;
+  font-size: 0.79rem;
+  color: var(--text-secondary);
+}
+.imp-unmatched-chip b { color: var(--text-primary); font-weight: 600; }
+.imp-unmatched-chip em { color: var(--text-muted); font-style: normal; }
 
 /* ---------- Fayl qatori ---------- */
 .imp-filebar {

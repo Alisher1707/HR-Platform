@@ -14,9 +14,16 @@ import {
   ListChecks,
   Sparkles,
   RotateCcw,
+  Info,
 } from 'lucide-react';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
+import {
+  BRANCH_OPTIONS,
+  DEPARTMENT_OPTIONS,
+  POSITION_OPTIONS,
+  matchOption,
+} from '../../constants/employeeOptions';
 import './EmployeeImportWizard.css';
 
 /**
@@ -37,9 +44,12 @@ const FIELDS = [
   { key: 'firstName', label: 'Ism', required: true, aliases: ['ism', 'ismi', 'firstname', 'first name', 'имя'] },
   { key: 'lastName', label: 'Familiya', required: true, aliases: ['familiya', 'familiyasi', 'lastname', 'last name', 'фамилия'] },
   { key: 'employeeNumber', label: 'Tabel raqami', aliases: ['tabel', 'tabel raqami', 'employee number', 'табель'] },
-  { key: 'position', label: 'Lavozim', aliases: ['lavozim', 'lavozimi', 'position', 'должность'] },
-  { key: 'department', label: "Bo'lim", aliases: ['bolim', "bo'lim", 'bolimi', 'department', 'отдел'] },
-  { key: 'branch', label: 'Filial', aliases: ['filial', 'filiali', 'branch', 'филиал'] },
+  // `options` bo'lgan maydonlar erkin matn emas — xodim kartochkasida
+  // ro'yxatdan tanlanadi, shuning uchun import ham aynan o'sha rasmiy
+  // qiymatga keltirishi shart, aks holda forma qiymatni tanimaydi.
+  { key: 'position', label: 'Lavozim', options: POSITION_OPTIONS, aliases: ['lavozim', 'lavozimi', 'position', 'должность'] },
+  { key: 'department', label: "Bo'lim", options: DEPARTMENT_OPTIONS, aliases: ['bolim', "bo'lim", 'bolimi', 'department', 'отдел'] },
+  { key: 'branch', label: 'Filial', options: BRANCH_OPTIONS, aliases: ['filial', 'filiali', 'branch', 'филиал'] },
   { key: 'phone', label: 'Telefon', aliases: ['telefon', 'tel', 'phone', 'телефон', 'raqam'] },
   { key: 'email', label: 'Email', aliases: ['email', 'e-mail', 'pochta', 'почта'] },
   { key: 'pnfl', label: 'JSHSHIR', hint: '14 raqam', aliases: ['jshshir', 'pnfl', 'jshshr', 'пинфл'] },
@@ -213,15 +223,37 @@ export function EmployeeImportWizard({ isOpen, onClose, onImported }) {
   const downloadTemplate = async () => {
     const XLSX = await import('xlsx');
     const headerRow = FIELDS.map((f) => f.label);
+    // Namunadagi Lavozim/Bo'lim/Filial ataylab rasmiy ro'yxatdan olinadi —
+    // shunda HR qanday yozish kerakligini darhol ko'radi.
     const example = [
-      'Alisher', 'Abdusalomov', '1042', 'Dasturchi', "Dasturlash bo'limi", 'Sayhun',
+      'Alisher', 'Abdusalomov', '1042',
+      POSITION_OPTIONS.find((o) => o.value === 'mentor').label,
+      DEPARTMENT_OPTIONS.find((o) => o.value === 'oquv').label,
+      BRANCH_OPTIONS.find((o) => o.value === 'sayxun').label,
       '+998901234567', 'alisher@company.uz', '31234567890123', '15.03.1998', '01.02.2024',
       '8000000', 'Oylik', '3', '@alisher', 'Toshkent sh.', '01.02.2024', '01.02.2027',
     ];
     const ws = XLSX.utils.aoa_to_sheet([headerRow, example]);
     ws['!cols'] = headerRow.map(() => ({ wch: 20 }));
+
+    // Ikkinchi varaq — ruxsat etilgan qiymatlar ro'yxati. Filial/Bo'lim/
+    // Lavozim erkin matn emas, shuning uchun HR faylni to'ldirayotganda
+    // qaysi so'zlar qabul qilinishini ko'rib turishi kerak.
+    const maxLen = Math.max(BRANCH_OPTIONS.length, DEPARTMENT_OPTIONS.length, POSITION_OPTIONS.length);
+    const refRows = [['Filial', "Bo'lim", 'Lavozim']];
+    for (let i = 0; i < maxLen; i += 1) {
+      refRows.push([
+        BRANCH_OPTIONS[i]?.label || '',
+        DEPARTMENT_OPTIONS[i]?.label || '',
+        POSITION_OPTIONS[i]?.label || '',
+      ]);
+    }
+    const refWs = XLSX.utils.aoa_to_sheet(refRows);
+    refWs['!cols'] = [{ wch: 22 }, { wch: 22 }, { wch: 22 }];
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Xodimlar');
+    XLSX.utils.book_append_sheet(wb, refWs, "Ruxsat etilgan qiymatlar");
     XLSX.writeFile(wb, 'xodimlar-namuna.xlsx');
   };
 
@@ -232,12 +264,27 @@ export function EmployeeImportWizard({ isOpen, onClose, onImported }) {
 
     return rawRows.map((row, i) => {
       const obj = { rowNumber: i + 2 };
+      // Ro'yxatdan tanlanadigan maydonlarda mos kelmagan qiymatlar —
+      // bular xato emas (import to'xtamaydi), lekin foydalanuvchi ularni
+      // ko'rishi kerak, chunki bunday xodimda Filial/Bo'lim bo'sh qoladi.
+      const unmatched = [];
+
       fieldByColumn.forEach(([colIdx, fieldKey]) => {
         const field = FIELDS.find((f) => f.key === fieldKey);
         const raw = row[Number(colIdx)];
-        if (field.type === 'date') obj[fieldKey] = toIsoDate(raw);
-        else if (field.type === 'number') obj[fieldKey] = toNumber(raw);
-        else obj[fieldKey] = toText(raw);
+
+        if (field.type === 'date') {
+          obj[fieldKey] = toIsoDate(raw);
+        } else if (field.type === 'number') {
+          obj[fieldKey] = toNumber(raw);
+        } else if (field.options) {
+          const text = toText(raw);
+          const matched = text ? matchOption(text, field.options) : null;
+          obj[fieldKey] = matched;
+          if (text && !matched) unmatched.push({ field: field.label, value: text });
+        } else {
+          obj[fieldKey] = toText(raw);
+        }
       });
 
       const errors = [];
@@ -249,12 +296,29 @@ export function EmployeeImportWizard({ isOpen, onClose, onImported }) {
       if (obj.pnfl && !/^\d{14}$/.test(obj.pnfl)) errors.push('JSHSHIR 14 ta raqamdan iborat boʻlishi kerak');
       if (obj.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(obj.email)) errors.push('Email formati notoʻgʻri');
 
-      return { ...obj, __errors: errors };
+      return { ...obj, __errors: errors, __unmatched: unmatched };
     });
   }, [rawRows, mapping, step]);
 
   const validRows = useMemo(() => preparedRows.filter((r) => r.__errors.length === 0), [preparedRows]);
   const invalidRows = useMemo(() => preparedRows.filter((r) => r.__errors.length > 0), [preparedRows]);
+
+  /**
+   * Ro'yxatga tushmagan Filial/Bo'lim/Lavozim qiymatlari — noyob qilib
+   * yig'iladi ("Dasturlash bo'limi" 50 ta qatorda bo'lsa ham bir marta
+   * ko'rsatiladi). Bu xato emas: xodim baribir import qilinadi, lekin
+   * o'sha maydoni bo'sh bo'ladi va HR uni keyin tanlashi kerak.
+   */
+  const unmatchedValues = useMemo(() => {
+    const seen = new Map();
+    validRows.forEach((r) => {
+      (r.__unmatched || []).forEach(({ field, value }) => {
+        const key = `${field}::${value}`;
+        seen.set(key, { field, value, count: (seen.get(key)?.count || 0) + 1 });
+      });
+    });
+    return [...seen.values()].sort((a, b) => b.count - a.count);
+  }, [validRows]);
 
   /**
    * Natija ekranidagi "muammoli qatorlar" jadvali ikkita manbani birlashtiradi:
@@ -547,6 +611,28 @@ export function EmployeeImportWizard({ isOpen, onClose, onImported }) {
               <span className="imp-sum-l">Xatolik bor — oʻtkazib yuboriladi</span>
             </div>
           </div>
+
+          {unmatchedValues.length > 0 && (
+            <div className="imp-alert info">
+              <Info size={17} strokeWidth={2.25} />
+              <div>
+                <b>Quyidagi qiymatlar roʻyxatda topilmadi</b> — bu xodimlar baribir
+                import qilinadi, lekin oʻsha maydoni boʻsh qoladi va uni keyin xodim
+                kartochkasida tanlash kerak boʻladi:
+                <div className="imp-unmatched">
+                  {unmatchedValues.slice(0, 8).map((u) => (
+                    <span key={`${u.field}-${u.value}`} className="imp-unmatched-chip">
+                      {u.field}: <b>{u.value}</b>
+                      {u.count > 1 && <em> ×{u.count}</em>}
+                    </span>
+                  ))}
+                  {unmatchedValues.length > 8 && (
+                    <span className="imp-unmatched-chip">…va yana {unmatchedValues.length - 8} ta</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {invalidRows.length > 0 && (
             <>
