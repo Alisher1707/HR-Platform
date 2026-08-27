@@ -222,14 +222,47 @@ export function EmployeeImportWizard({ isOpen, onClose, onImported }) {
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       if (!sheet) throw new Error("Faylda birorta ham varaq topilmadi");
 
-      const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: false, defval: '' });
+      // blankrows YO'Q — bo'sh qatorlarni bu bosqichda olib tashlamaymiz,
+      // chunki quyidagi '!merges' birlashtirilgan katakchalar RAW sheet
+      // qator raqamlariga (bo'sh qatorlar ham hisobga olingan holda)
+      // ishora qiladi. Agar bo'sh qatorlarni oldindan filtrlasak, matritsa
+      // indekslari sheet'dagi haqiqiy qator raqamlaridan siljib ketadi va
+      // merge to'ldirish butunlay noto'g'ri katakchalarga tushadi.
+      const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
       if (matrix.length < 2) throw new Error('Faylda sarlavha qatoridan boshqa maʼlumot yoʻq');
+
+      // Birlashtirilgan katakchalar (merged cells): Excel'da qiymat butun
+      // birlashgan hudud bo'ylab ko'rinadi, lekin xom ma'lumotda faqat
+      // yuqori chap katakda saqlanadi — qolganlari bo'sh. Foydalanuvchiga
+      // "hammasi to'ldirilgan" ko'rinadi, dastur esa ularni bo'sh deb o'qib,
+      // Ism/Familiya kabi majburiy maydonlarni xato deb belgilaydi. Har bir
+      // birlashgan hudud qiymatini o'sha hududning barcha katakchalariga
+      // qo'lda tarqatib chiqamiz.
+      (sheet['!merges'] || []).forEach((range) => {
+        const topValue = matrix[range.s.r]?.[range.s.c];
+        if (topValue === undefined || String(topValue).trim() === '') return;
+        for (let r = range.s.r; r <= range.e.r; r += 1) {
+          if (!matrix[r]) continue;
+          for (let c = range.s.c; c <= range.e.c; c += 1) {
+            if (String(matrix[r][c] ?? '').trim() === '') matrix[r][c] = topValue;
+          }
+        }
+      });
 
       // Sarlavha qatori har doim ham birinchi qator emas — sarlavha
       // matni yoki bo'sh ajratuvchi qator oldida kelishi mumkin.
       const headerRowIndex = findHeaderRowIndex(matrix);
       const headerRow = matrix[headerRowIndex].map((h) => String(h ?? '').trim());
-      const dataRows = matrix.slice(headerRowIndex + 1).filter((r) => r.some((c) => String(c ?? '').trim() !== ''));
+
+      // Har bir qatorga o'zining HAQIQIY Excel qator raqamini biriktiramiz
+      // (1-indeksli, xuddi Excel'ning o'zida ko'rinadigani kabi) — shunda
+      // fayldagi bo'sh qatorlar tashlab yuborilsa ham, xato xabarlari
+      // ("5-qator noto'g'ri") HR Excel'da ochganda ko'radigan qatorga
+      // aniq mos keladi, oddiy ketma-ket sanashdan farqli o'laroq.
+      const dataRows = matrix
+        .slice(headerRowIndex + 1)
+        .map((cells, i) => ({ cells, excelRowNumber: headerRowIndex + 1 + i + 1 }))
+        .filter(({ cells }) => cells.some((c) => String(c ?? '').trim() !== ''));
       if (dataRows.length === 0) throw new Error('Faylda toʻldirilgan qator topilmadi');
 
       // Avtomatik moslashtirish
@@ -310,8 +343,8 @@ export function EmployeeImportWizard({ isOpen, onClose, onImported }) {
     if (step < 3 && step !== 2) return [];
     const fieldByColumn = Object.entries(mapping).filter(([, v]) => v);
 
-    return rawRows.map((row, i) => {
-      const obj = { rowNumber: i + 2 };
+    return rawRows.map(({ cells, excelRowNumber }) => {
+      const obj = { rowNumber: excelRowNumber };
       // Ro'yxatdan tanlanadigan maydonlarda mos kelmagan qiymatlar —
       // bular xato emas (import to'xtamaydi), lekin foydalanuvchi ularni
       // ko'rishi kerak, chunki bunday xodimda Filial/Bo'lim bo'sh qoladi.
@@ -319,7 +352,7 @@ export function EmployeeImportWizard({ isOpen, onClose, onImported }) {
 
       fieldByColumn.forEach(([colIdx, fieldKey]) => {
         const field = FIELDS.find((f) => f.key === fieldKey);
-        const raw = row[Number(colIdx)];
+        const raw = cells[Number(colIdx)];
 
         if (field.type === 'date') {
           obj[fieldKey] = toIsoDate(raw);
@@ -615,7 +648,7 @@ export function EmployeeImportWizard({ isOpen, onClose, onImported }) {
               const selected = mapping[idx] || '';
               const field = FIELDS.find((f) => f.key === selected);
               const sample = rawRows.slice(0, 2)
-                .map((r) => String(r[idx] ?? '').trim())
+                .map(({ cells }) => String(cells[idx] ?? '').trim())
                 .filter(Boolean)
                 .join(' · ');
 
