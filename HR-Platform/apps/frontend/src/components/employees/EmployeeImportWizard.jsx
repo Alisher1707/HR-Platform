@@ -24,7 +24,6 @@ import {
   POSITION_OPTIONS,
   matchOption,
 } from '../../constants/employeeOptions';
-import { formatPhone } from '../../utils/formatPhone';
 import './EmployeeImportWizard.css';
 
 /**
@@ -794,14 +793,9 @@ export function EmployeeImportWizard({ isOpen, onClose, onImported }) {
                   <tbody>
                     {validRows.slice(0, 5).map((r) => (
                       <tr key={r.rowNumber}>
-                        {[...mappedFieldKeys].map((k) => {
-                          // Telefon bu yerda ham Xodimlar jadvalidagi bilan bir
-                          // xil formatda ko'rsatiladi — aks holda import
-                          // qilingandan keyin raqam ko'rinishi birdan
-                          // o'zgarib qolganday tuyulardi.
-                          const value = k === 'phone' ? formatPhone(r[k]) : r[k];
-                          return <td key={k}>{value ?? <span className="imp-empty">—</span>}</td>;
-                        })}
+                        {[...mappedFieldKeys].map((k) => (
+                          <td key={k}>{r[k] ?? <span className="imp-empty">—</span>}</td>
+                        ))}
                       </tr>
                     ))}
                   </tbody>
