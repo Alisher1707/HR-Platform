@@ -95,7 +95,6 @@ import SidePanel from '../../components/ui/SidePanel';
 import Modal from '../../components/ui/Modal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import useConfirm from '../../hooks/useConfirm';
-import { formatPhone } from '../../utils/formatPhone';
 
 const UZ_MONTHS = [
   'Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'Iyun',
@@ -5509,7 +5508,7 @@ export function AttendancePage() {
                       <div className="fine-employee-row-info">
                         <span className="fine-employee-row-name">{emp.first_name} {emp.last_name}</span>
                         <span className="fine-employee-row-meta">
-                          {[emp.position, formatPhone(emp.phone)].filter(Boolean).join(' • ')}
+                          {[emp.position, emp.phone].filter(Boolean).join(' • ')}
                         </span>
                       </div>
                       <button
@@ -5568,7 +5567,7 @@ export function AttendancePage() {
                     <div className="fine-employee-row-info">
                       <span className="fine-employee-row-name">{emp.first_name} {emp.last_name}</span>
                       <span className="fine-employee-row-meta">
-                        {[emp.position, formatPhone(emp.phone)].filter(Boolean).join(' • ')}
+                        {[emp.position, emp.phone].filter(Boolean).join(' • ')}
                       </span>
                     </div>
                     <button

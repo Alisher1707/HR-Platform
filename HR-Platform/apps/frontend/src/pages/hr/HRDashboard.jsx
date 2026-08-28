@@ -6,7 +6,6 @@ import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import applicationService from '../../services/applicationService';
-import { formatPhone } from '../../utils/formatPhone';
 
 /**
  * HRDashboard Component
@@ -155,7 +154,7 @@ export function HRDashboard() {
                     <tr key={app.id}>
                       <td>
                         <div className="font-semibold">{app.firstName} {app.lastName}</div>
-                        <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>{formatPhone(app.phone) || 'Kiritilmagan'}</div>
+                        <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>{app.phone || 'Kiritilmagan'}</div>
                       </td>
                       <td>{app.position || 'Kiritilmagan'}</td>
                       <td>{formatDate(app.createdAt)}</td>

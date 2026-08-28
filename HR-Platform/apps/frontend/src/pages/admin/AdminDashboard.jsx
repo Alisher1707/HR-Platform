@@ -8,7 +8,6 @@ import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import employeeService from '../../services/employeeService';
 import inviteService from '../../services/inviteService';
 import applicationService from '../../services/applicationService';
-import { formatPhone } from '../../utils/formatPhone';
 
 /**
  * AdminDashboard Page
@@ -130,7 +129,7 @@ export function AdminDashboard() {
                       <div className="font-semibold">{emp.first_name} {emp.last_name}</div>
                     </td>
                     <td>{emp.position || 'Kiritilmagan'}</td>
-                    <td>{formatPhone(emp.phone) || 'Kiritilmagan'}</td>
+                    <td>{emp.phone || 'Kiritilmagan'}</td>
                     <td>{emp.experience ? `${emp.experience} yil` : 'Yo\'q'}</td>
                   </tr>
                 ))}

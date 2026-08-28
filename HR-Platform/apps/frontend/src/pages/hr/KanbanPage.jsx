@@ -30,7 +30,6 @@ import Select from '../../components/ui/Select';
 import Textarea from '../../components/ui/Textarea';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import useToast from '../../hooks/useToast';
-import { formatPhone } from '../../utils/formatPhone';
 
 /**
  * KanbanPage Component
@@ -516,7 +515,7 @@ export function KanbanPage() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                     <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '600' }}>Telefon raqami</span>
                     <span style={{ fontSize: '0.9375rem', fontWeight: '600', color: 'var(--text-primary)' }}>
-                      {formatPhone(selectedApp.phone) || '—'}
+                      {selectedApp.phone || '—'}
                     </span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
