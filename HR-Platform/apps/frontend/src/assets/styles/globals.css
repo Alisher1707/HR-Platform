@@ -1680,6 +1680,18 @@ button.header-pill {
   border-bottom: 1px solid var(--border);
 }
 
+/*
+ * Telefon katakchasi — bir xil dizaynda formatlangan raqam ("+998 XX XXX
+ * XX XX") o'zidagi bo'shliqlar tufayli tor ustunda ikkinchi qatorga
+ * o'tib ketardi. nowrap + tabular-nums bilan raqam har doim bitta
+ * qatorda, raqamlar bir-biriga tekis tizilgan holda chiqadi.
+ */
+.phone-cell {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
 .table tr:last-child td {
   border-bottom: none;
 }

@@ -800,7 +800,11 @@ export function EmployeeImportWizard({ isOpen, onClose, onImported }) {
                           // qilingandan keyin raqam ko'rinishi birdan
                           // o'zgarib qolganday tuyulardi.
                           const value = k === 'phone' ? formatPhone(r[k]) : r[k];
-                          return <td key={k}>{value ?? <span className="imp-empty">—</span>}</td>;
+                          return (
+                            <td key={k} className={k === 'phone' ? 'phone-cell' : undefined}>
+                              {value ?? <span className="imp-empty">—</span>}
+                            </td>
+                          );
                         })}
                       </tr>
                     ))}

@@ -130,7 +130,7 @@ export function AdminDashboard() {
                       <div className="font-semibold">{emp.first_name} {emp.last_name}</div>
                     </td>
                     <td>{emp.position || 'Kiritilmagan'}</td>
-                    <td>{formatPhone(emp.phone) || 'Kiritilmagan'}</td>
+                    <td className="phone-cell">{formatPhone(emp.phone) || 'Kiritilmagan'}</td>
                     <td>{emp.experience ? `${emp.experience} yil` : 'Yo\'q'}</td>
                   </tr>
                 ))}
