@@ -368,6 +368,18 @@ export function EmployeeImportWizard({ isOpen, onClose, onImported }) {
         }
       });
 
+      // Ism VA Familiya ikkalasi ham bo'sh — bu xodim yozuvi emas. Haqiqiy
+      // fayllarda jadval tagida "Jami" qatori bo'lishi odatiy hol: Ism/
+      // Familiya ustunlari bo'sh, lekin "Oylik maosh" ustunida SUM(),
+      // "Tajriba" ustunida AVERAGE() natijasi turadi — shu raqamlar
+      // borligi uchun qator "butunlay bo'sh" filtridan o'tib ketadi va
+      // xato sifatida ko'rsatilardi, garchi u umuman xodim bo'lmasa ham.
+      // Bunday qatorni xato emas, oddiy "e'tiborga olinmadi" deb belgilaymiz.
+      const isSummaryRow = REQUIRED_KEYS.length > 0 && REQUIRED_KEYS.every((k) => !obj[k]);
+      if (isSummaryRow) {
+        return { ...obj, __errors: [], __unmatched: [], __skippedAsSummary: true };
+      }
+
       const errors = [];
       REQUIRED_KEYS.forEach((k) => {
         const label = FIELDS.find((f) => f.key === k).label;
@@ -377,12 +389,17 @@ export function EmployeeImportWizard({ isOpen, onClose, onImported }) {
       if (obj.pnfl && !/^\d{14}$/.test(obj.pnfl)) errors.push('JSHSHIR 14 ta raqamdan iborat boʻlishi kerak');
       if (obj.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(obj.email)) errors.push('Email formati notoʻgʻri');
 
-      return { ...obj, __errors: errors, __unmatched: unmatched };
+      return { ...obj, __errors: errors, __unmatched: unmatched, __skippedAsSummary: false };
     });
   }, [rawRows, mapping, step]);
 
-  const validRows = useMemo(() => preparedRows.filter((r) => r.__errors.length === 0), [preparedRows]);
+  // Sarlavha/"Jami" kabi xodim bo'lmagan qatorlar butunlay chetlanadi —
+  // ular na tayyor, na xato hisoblanadi, foydalanuvchiga umuman ko'rsatilmaydi.
+  const dataOnlyRows = useMemo(() => preparedRows.filter((r) => !r.__skippedAsSummary), [preparedRows]);
+
+  const validRows = useMemo(() => dataOnlyRows.filter((r) => r.__errors.length === 0), [dataOnlyRows]);
   const invalidRows = useMemo(() => preparedRows.filter((r) => r.__errors.length > 0), [preparedRows]);
+  const summaryRowCount = useMemo(() => preparedRows.filter((r) => r.__skippedAsSummary).length, [preparedRows]);
 
   /**
    * Ro'yxatga tushmagan Filial/Bo'lim/Lavozim qiymatlari — noyob qilib
@@ -692,6 +709,17 @@ export function EmployeeImportWizard({ isOpen, onClose, onImported }) {
               <span className="imp-sum-l">Xatolik bor — oʻtkazib yuboriladi</span>
             </div>
           </div>
+
+          {summaryRowCount > 0 && (
+            <div className="imp-alert info">
+              <Info size={17} strokeWidth={2.25} />
+              <span>
+                Faylda xodim yozuvi boʻlmagan <b>{summaryRowCount} ta qator</b> (masalan "Jami"
+                qatori yoki sarlavha) avtomatik eʼtiborga olinmadi — ular xatolik sifatida
+                koʻrsatilmaydi.
+              </span>
+            </div>
+          )}
 
           {unmatchedValues.length > 0 && (
             <div className="imp-alert info">
