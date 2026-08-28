@@ -12,6 +12,7 @@ import EmployeeForm from './EmployeeForm';
 import EmployeeImportWizard from '../../components/employees/EmployeeImportWizard';
 import useToast from '../../hooks/useToast';
 import { useAuthStore } from '../../store/authStore';
+import { formatPhone } from '../../utils/formatPhone';
 
 /**
  * EmployeeList Component
@@ -329,7 +330,7 @@ export function EmployeeList() {
                           <span style={{ color: 'var(--text-muted)' }}>—</span>
                         )}
                       </td>
-                      <td>{emp.phone || 'Yo\'q'}</td>
+                      <td>{formatPhone(emp.phone) || 'Yo\'q'}</td>
                       <td>
                         <div className="table-actions" style={{ justifyContent: 'flex-end', gap: '0.75rem' }}>
                           <Button
@@ -550,7 +551,7 @@ export function EmployeeList() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
                   <div>
                     <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem', fontWeight: '600' }}>Telefon</label>
-                    <div style={{ fontSize: '0.9rem', fontWeight: '500', fontFamily: 'monospace' }}>{selectedEmployee.phone || '—'}</div>
+                    <div style={{ fontSize: '0.9rem', fontWeight: '500', fontFamily: 'monospace' }}>{formatPhone(selectedEmployee.phone) || '—'}</div>
                   </div>
                   <div>
                     <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem', fontWeight: '600' }}>Email</label>
