@@ -46,3 +46,13 @@ coverage/
 
 # Local scratch files (may contain credentials, never commit)
 scratchpad/
+
+# XAVFSIZLIK-AUDIT.md Y-7: candidate resumes, employee photos and EJM
+# documents — real personal data — were being committed straight into git.
+# Runtime-uploaded content belongs in the volume-mounted uploads/ dir
+# (see docker-compose.yml), never in the repo.
+apps/backend/uploads/
+
+# XAVFSIZLIK-AUDIT.md P-2: stray backup of an old, unpatched service file
+# left tracked in git.
+**/*.service.js.bak
