@@ -68,7 +68,16 @@ export const useAuthStore = create(
       loadUser: async () => {
         const token = localStorage.getItem('accessToken');
         if (!token) {
-          set({ isAuthenticated: false, user: null });
+          // XAVFSIZLIK-AUDIT.md (production incident, 2026-08-31): bu qator
+          // `isLoading: false`siz qoldirilgan edi — token yo'q holatda (ya'ni
+          // HAR QANDAY hali login qilmagan tashrif buyuruvchi uchun)
+          // `isLoading` abadiy `true` bo'lib qolardi, chunki uni boshqa hech
+          // narsa qaytarmaydi. AppRouter esa BUTUN ilovani (hatto /login
+          // marshrutining o'zini ham) `isLoading`ga bog'lab qo'ygan —
+          // natijada production'da HECH KIM sahifani ochib bo'lmasdi,
+          // abadiy "Yuklanmoqda..." holatida qolardi. Jonli aniqlandi va
+          // shu zahoti tuzatildi.
+          set({ isAuthenticated: false, user: null, isLoading: false });
           return;
         }
 
