@@ -63,9 +63,7 @@ docker-compose exec backend pnpm seed
 
 **Frontend:** http://localhost:5173
 
-**Default Login:**
-- 📧 Email: `admin@hrplatform.com`
-- 🔑 Password: `Admin123!@#`
+**Birinchi kirish:** `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` (`.env.example`) — `pnpm seed` shu qiymatlar bilan hisob yaratadi, qattiq kodlangan standart parol yo'q.
 
 **Backend API:** http://localhost:5000/api/v1
 
@@ -152,8 +150,8 @@ curl http://localhost:5000/health
 curl -X POST http://localhost:5000/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "admin@hrplatform.com",
-    "password": "Admin123!@#"
+    "email": "'"$SEED_ADMIN_EMAIL"'",
+    "password": "'"$SEED_ADMIN_PASSWORD"'"
   }'
 ```
 

@@ -30,8 +30,8 @@ curl http://localhost:5000/health
 curl -X POST http://localhost:5000/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "admin@hrplatform.com",
-    "password": "Admin123!@#"
+    "email": "'"$SEED_ADMIN_EMAIL"'",
+    "password": "'"$SEED_ADMIN_PASSWORD"'"
   }' \
   -c cookies.txt
 ```
@@ -44,7 +44,7 @@ curl -X POST http://localhost:5000/api/v1/auth/login \
   "data": {
     "user": {
       "id": "uuid",
-      "email": "admin@hrplatform.com",
+      "email": "<SEED_ADMIN_EMAIL>",
       "role": "SUPER_ADMIN",
       "first_name": "Super",
       "last_name": "Admin"

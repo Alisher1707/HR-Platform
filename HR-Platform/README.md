@@ -154,11 +154,10 @@ docker-compose exec backend pnpm seed
 - Backend API: http://localhost:5000/api/v1
 - Health Check: http://localhost:5000/health
 
-**Default Login:**
-- Email: `admin@hrplatform.com`
-- Password: `Admin123!@#`
+**Birinchi kirish:**
+`pnpm seed` ishga tushirilganda `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` (va HR uchun `SEED_HR_EMAIL`/`SEED_HR_PASSWORD`) muhit o'zgaruvchilaridan olinadi — qattiq kodlangan standart parol endi YO'Q (`.env.example`ga qarang). Har bir muhit (dev/demo/prod) uchun o'zingiz alohida, kuchli parol tanlang.
 
-⚠️ **IMPORTANT:** Birinchi kirishdan keyin parolni o'zgartiring!
+⚠️ **MUHIM:** bu faqat ilk `SUPER_ADMIN`/`HR` hisoblarini yaratadi — parolni keyinroq almashtirish uchun `PATCH /api/v1/auth/password` ishlating.
 
 ---
 
