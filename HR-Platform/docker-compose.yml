@@ -1,9 +1,45 @@
 name: hr-platform
 
 services:
+  # XAVFSIZLIK-AUDIT.md P-6: postgres:16-alpine image'ida `openssl` CLI yo'q
+  # (faqat busybox'ning cheklangan ssl_client'i), shuning uchun sertifikatni
+  # alohida, faqat shu ish uchun ishlaydigan konteynerda yasaymiz va
+  # `pg_certs` volume'ga yozamiz — postgres konteyneri keyin shu volume'ni
+  # faqat o'qish uchun ulaydi. Fayl allaqachon bo'lsa qayta yaratilmaydi
+  # (data volume o'chirilmaguncha bir marta ishlaydi).
+  pg-certs:
+    image: alpine:3.20
+    container_name: hr_platform_pg_certs
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -e
+        if [ ! -f /certs/server.key ]; then
+          apk add --no-cache openssl >/dev/null
+          openssl req -new -x509 -days 3650 -nodes -subj '/CN=hr-platform-postgres' \
+            -out /certs/server.crt -keyout /certs/server.key
+          # postgres:16-alpine ichidagi `postgres` foydalanuvchisi uid/gid 70 —
+          # kalit fayl shu egaga va faqat 0600 ruxsatga tegishli bo'lishi
+          # shart, aks holda Postgres uni rad etib ishga tushmaydi.
+          chown 70:70 /certs/server.crt /certs/server.key
+          chmod 600 /certs/server.key
+          chmod 644 /certs/server.crt
+        fi
+    volumes:
+      - pg_certs:/certs
+
   postgres:
     image: postgres:16-alpine
     container_name: hr_platform_db
+    command:
+      - postgres
+      - -c
+      - ssl=on
+      - -c
+      - ssl_cert_file=/certs/server.crt
+      - -c
+      - ssl_key_file=/certs/server.key
     environment:
       POSTGRES_DB: hr_platform
       POSTGRES_USER: postgres
@@ -14,8 +50,12 @@ services:
       - "127.0.0.1:5435:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - pg_certs:/certs:ro
     networks:
       - hr_network
+    depends_on:
+      pg-certs:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -31,6 +71,8 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL .env faylida belgilanishi shart}
+      DB_SSL: ${DB_SSL:-false}
+      DB_SSL_REJECT_UNAUTHORIZED: ${DB_SSL_REJECT_UNAUTHORIZED:-true}
       PORT: ${PORT:-5000}
       FRONTEND_URL: ${FRONTEND_URL:?FRONTEND_URL .env faylida belgilanishi shart}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET .env faylida belgilanishi shart}
@@ -54,6 +96,13 @@ services:
     networks:
       - hr_network
     restart: unless-stopped
+    # XAVFSIZLIK-AUDIT.md O-6: the image now runs as the non-root `node`
+    # user (see Dockerfile), not root. A bind mount like the one above
+    # keeps the HOST directory's own ownership — the image-side `chown`
+    # doesn't apply to it. On first deploy after this change, run on the
+    # HOST:  sudo chown -R 1000:1000 apps/backend/uploads
+    # (1000 is node:node's uid/gid in the node:20-alpine base image) or
+    # uploads will start failing with EACCES.
 
   frontend:
     build:
@@ -69,6 +118,7 @@ services:
 
 volumes:
   postgres_data:
+  pg_certs:
 
 networks:
   hr_network:
