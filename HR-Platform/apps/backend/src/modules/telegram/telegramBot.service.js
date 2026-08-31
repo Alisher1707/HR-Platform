@@ -30,17 +30,36 @@ const ARIZA_CATEGORIES = [
 
 async function findEmployeeByChatId(chatId) {
   const { rows } = await query(
-    'SELECT id, first_name, last_name FROM employees WHERE telegram_chat_id = $1',
+    // Arxivlangan xodim (migratsiya 060) bot orqali ariza yubora olmaydi
+    // va Rahbar tugmalarini bosa olmaydi — bog'lanmagan chat sifatida
+    // ko'riladi.
+    'SELECT id, first_name, last_name FROM employees WHERE telegram_chat_id = $1 AND deleted_at IS NULL',
     [chatId]
   );
   return rows[0] || null;
 }
 
-/** person_id — Xodimlar ro'yxatida "ID: 1038" tarzida ko'rinadigan, har bir xodimga tizim tomonidan berilgan raqam. */
-async function findEmployeeByPersonId(personId) {
+/**
+ * Looks up an employee by their current, still-valid Telegram link code
+ * (see employees.service#generateTelegramLinkCode). Codes are single-use —
+ * the caller clears the column as part of linking, in the same statement
+ * that verifies it's still valid, so a code can't be raced/reused between
+ * the check and the link.
+ *
+ * XAVFSIZLIK-AUDIT.md K-4: this replaces the old "type your own person_id"
+ * flow, which "proved" identity with nothing but a small sequential
+ * integer anyone could guess (1000, 1001, 1002, ...) — including the
+ * Rahbar's, which let an attacker approve/reject every fine appeal in the
+ * system. A code is opaque (6 chars, 32-symbol alphabet), HR-issued out of
+ * band, and expires in 10 minutes.
+ */
+async function findAndConsumeEmployeeByLinkCode(code) {
   const { rows } = await query(
-    'SELECT id, first_name, last_name FROM employees WHERE person_id = $1',
-    [personId]
+    `UPDATE employees
+     SET telegram_link_code = NULL, telegram_link_code_expires_at = NULL
+     WHERE telegram_link_code = $1 AND telegram_link_code_expires_at > NOW()
+     RETURNING id, first_name, last_name`,
+    [code]
   );
   return rows[0] || null;
 }
@@ -133,33 +152,62 @@ async function sendMainMenu(chatId, employee, greeting) {
   await telegramApi.sendMessage(chatId, text, { replyMarkup: MAIN_MENU_KEYBOARD });
 }
 
+// XAVFSIZLIK-AUDIT.md K-4 tuzatishining bir qismi: kod topilmagan
+// urinishlar bitta chat uchun shu oyna ichida cheklanadi — aks holda 6
+// belgili kodni ham (32 belgili alifbo bo'lsa-da) qo'lda sanab ko'rish
+// nazariy jihatdan urinib ko'rilishi mumkin edi.
+const MAX_LINK_ATTEMPTS = 5;
+const LINK_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
+const LINK_CODE_PATTERN = /^[A-Z2-9]{6}$/;
+
 /**
- * Unlinked chat — every message gets the same instruction until the
- * employee sends a valid person_id. No code, no HR step: the employee
- * already knows their own ID (visible to them / assigned by HR), so this
- * links immediately and self-service, same as before with codes but with
- * one less round trip.
+ * Unlinked chat — every message is checked against a live HR-issued link
+ * code (see findAndConsumeEmployeeByLinkCode). Replaces the old "type your
+ * own person_id" self-service flow, which let anyone impersonate any
+ * employee (including the Rahbar) just by guessing a small sequential
+ * number — see the function's own doc comment for the full rationale.
  */
 async function handleUnlinkedChat(chatId, rawText) {
   const trimmed = (rawText || '').trim();
 
   if (!trimmed || trimmed.startsWith('/start')) {
-    await telegramApi.sendMessage(chatId, "Botdan foydalanish uchun ID raqamingizni yuboring (masalan: 1038).");
+    await telegramApi.sendMessage(
+      chatId,
+      "Botdan foydalanish uchun HR sizga bergan bog'lash kodini yuboring (6 belgi, masalan: K7M2XQ)."
+    );
     return;
   }
 
-  const personId = trimmed.replace(/[^0-9]/g, '');
-  if (!personId) {
-    await telegramApi.sendMessage(chatId, 'Iltimos, faqat ID raqamingizni yuboring (masalan: 1038).');
+  const session = await getSession(chatId);
+  if (session && session.state === 'unlinked_attempts') {
+    const { count, firstAttemptAt } = session.draft || {};
+    const withinWindow = firstAttemptAt && Date.now() - new Date(firstAttemptAt).getTime() < LINK_ATTEMPT_WINDOW_MS;
+    if (withinWindow && count >= MAX_LINK_ATTEMPTS) {
+      await telegramApi.sendMessage(chatId, "Juda ko'p noto'g'ri urinish. Iltimos, 15 daqiqadan so'ng qayta urinib ko'ring.");
+      return;
+    }
+  }
+
+  const code = trimmed.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!LINK_CODE_PATTERN.test(code)) {
+    await telegramApi.sendMessage(chatId, "Kod noto'g'ri ko'rinishda. HR bergan 6 belgili kodni aynan shu ko'rinishda yuboring.");
     return;
   }
 
-  const employee = await findEmployeeByPersonId(personId);
+  const employee = await findAndConsumeEmployeeByLinkCode(code);
   if (!employee) {
-    await telegramApi.sendMessage(chatId, 'Bunday ID topilmadi. ID raqamingizni tekshirib qayta yuboring, yoki HR\'ga murojaat qiling.');
+    const prevCount = session && session.state === 'unlinked_attempts' ? (session.draft?.count || 0) : 0;
+    const stillWithinWindow = session?.draft?.firstAttemptAt
+      && Date.now() - new Date(session.draft.firstAttemptAt).getTime() < LINK_ATTEMPT_WINDOW_MS;
+    const nextDraft = stillWithinWindow
+      ? { count: prevCount + 1, firstAttemptAt: session.draft.firstAttemptAt }
+      : { count: 1, firstAttemptAt: new Date().toISOString() };
+    await saveSession(chatId, null, 'unlinked_attempts', nextDraft);
+    await telegramApi.sendMessage(chatId, "Bunday kod topilmadi yoki muddati o'tgan. HR'dan yangi kod so'rang.");
     return;
   }
 
+  await clearSession(chatId);
   await linkChatToEmployee(chatId, employee.id);
   await sendMainMenu(chatId, employee, `✅ Xush kelibsiz, ${employee.first_name} ${employee.last_name}!`);
 }

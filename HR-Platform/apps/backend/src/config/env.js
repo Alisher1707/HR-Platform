@@ -19,8 +19,16 @@ export const config = {
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
 
   // Database Configuration
+  // XAVFSIZLIK-AUDIT.md P-6: TLS ataylab OPT-IN — backend va Postgres
+  // hozircha bir xil host/tarmoqda (docker-compose, 127.0.0.1'ga
+  // bog'langan), shuning uchun audit buni past ustuvorlik deb topgan.
+  // Backend va DB kelajakda ALOHIDA serverlarga ko'chirilsa,
+  // DB_SSL=true qo'ying — pg shundan keyin ulanishni TLS orqali qiladi.
   database: {
     url: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/hr_platform',
+    ssl: process.env.DB_SSL === 'true'
+      ? { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false' }
+      : false,
   },
 
   // JWT Configuration

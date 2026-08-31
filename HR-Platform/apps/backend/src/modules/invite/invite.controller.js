@@ -44,7 +44,7 @@ export const getAllInvites = asyncHandler(async (req, res) => {
     createdBy: req.query.createdBy,
   };
 
-  const invites = await inviteService.getAllInvites(filters);
+  const invites = await inviteService.getAllInvites(filters, req.user.role);
 
   return successResponse(res, { invites, total: invites.length }, 'Invites retrieved successfully');
 });
@@ -54,7 +54,7 @@ export const getAllInvites = asyncHandler(async (req, res) => {
  * Get invite by ID
  */
 export const getInviteById = asyncHandler(async (req, res) => {
-  const invite = await inviteService.getInviteById(req.params.id);
+  const invite = await inviteService.getInviteById(req.params.id, req.user.role);
 
   return successResponse(res, { invite }, 'Invite retrieved successfully');
 });

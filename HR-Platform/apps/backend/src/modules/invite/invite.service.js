@@ -2,7 +2,7 @@ import fs from 'fs/promises';
 import { query, getClient } from '../../config/database.js';
 import { generateInviteToken } from '../../shared/utils/crypto.js';
 import { config } from '../../config/env.js';
-import { HTTP_STATUS, MESSAGES } from '../../config/constants.js';
+import { HTTP_STATUS, MESSAGES, USER_ROLES } from '../../config/constants.js';
 
 /**
  * Invite Service
@@ -40,9 +40,33 @@ export async function createInvite(createdBy, position = null, requirements = nu
 }
 
 /**
+ * A raw invite token IS a password-equivalent bearer credential — whoever
+ * has it can POST /auth/register with it and, for a position-less invite,
+ * walk away with an ADMIN account (see invite.controller#createInvite's
+ * own SUPER_ADMIN-only guard on minting those). Listing/detail endpoints
+ * must never hand the raw token to a caller who isn't allowed to mint that
+ * same kind of invite themselves — otherwise the guard on creation is
+ * pointless, since HR could simply read a SUPER_ADMIN-created one back out
+ * (XAVFSIZLIK-AUDIT.md K-5). Masking (not just omitting) still lets HR
+ * visually confirm which row is which without handing over anything usable.
+ */
+function maskToken(token) {
+  if (!token) return token;
+  return `${token.slice(0, 8)}…`;
+}
+
+function canSeeFullInvite(invite, requestingRole) {
+  // Only a position-less invite (=> registers ADMIN, see auth.service.js)
+  // needs restricting. A candidate invite (position set) always resolves
+  // to the low-privilege EMPLOYEE role, so HR seeing/sharing its real
+  // token with a candidate is the whole point of the feature.
+  return requestingRole === USER_ROLES.SUPER_ADMIN || !!invite.position;
+}
+
+/**
  * Get all invites
  */
-export async function getAllInvites(filters = {}) {
+export async function getAllInvites(filters = {}, requestingRole = null) {
   let whereClause = [];
   let params = [];
   let paramCount = 1;
@@ -58,6 +82,13 @@ export async function getAllInvites(filters = {}) {
     whereClause.push(`i.created_by = $${paramCount}`);
     params.push(filters.createdBy);
     paramCount++;
+  }
+
+  // Defense in depth, at the query level rather than just the response
+  // shape: anyone below SUPER_ADMIN never even receives an ADMIN-granting
+  // invite row at all, masked or not.
+  if (requestingRole !== USER_ROLES.SUPER_ADMIN) {
+    whereClause.push(`i.position IS NOT NULL`);
   }
 
   const whereString = whereClause.length > 0 ? `WHERE ${whereClause.join(' AND ')}` : '';
@@ -90,16 +121,18 @@ export async function getAllInvites(filters = {}) {
   const result = await query(sql, params);
 
   // Format response
-  return result.rows.map((row) => ({
+  return result.rows.map((row) => {
+    const full = canSeeFullInvite(row, requestingRole);
+    return {
     id: row.id,
-    token: row.token,
+    token: full ? row.token : maskToken(row.token),
     expires_at: row.expires_at,
     used_at: row.used_at,
     is_active: row.is_active,
     created_at: row.created_at,
     position: row.position,
     requirements: row.requirements,
-    invite_url: `${config.frontendUrl}/apply?token=${row.token}`,
+    invite_url: full ? `${config.frontendUrl}/apply?token=${row.token}` : null,
     is_expired: new Date(row.expires_at) < new Date(),
     is_used: !!row.used_at,
     created_by: row.created_by ? {
@@ -114,13 +147,14 @@ export async function getAllInvites(filters = {}) {
       last_name: row.used_by_last_name,
       email: row.used_by_email,
     } : null,
-  }));
+    };
+  });
 }
 
 /**
  * Get invite by ID
  */
-export async function getInviteById(id) {
+export async function getInviteById(id, requestingRole = null) {
   const result = await query(
     `SELECT
       i.id,
@@ -151,6 +185,17 @@ export async function getInviteById(id) {
   }
 
   const row = result.rows[0];
+
+  // Same reasoning as getAllInvites: an ADMIN-granting (position-less)
+  // invite's real token must never reach anyone but SUPER_ADMIN, including
+  // by direct id lookup. Responds identically to "not found" rather than
+  // e.g. 403, so a non-SUPER_ADMIN can't even confirm such an invite id
+  // exists (XAVFSIZLIK-AUDIT.md K-5).
+  if (!canSeeFullInvite(row, requestingRole)) {
+    const error = new Error('Invite not found');
+    error.statusCode = HTTP_STATUS.NOT_FOUND;
+    throw error;
+  }
 
   return {
     id: row.id,
@@ -244,11 +289,17 @@ export async function submitApplication(applicationData, resumeFile = null) {
   try {
     await client.query('BEGIN');
 
-    // 1. Validate invite token
+    // 1. Validate invite token.
+    // XAVFSIZLIK-AUDIT.md (2-pass, poyga sharoiti #2): `FOR UPDATE` —
+    // auth.service.js#registerUser'dagi bir xil tuzatish, himoya
+    // maqsadida shu yerga ham qo'llanildi (lavozimli taklifnomalar
+    // ataylab qayta ishlatiladigan bo'lsa-da, qulflash ularga hech qanday
+    // yon ta'sir qilmaydi — faqat lavozimsiz yo'l uchun muhim).
     const inviteResult = await client.query(
       `SELECT id, expires_at, used_at, is_active, position, requirements, created_by
        FROM invites
-       WHERE token = $1`,
+       WHERE token = $1
+       FOR UPDATE`,
       [applicationData.token]
     );
 

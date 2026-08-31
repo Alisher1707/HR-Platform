@@ -54,17 +54,49 @@ export const deviceEventLimiter = rateLimit({
 });
 
 /**
+ * Second, IP-keyed limiter for the camera webhook — closes the hole that
+ * deviceEventLimiter alone cannot: its key is `req.params.token`, which is
+ * a path segment the CALLER fully controls, so anyone can hand themselves
+ * a fresh 3000-request budget just by changing it. Rotating the token made
+ * that limiter a no-op, and generalLimiter deliberately skips this path.
+ *
+ * `skipSuccessfulRequests` is what makes an IP key safe here despite the
+ * NAT concern documented above: a real camera sending a valid token gets
+ * 200 and is NEVER counted, no matter how many cameras share the branch's
+ * public IP. Only requests that end 4xx/5xx — i.e. unknown/invalid device
+ * tokens, which is exactly what token-rotation probing looks like — count
+ * against this budget.
+ */
+export const deviceUnknownTokenLimiter = rateLimit({
+  windowMs: RATE_LIMIT.WINDOW_MS,
+  max: 100,
+  message: {
+    success: false,
+    message: 'Noma\'lum qurilma tokenlari bilan juda ko\'p urinish.',
+  },
+  skip: () => process.env.NODE_ENV === 'development',
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
  * Strict limiter for auth endpoints (5 requests per 15 minutes)
+ *
+ * XAVFSIZLIK-AUDIT.md Y-2: this used to key on the CLIENT-supplied
+ * X-Forwarded-For header directly, first entry. nginx (see nginx.conf)
+ * only APPENDS the real client IP to whatever X-Forwarded-For it
+ * received — it doesn't replace it — so a request that already carries
+ * one (fully attacker-controlled) always keeps that value in the first
+ * position. Every login attempt with a new random first IP got its own
+ * fresh 20-request budget, making the limiter a no-op. `app.set('trust
+ * proxy', 1)` (app.js) already makes Express itself compute `req.ip`
+ * correctly (the real client IP, one hop back from nginx) — no custom
+ * keyGenerator is needed, or safe, here.
  */
 export const authLimiter = rateLimit({
   windowMs: RATE_LIMIT.WINDOW_MS,
   max: 20,
-  keyGenerator: (req) => {
-    // Nginx proxy orqasida haqiqiy IP manzilni olish
-    return req.headers['x-forwarded-for']?.split(',')[0]?.trim()
-      || req.headers['x-real-ip']
-      || req.ip;
-  },
   message: {
     success: false,
     message: 'Too many authentication attempts, please try again later.',

@@ -112,7 +112,11 @@ export async function ensureWebhookRegistered() {
     return;
   }
 
-  const targetUrl = `${config.telegram.webhookBaseUrl}/api/v1/telegram/webhook/${config.telegram.webhookSecret}`;
+  // Secret no longer sits in the URL — it's verified from Telegram's
+  // X-Telegram-Bot-Api-Secret-Token header instead (see telegram.routes.js,
+  // XAVFSIZLIK-AUDIT.md O-2). `setWebhook` below still tells Telegram which
+  // secret to send back in that header.
+  const targetUrl = `${config.telegram.webhookBaseUrl}/api/v1/telegram/webhook`;
 
   try {
     const info = await getWebhookInfo();

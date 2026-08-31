@@ -18,6 +18,25 @@ export function successResponse(res, data = null, message = 'Success', statusCod
 }
 
 /**
+ * Safe error message for hand-rolled try/catch controllers (the ones that
+ * don't go through asyncHandler + the central errorHandler.js).
+ *
+ * XAVFSIZLIK-AUDIT.md (re-audit, ochiq/oshkor xabar #7): errorHandler.js
+ * ataylab faqat o'zimiz tashlagan, `statusCode` bilan birga keladigan
+ * "bilinadigan" xatoning `message`'ini mijozga qaytaradi — kutilmagan
+ * xato (xom Postgres/driver istisnosi, statusCode'siz) esa umumiy xabar
+ * bilan almashtiriladi (jadval/ustun nomi kabi ichki tafsilotlar
+ * sizmasligi uchun). ~50 ta qo'lda yozilgan catch bloki (fines, payroll,
+ * departments, attendance, ejm, onboarding, schedules) bu qoidani
+ * bilmasdan har doim `error.message`ni ko'rsatardi — statusCode bor-
+ * yo'qligidan qat'iy nazar. Bu funksiya o'sha bir xil qoidani shu
+ * bloklarga ham qo'llaydi.
+ */
+export function safeErrorMessage(error, fallback) {
+  return typeof error?.statusCode === 'number' && error.message ? error.message : fallback;
+}
+
+/**
  * Error response
  */
 export function errorResponse(res, message = 'Error', statusCode = HTTP_STATUS.INTERNAL_SERVER_ERROR, errors = null) {

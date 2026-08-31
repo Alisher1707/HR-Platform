@@ -291,7 +291,8 @@ export async function listEmployeeFines({
 }
 
 export async function createEmployeeFine({ employeeId, amount, fineTypeId, note, fileUrl, fileName, createdBy }) {
-  const employeeCheck = await query('SELECT id FROM employees WHERE id = $1', [employeeId]);
+  // Arxivlangan xodimga (migratsiya 060) yangi jarima yozib bo'lmaydi.
+  const employeeCheck = await query('SELECT id FROM employees WHERE id = $1 AND deleted_at IS NULL', [employeeId]);
   if (employeeCheck.rows.length === 0) {
     const error = new Error('Xodim topilmadi');
     error.statusCode = HTTP_STATUS.NOT_FOUND;
@@ -497,7 +498,9 @@ export async function markAppealForwardedToManager(id) {
 /** The single employee flagged as the bot-approval Rahbar (see migration 051), or null if none is assigned yet. */
 export async function getBotManagerEmployee() {
   const { rows } = await query(
-    `SELECT id, first_name, last_name, telegram_chat_id FROM employees WHERE is_bot_manager = true LIMIT 1`
+    // Arxivlangan xodim (migratsiya 060) Rahbar sifatida ariza tasdiqlay
+    // olmaydi — bunday holatda "Rahbar tayinlanmagan" javobi qaytadi.
+    `SELECT id, first_name, last_name, telegram_chat_id FROM employees WHERE is_bot_manager = true AND deleted_at IS NULL LIMIT 1`
   );
   return rows[0] || null;
 }

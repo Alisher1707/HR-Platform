@@ -1,18 +1,36 @@
 import express from 'express';
+import crypto from 'crypto';
 import { receiveTelegramUpdate } from './telegram.controller.js';
 import { config } from '../../config/env.js';
 
 const router = express.Router();
 
 /**
- * Telegram can't do our cookie/JWT auth, so the URL-embedded secret
- * (TELEGRAM_WEBHOOK_SECRET) is what stands in for auth here — same
- * rationale/shape as the Hikvision device webhook's `:token` param
- * (devices.routes.js). A request with a wrong/missing secret gets a plain
- * 404 rather than a body that would reveal whether the route exists.
+ * Telegram can't do our cookie/JWT auth, so TELEGRAM_WEBHOOK_SECRET stands
+ * in for auth here. It used to be embedded in the URL path (`/webhook/:secret`)
+ * and compared with plain `!==` — that put the secret in nginx's access
+ * log (and any backup/aggregator that ingests it) on every single update,
+ * and a non-constant-time compare leaks timing information. Telegram's Bot
+ * API already sends the secret back as the `X-Telegram-Bot-Api-Secret-Token`
+ * header on every webhook call (see telegramApi.js#setWebhook, which has
+ * always passed `secret_token` — it just wasn't being checked), so the
+ * secret never needs to appear in the URL at all now
+ * (XAVFSIZLIK-AUDIT.md O-2).
  */
-router.post('/webhook/:secret', (req, res, next) => {
-  if (!config.telegram.webhookSecret || req.params.secret !== config.telegram.webhookSecret) {
+router.post('/webhook', (req, res, next) => {
+  const expected = config.telegram.webhookSecret;
+  const received = req.headers['x-telegram-bot-api-secret-token'];
+
+  if (!expected || typeof received !== 'string') {
+    return res.status(404).end();
+  }
+
+  const expectedBuf = Buffer.from(expected);
+  const receivedBuf = Buffer.from(received);
+  const matches = expectedBuf.length === receivedBuf.length
+    && crypto.timingSafeEqual(expectedBuf, receivedBuf);
+
+  if (!matches) {
     return res.status(404).end();
   }
   return next();

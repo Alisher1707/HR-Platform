@@ -25,6 +25,11 @@ const registerSchema = Joi.object({
   lastName: Joi.string().min(2).max(100).required(),
 });
 
+const changePasswordSchema = Joi.object({
+  currentPassword: Joi.string().required(),
+  newPassword: commonSchemas.password,
+});
+
 /**
  * Routes
  */
@@ -33,7 +38,11 @@ const registerSchema = Joi.object({
 router.post('/login', authLimiter, validate(loginSchema), authController.login);
 
 // POST /api/v1/auth/register
-router.post('/register', validate(registerSchema), authController.register);
+// authLimiter added (XAVFSIZLIK-AUDIT.md O-10) — the invite token itself is
+// unguessable (64 hex chars), but without a limiter this endpoint let
+// anyone force the server to run bcrypt(12) an unbounded number of times
+// per second, a cheap CPU-exhaustion DoS lever that cost the caller nothing.
+router.post('/register', authLimiter, validate(registerSchema), authController.register);
 
 // POST /api/v1/auth/refresh
 router.post('/refresh', authController.refresh);
@@ -43,5 +52,8 @@ router.post('/logout', authenticate, authController.logout);
 
 // GET /api/v1/auth/me
 router.get('/me', authenticate, authController.me);
+
+// PATCH /api/v1/auth/password — change own password (XAVFSIZLIK-AUDIT.md O-9)
+router.patch('/password', authenticate, authLimiter, validate(changePasswordSchema), authController.changePassword);
 
 export default router;

@@ -55,9 +55,28 @@ export async function rotateRefreshToken(dbClient, refreshToken) {
     [decoded.jti]
   );
 
-  if (result.rows.length === 0 || result.rows[0].revoked_at) {
-    // Missing row (predates this migration, or already cleaned up) or an
-    // already-revoked token being replayed — either way, not valid.
+  if (result.rows.length === 0) {
+    // Predates this migration, or already cleaned up — not attributable to
+    // a user, nothing further to revoke.
+    throw new Error('Invalid refresh token');
+  }
+
+  if (result.rows[0].revoked_at) {
+    // XAVFSIZLIK-AUDIT.md O-13: an already-revoked token being presented
+    // again means one of two things happened to this exact token — either
+    // the legitimate client retried a request whose response it never saw
+    // (harmless), or someone else got hold of the token and the real owner
+    // already rotated past it (theft). There's no way to tell those apart
+    // from here, so this is treated as a theft signal: EVERY refresh token
+    // this user currently holds is revoked, forcing every session
+    // (attacker's and the legitimate one) to log in again. Previously only
+    // this one replay attempt was rejected — the rest of the "family"
+    // (including whichever token the attacker was actually using) stayed
+    // valid.
+    await dbClient.query(
+      'UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL',
+      [result.rows[0].user_id]
+    );
     throw new Error('Invalid refresh token');
   }
 
@@ -66,20 +85,38 @@ export async function rotateRefreshToken(dbClient, refreshToken) {
   return decoded;
 }
 
-/** Revokes one refresh token by its raw JWT value — used by logout. */
-export async function revokeRefreshToken(dbClient, refreshToken) {
+/**
+ * Revokes one refresh token by its raw JWT value — used by logout.
+ *
+ * XAVFSIZLIK-AUDIT.md O-14: this used to `jwt.decode()` the token —
+ * decode never checks the signature, so any well-formed-but-unsigned/
+ * forged JWT with a guessed or observed `jti` would revoke that session.
+ * `verifyRefreshToken` is used instead (throws on a bad signature), and
+ * the caller now must also supply the authenticated requester's own user
+ * id so a valid-but-someone-else's refresh token can't be logged out
+ * either.
+ */
+export async function revokeRefreshToken(dbClient, refreshToken, requestingUserId = null) {
   if (!refreshToken) return;
   try {
-    const decoded = jwt.decode(refreshToken);
-    if (decoded?.jti) {
-      await dbClient.query(
-        'UPDATE refresh_tokens SET revoked_at = NOW() WHERE id = $1 AND revoked_at IS NULL',
-        [decoded.jti]
-      );
-    }
+    const decoded = verifyRefreshToken(refreshToken);
+    if (!decoded?.jti) return;
+    if (requestingUserId && decoded.userId !== requestingUserId) return;
+    await dbClient.query(
+      'UPDATE refresh_tokens SET revoked_at = NOW() WHERE id = $1 AND revoked_at IS NULL',
+      [decoded.jti]
+    );
   } catch {
-    // Malformed token on logout — nothing to revoke, nothing to fail on.
+    // Malformed/invalid/expired token on logout — nothing to revoke, nothing to fail on.
   }
+}
+
+/** Revokes every refresh token currently issued to a user — used after a password change (O-9) and for a future "sign out everywhere" action. */
+export async function revokeAllUserRefreshTokens(dbClient, userId) {
+  await dbClient.query(
+    'UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL',
+    [userId]
+  );
 }
 
 /**

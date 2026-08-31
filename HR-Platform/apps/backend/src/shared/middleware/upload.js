@@ -18,25 +18,45 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
+// XAVFSIZLIK-AUDIT.md Y-6: this was the one upload route left on the old
+// pattern — "allow all file types", extension taken from the client's own
+// filename, served back with `inline` disposition (see ejm.controller.js).
+// That combination let an ".html"/".svg" upload come back from
+// /api/v1/ejm/download/<id> as a browser-executed page — stored XSS in the
+// EJM module, reachable by anyone who can view an EJM node (every
+// ADMIN/HR). Extension now comes ONLY from this fixed mime allow-list,
+// exactly like every other upload route in this file (safeFilenameFromMime
+// — see safeUpload.js).
+const EJM_MIME_EXT = {
+  'application/pdf': '.pdf',
+  'application/msword': '.doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/vnd.ms-excel': '.xls',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+  'application/vnd.ms-powerpoint': '.ppt',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
+  'text/plain': '.txt',
+  'application/zip': '.zip',
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+};
+
 // Configure storage
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, uploadsDir);
   },
-  filename: function (req, file, cb) {
-    // Generate unique filename: timestamp_userId_originalname
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    const nameWithoutExt = path.basename(file.originalname, ext);
-    const sanitizedName = nameWithoutExt.replace(/[^a-zA-Z0-9_-]/g, '_');
-    cb(null, `${uniqueSuffix}_${sanitizedName}${ext}`);
-  }
+  filename: safeFilenameFromMime(EJM_MIME_EXT),
 });
 
-// File filter - allow all types
 const fileFilter = (req, file, cb) => {
-  // Allow all file types as requested
-  cb(null, true);
+  if (EJM_MIME_EXT[file.mimetype]) {
+    cb(null, true);
+  } else {
+    cb(new Error("Fayl turi qo'llab-quvvatlanmaydi. Ruxsat etilgan: PDF, Word, Excel, PowerPoint, TXT, ZIP, rasm (JPG/PNG/WEBP/GIF)"));
+  }
 };
 
 // Configure multer

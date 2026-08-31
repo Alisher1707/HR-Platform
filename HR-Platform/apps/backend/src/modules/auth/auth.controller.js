@@ -79,7 +79,7 @@ export const refresh = asyncHandler(async (req, res) => {
  * after the user believed they'd logged out.
  */
 export const logout = asyncHandler(async (req, res) => {
-  await authService.logoutUser(req.cookies.refreshToken);
+  await authService.logoutUser(req.cookies.refreshToken, req.user.id);
 
   res.clearCookie('refreshToken');
 
@@ -94,4 +94,21 @@ export const me = asyncHandler(async (req, res) => {
   const user = await authService.getCurrentUser(req.user.id);
 
   return successResponse(res, { user }, 'User retrieved successfully');
+});
+
+/**
+ * PATCH /api/v1/auth/password
+ * Change own password — XAVFSIZLIK-AUDIT.md O-9. Clears the refresh
+ * cookie too: every refresh token was just revoked server-side
+ * (auth.service#changePassword), so the cookie is already dead weight and
+ * the client must log in again with the new password.
+ */
+export const changePassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  await authService.changePassword(req.user.id, currentPassword, newPassword);
+
+  res.clearCookie('refreshToken');
+
+  return successResponse(res, null, "Parol muvaffaqiyatli almashtirildi. Iltimos, qayta kiring.");
 });

@@ -1,5 +1,5 @@
 import * as ejmService from './ejm.service.js';
-import { successResponse, errorResponse } from '../../shared/utils/response.js';
+import { successResponse, errorResponse, safeErrorMessage } from '../../shared/utils/response.js';
 import { HTTP_STATUS } from '../../config/constants.js';
 
 /**
@@ -20,7 +20,7 @@ export async function getEJM(req, res) {
     console.error('Get EJM error:', error);
     return errorResponse(
       res,
-      error.message || 'EJM ma\'lumotlarini olishda xatolik',
+      safeErrorMessage(error, 'EJM ma\'lumotlarini olishda xatolik'),
       error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR
     );
   }
@@ -45,7 +45,7 @@ export async function saveEJM(req, res) {
     console.error('Save EJM error:', error);
     return errorResponse(
       res,
-      error.message || 'EJM saqlashda xatolik',
+      safeErrorMessage(error, 'EJM saqlashda xatolik'),
       error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR
     );
   }
@@ -80,7 +80,7 @@ export async function uploadFiles(req, res) {
     console.error('Upload EJM files error:', error);
     return errorResponse(
       res,
-      error.message || 'Fayllarni yuklashda xatolik',
+      safeErrorMessage(error, 'Fayllarni yuklashda xatolik'),
       error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR
     );
   }
@@ -108,7 +108,7 @@ export async function getNodeFiles(req, res) {
     console.error('Get node files error:', error);
     return errorResponse(
       res,
-      error.message || 'Fayllarni olishda xatolik',
+      safeErrorMessage(error, 'Fayllarni olishda xatolik'),
       error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR
     );
   }
@@ -124,14 +124,24 @@ export async function downloadFile(req, res) {
 
     const file = await ejmService.getEJMFile(fileId, req.user.id);
 
-    // Faylni majburiy yuklash o'rniga brauzerda ochilishi uchun inline qilib beramiz
-    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.name)}"`);
+    // XAVFSIZLIK-AUDIT.md Y-6: `inline` + no explicit Content-Type let the
+    // browser render whatever the file's on-disk EXTENSION implied —
+    // before the upload-side fix (upload.js#EJM_MIME_EXT), that included
+    // ".html"/".svg" uploads, which the browser would execute in this
+    // origin. Uploads are now restricted to a safe mime allow-list, but
+    // any file uploaded before that fix could still be sitting on disk —
+    // forcing `attachment` + a fixed generic Content-Type here means even
+    // a still-present old malicious file can only ever be downloaded,
+    // never rendered/executed by the browser.
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(file.name)}"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.type('application/octet-stream');
     res.sendFile(file.path);
   } catch (error) {
     console.error('Download file error:', error);
     return errorResponse(
       res,
-      error.message || 'Faylni yuklashda xatolik',
+      safeErrorMessage(error, 'Faylni yuklashda xatolik'),
       error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR
     );
   }
@@ -152,7 +162,7 @@ export async function deleteFile(req, res) {
     console.error('Delete file error:', error);
     return errorResponse(
       res,
-      error.message || 'Faylni o\'chirishda xatolik',
+      safeErrorMessage(error, 'Faylni o\'chirishda xatolik'),
       error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR
     );
   }

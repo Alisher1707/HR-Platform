@@ -438,7 +438,9 @@ export async function listAssignments() {
 export async function createAssignment(planId, employeeId, userId) {
   await getPlanById(planId); // 404 if plan missing
 
-  const employeeCheck = await query('SELECT id FROM employees WHERE id = $1', [employeeId]);
+  // Arxivlangan xodimga (migratsiya 060) yangi onboarding rejasi
+  // biriktirib bo'lmaydi.
+  const employeeCheck = await query('SELECT id FROM employees WHERE id = $1 AND deleted_at IS NULL', [employeeId]);
   if (employeeCheck.rows.length === 0) {
     const error = new Error('Xodim topilmadi');
     error.statusCode = HTTP_STATUS.NOT_FOUND;
@@ -568,6 +570,51 @@ export async function getAssignmentByToken(token) {
     completedStepIds: completions.map((c) => c.taskId),
     completions,
   };
+}
+
+/**
+ * Lightweight existence+expiry check only (no plan/steps/completions
+ * loaded) — used by the /uploads/onboarding/submissions/* file route
+ * (app.js) to decide whether an unauthenticated request may view a
+ * submitted document. XAVFSIZLIK-AUDIT.md O-1: those files used to be
+ * served with NO check at all beyond an unguessable filename, so access
+ * never actually expired along with the assignment link itself. Doesn't
+ * confirm the token owns THIS specific file — only that it's a live,
+ * unexpired onboarding link — which is still a large improvement over no
+ * check at all, at a cost proportional to what the rest of this route
+ * already does (see comment there for the fuller reasoning).
+ */
+/**
+ * Can the holder of this public onboarding token download THIS submission
+ * file?
+ *
+ * XAVFSIZLIK-AUDIT.md (3-pass qayta-audit, #13). The O-1 fix replaced
+ * "no authentication at all, forever" with isOnboardingTokenLive() — but
+ * that only asks "is SOME onboarding link still alive", never "was this
+ * file submitted under THAT link". So any employee holding any live
+ * onboarding link could fetch any OTHER employee's uploaded passport scan
+ * or diploma, given its filename. The only thing standing in the way was
+ * the filename being 16 random bytes — i.e. security by obscurity, which
+ * is precisely what the original O-1 finding objected to. The comment in
+ * app.js openly admitted this was left incomplete; this closes it.
+ *
+ * The completion row is the authoritative link between an assignment and
+ * the file it produced, so the check joins straight through it. Expiry is
+ * re-checked here too, so the two conditions can never drift apart.
+ */
+export async function canAccessSubmissionFile(token, filename) {
+  if (!token || !filename) return false;
+  const { rows } = await query(
+    `SELECT 1
+       FROM onboarding_step_completions c
+       JOIN onboarding_assignments a ON a.id = c.assignment_id
+      WHERE a.public_token = $1
+        AND c.submission_file_url = $2
+        AND (a.expires_at IS NULL OR a.expires_at > NOW())
+      LIMIT 1`,
+    [token, `/uploads/onboarding/submissions/${filename}`]
+  );
+  return rows.length > 0;
 }
 
 /**

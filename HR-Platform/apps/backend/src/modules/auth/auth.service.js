@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import { query, getClient, pool } from '../../config/database.js';
 import { HTTP_STATUS, MESSAGES } from '../../config/constants.js';
 import { getNextAutoPersonId } from '../employees/employees.service.js';
-import { issueTokenPair, rotateRefreshToken, revokeRefreshToken } from './refreshToken.service.js';
+import { issueTokenPair, rotateRefreshToken, revokeRefreshToken, revokeAllUserRefreshTokens } from './refreshToken.service.js';
 
 /**
  * Auth Service
@@ -70,11 +70,19 @@ export async function registerUser(inviteToken, userData) {
   try {
     await client.query('BEGIN');
 
-    // Validate invite token
+    // Validate invite token.
+    // XAVFSIZLIK-AUDIT.md (2-pass, poyga sharoiti #2): `FOR UPDATE` shu
+    // qatorni tranzaksiya davomida qulflaydi. Shu tokenni bir vaqtda
+    // ishlatmoqchi bo'lgan IKKINCHI so'rov shu SELECT'da to'xtab qoladi —
+    // birinchisi COMMIT qilib (used_at'ni belgilab) bo'lgunicha. Bundan
+    // oldin oddiy SELECT edi: ikkala so'rov ham used_at'ni NULL deb ko'rib,
+    // ikkalasi ham hisob (lavozimsiz taklifnomada — ADMIN!) yaratib
+    // qo'yishi mumkin edi.
     const inviteResult = await client.query(
       `SELECT id, expires_at, used_at, is_active, position, requirements, created_by
        FROM invites
-       WHERE token = $1`,
+       WHERE token = $1
+       FOR UPDATE`,
       [inviteToken]
     );
 
@@ -266,8 +274,8 @@ export async function refreshAccessToken(refreshToken) {
  * be used again, not just clears the cookie holding it (that part still
  * happens separately in the controller).
  */
-export async function logoutUser(refreshToken) {
-  await revokeRefreshToken(pool, refreshToken);
+export async function logoutUser(refreshToken, requestingUserId) {
+  await revokeRefreshToken(pool, refreshToken, requestingUserId);
 }
 
 /**
@@ -286,4 +294,33 @@ export async function getCurrentUser(userId) {
   }
 
   return result.rows[0];
+}
+
+/**
+ * Change the current user's own password (XAVFSIZLIK-AUDIT.md O-9 — this
+ * flow didn't exist at all before, meaning the documented default
+ * SUPER_ADMIN/HR passwords (K-1) could only ever be changed directly in
+ * the database). Requires the current password, and revokes every other
+ * refresh token the user holds — a password change is exactly the moment
+ * you want any session that might belong to someone else logged out.
+ */
+export async function changePassword(userId, currentPassword, newPassword) {
+  const result = await query('SELECT password_hash FROM users WHERE id = $1', [userId]);
+  if (result.rows.length === 0) {
+    const error = new Error(MESSAGES.USER_NOT_FOUND);
+    error.statusCode = HTTP_STATUS.NOT_FOUND;
+    throw error;
+  }
+
+  const isCurrentValid = await bcrypt.compare(currentPassword, result.rows[0].password_hash);
+  if (!isCurrentValid) {
+    const error = new Error("Joriy parol noto'g'ri");
+    error.statusCode = HTTP_STATUS.UNAUTHORIZED;
+    throw error;
+  }
+
+  const newHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+  await query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [newHash, userId]);
+
+  await revokeAllUserRefreshTokens(pool, userId);
 }

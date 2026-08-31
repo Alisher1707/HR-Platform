@@ -21,7 +21,11 @@ export async function listDepartments() {
 export async function createDepartment(name, userId) {
   const trimmed = name.trim();
 
-  const existing = await query('SELECT id FROM departments WHERE name = $1', [trimmed]);
+  // XAVFSIZLIK-AUDIT.md (6-pass, amaliy funksional audit, F1): aynan bir
+  // xil satr solishtirilardi — "Sotuv" va "sotuv" ikkita ALOHIDA bo'lim
+  // bo'lib qolaverardi, xodim/hisobot sonlarini bo'lib yuborib. Endi
+  // katta-kichik harfga sezgir emas.
+  const existing = await query('SELECT id FROM departments WHERE LOWER(name) = LOWER($1)', [trimmed]);
   if (existing.rows.length > 0) {
     const error = new Error("Bu nomdagi bo'lim allaqachon mavjud");
     error.statusCode = HTTP_STATUS.CONFLICT;
@@ -57,7 +61,7 @@ export async function updateDepartment(id, name) {
     const oldName = current.rows[0].name;
 
     if (oldName !== trimmed) {
-      const dup = await client.query('SELECT id FROM departments WHERE name = $1 AND id <> $2', [trimmed, id]);
+      const dup = await client.query('SELECT id FROM departments WHERE LOWER(name) = LOWER($1) AND id <> $2', [trimmed, id]);
       if (dup.rows.length > 0) {
         const error = new Error("Bu nomdagi bo'lim allaqachon mavjud");
         error.statusCode = HTTP_STATUS.CONFLICT;

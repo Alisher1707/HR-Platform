@@ -1,12 +1,25 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { query } from '../../config/database.js';
+import { query, getClient } from '../../config/database.js';
 import { computeLateness, computeShiftLimit, getActiveScheduleForEmployee } from '../schedules/schedules.service.js';
 import { recomputeEmployeePresence } from '../attendance/attendance.service.js';
 import { checkLateArrivalFine } from '../../services/autoFineService.js';
 import { generateRandomString } from '../../shared/utils/crypto.js';
 import { businessDayStart } from '../../shared/utils/timezone.js';
+import { randomFilename } from '../../shared/utils/safeUpload.js';
+
+// Only image mimetypes a Hikvision snapshot can legitimately be — the saved
+// extension is derived from this map, never from the client-supplied
+// filename/fieldname (see XAVFSIZLIK-AUDIT.md K-2: the old code built the
+// on-disk filename from `file.fieldname` + `path.extname(originalname)`,
+// both fully attacker-controlled, on a route with no authentication at
+// all — that allowed writing arbitrary files, including overwriting `.js`
+// source files, anywhere `path.join` would resolve them to).
+const DEVICE_EVENT_IMAGE_EXT = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+};
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const eventsDir = path.join(__dirname, '../../../uploads/device-events');
@@ -230,9 +243,27 @@ function extractAttendanceType(candidates) {
 
 async function findEmployeeByPersonId(personId) {
   const result = await query(
-    'SELECT id, first_name, last_name FROM employees WHERE person_id = $1 LIMIT 1',
+    // Arxivlangan xodim (migratsiya 060) kamerada hali ham ro'yxatdan
+    // o'tgan bo'lishi mumkin — lekin uning uchun yangi davomat/jarima
+    // yozilmasligi kerak. Topilmasa hodisa "unmatched" deb log qilinadi.
+    'SELECT id, first_name, last_name FROM employees WHERE person_id = $1 AND deleted_at IS NULL LIMIT 1',
     [personId]
   );
+  return result.rows[0] || null;
+}
+
+/**
+ * Confirms the URL's :token belongs to a device that was actually
+ * registered via "Qurilma yaratish" (POST /api/v1/devices). Before this
+ * check existed, the token in the URL was only ever logged/stored — never
+ * compared against anything — so ANY value (including a guessable
+ * sequential person_id-style string, or nothing at all) was accepted as a
+ * valid device and could push fabricated attendance events for any
+ * employee (XAVFSIZLIK-AUDIT.md K-3).
+ */
+async function findDeviceByToken(token) {
+  if (!token) return null;
+  const result = await query('SELECT id FROM devices WHERE token = $1 LIMIT 1', [token]);
   return result.rows[0] || null;
 }
 
@@ -264,8 +295,64 @@ async function logDeviceEvent(deviceToken, eventType, personId, employeeId) {
  * Scans within 60s of the previous one for the same employee are ignored
  * as duplicates — Hikvision terminals fire repeatedly while a face stays
  * in frame.
+ *
+ * XAVFSIZLIK-AUDIT.md (2-pass, poyga sharoiti #1): bir xodim uchun ikki
+ * hodisa deyarli bir vaqtda kelsa (bu HAQIQIY, kutilgan holat — terminal
+ * qayta-qayta otishi yoki qurilma orqada qolgan (backlog) hodisalarni bir
+ * zumda oqib chiqarishi tufayli), oxirgi yozuvni SELECT qilish → turini
+ * hal qilish → INSERT qilish ketma-ketligi hech qanday qulfsiz bo'lsa,
+ * ikkala parallel chaqiruv ham bir xil "oxirgi yozuv"ni ko'rib, ikkalasi
+ * ham "keldi" deb yozishi mumkin edi.
+ *
+ * `pg_advisory_lock` (xodim ID'siga bog'langan) shu SELECT→INSERT
+ * oynasini butun so'rov davomida emas, balki FAQAT shu qism uchun ushlab
+ * turadi (recordAttendanceInsert) — pastdagi recomputeEmployeePresence/
+ * checkLateArrivalFine chaqiruvlari qulf BO'SHATILGANDAN KEYIN ishlaydi.
+ * Sabab: bular xodimning parallel boshqa chaqiruviga bog'liq emas
+ * (allaqachon commit qilingan qatorni o'qiydi/o'ziga tegishli DB-darajali
+ * dedup'ga tayanadi), lekin ular bir necha qo'shimcha so'rov qiladi —
+ * agar shular ham qulf ichida bo'lsa, har bir chaqiruv connection pool'dan
+ * (max 20) bitta ulanishni butun shu davr uchun band qilib turardi, va
+ * ko'p xodim bir vaqtda kelgan cho'qqi paytida (masalan aynan shu
+ * "backlog oqib chiqishi" holatida) pool tugab, butun server osilib
+ * qolishi mumkin edi.
  */
 async function recordAttendance(employeeId, deviceToken, rawPersonId, explicitType, eventDateTime) {
+  const lockClient = await getClient();
+  // hashtext(...) — UUID'ni 32-bitli butun songa aylantiradi (advisory lock
+  // shuni talab qiladi). Turli xodimlar orasida nazariy hash to'qnashuvi
+  // faqat ortiqcha (zararsiz) kutishga olib keladi — noto'g'ri natijaga
+  // emas, chunki qulf shunchaki bitta vaqtda bitta chaqiruv ishlashini
+  // ta'minlaydi, qaysi kalit ekanidan qat'iy nazar.
+  await lockClient.query('SELECT pg_advisory_lock(hashtext($1))', [employeeId]);
+  let outcome;
+  try {
+    outcome = await recordAttendanceInsert(employeeId, deviceToken, rawPersonId, explicitType, eventDateTime);
+  } finally {
+    try {
+      await lockClient.query('SELECT pg_advisory_unlock(hashtext($1))', [employeeId]);
+    } finally {
+      lockClient.release();
+    }
+  }
+
+  // Qulf ENDI bo'shatilgan — bu ikkala chaqiruv boshqa xodimlarning
+  // parallel hodisalarini bloklamaydi, va connection pool'ni ortiqcha
+  // band qilib turmaydi (izohga qarang).
+  if (!outcome.skipped) {
+    await recomputeEmployeePresence(employeeId);
+    if (outcome.type === 'keldi') {
+      await checkLateArrivalFine(employeeId, outcome.recordedAt, outcome.isLate);
+    }
+    // ketdi uchun erta-ketish jarimasi endi shu yerda emas — kutilayotgan
+    // (pending) chiqish yakuniy deb tasdiqlangandagina, resolveFinalCheckouts
+    // ichida chaqiriladi.
+  }
+
+  return outcome;
+}
+
+async function recordAttendanceInsert(employeeId, deviceToken, rawPersonId, explicitType, eventDateTime) {
   // Kameraning o'z vaqti bor va oqilona bo'lsa — o'shani ishlatamiz (bu
   // hodisa haqiqatan qachon sodir bo'lganini bildiradi). Bo'lmasa, serverga
   // yetib kelgan vaqt — eski xatti-harakat.
@@ -350,16 +437,10 @@ async function recordAttendance(employeeId, deviceToken, rawPersonId, explicitTy
     [employeeId, type, deviceToken, rawPersonId, recordedAt, isLate, isAfterHours, isEarly, isOverShiftLimit, scheduleId, dayBoundary]
   );
 
-  await recomputeEmployeePresence(employeeId);
-
-  if (type === 'keldi') {
-    await checkLateArrivalFine(employeeId, recordedAt, isLate);
-  }
-  // ketdi uchun erta-ketish jarimasi endi shu yerda emas — kutilayotgan
-  // (pending) chiqish yakuniy deb tasdiqlangandagina, resolveFinalCheckouts
-  // ichida chaqiriladi.
-
-  return { skipped: false, type, isLate, isEarly, dayBoundary };
+  // recomputeEmployeePresence/checkLateArrivalFine chaqiruvlari qasddan
+  // shu yerda EMAS — ular endi qulf bo'shatilgandan keyin, chaqiruvchi
+  // recordAttendance'da ishlaydi (yuqoridagi izohga qarang).
+  return { skipped: false, type, isLate, isEarly, dayBoundary, recordedAt };
 }
 
 /**
@@ -369,7 +450,6 @@ async function recordAttendance(employeeId, deviceToken, rawPersonId, explicitTy
  */
 export async function receiveDeviceEvent(req, res) {
   const receivedAt = new Date().toISOString();
-  const stamp = Date.now();
   const deviceToken = req.params.token;
 
   // Token is masked before logging — it's a bearer credential (anyone who
@@ -386,6 +466,26 @@ export async function receiveDeviceEvent(req, res) {
   console.log('Device token (URL param, maskalangan):', maskedToken);
   console.log('From IP:', req.ip);
   console.log('Content-Type:', req.headers['content-type']);
+
+  // Reject any request whose :token doesn't belong to a registered device
+  // BEFORE touching the filesystem or the database any further — this is
+  // an unauthenticated route by necessity (cameras can't do cookie/JWT
+  // auth), so the token itself is the only credential, and it must
+  // actually be checked (XAVFSIZLIK-AUDIT.md K-3).
+  //
+  // XAVFSIZLIK-AUDIT.md (3-pass, #10): the check now ALSO runs earlier, in
+  // `resolveDeviceOr404` (devices.routes.js), before the request body is
+  // read at all — checking it only here still meant an unauthenticated
+  // caller could stream an unbounded body into memory first. `req.device`
+  // is that already-resolved row; the lookup below is kept purely as a
+  // fallback so this handler stays correct on its own if it is ever
+  // mounted without that middleware.
+  const device = req.device || (await findDeviceByToken(deviceToken));
+  if (!device) {
+    console.log(`(!) Noma'lum device token bilan so'rov rad etildi: ${maskedToken}`);
+    console.log('=============================================\n');
+    return res.status(404).json({ success: false, message: 'Noma\'lum qurilma' });
+  }
 
   if (req.body && Object.keys(req.body).length > 0) {
     console.log('Parsed body fields:');
@@ -404,8 +504,17 @@ export async function receiveDeviceEvent(req, res) {
         `  [${idx}] field="${file.fieldname}" name="${file.originalname}" mime="${file.mimetype}" size=${file.size}B`
       );
 
-      const ext = path.extname(file.originalname) || (file.mimetype.includes('jpeg') ? '.jpg' : '.bin');
-      const savedName = `${stamp}_${idx}_${file.fieldname}${ext}`;
+      // Extension comes ONLY from the fixed mime->ext allow-list, never
+      // from file.fieldname or file.originalname (both fully
+      // client-controlled) — see DEVICE_EVENT_IMAGE_EXT above. A file whose
+      // reported mimetype isn't a recognized image is dropped instead of
+      // saved with a guessed/arbitrary extension.
+      const ext = DEVICE_EVENT_IMAGE_EXT[file.mimetype];
+      if (!ext) {
+        console.log(`  -> saqlanmadi (ruxsat etilmagan mime turi: ${file.mimetype})`);
+        return;
+      }
+      const savedName = randomFilename(ext);
       fs.writeFileSync(path.join(eventsDir, savedName), file.buffer);
       console.log(`  -> saved as /uploads/device-events/${savedName}`);
     });
@@ -559,7 +668,7 @@ export async function getTerminals(req, res) {
 export async function createDevice(req, res) {
   try {
     const { name } = req.body;
-    const token = generateRandomString(20);
+    const token = generateRandomString(32);
 
     const result = await query(
       `INSERT INTO devices (name, token, created_by) VALUES ($1, $2, $3)

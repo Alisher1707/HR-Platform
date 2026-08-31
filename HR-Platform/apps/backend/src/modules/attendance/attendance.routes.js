@@ -31,7 +31,14 @@ const attendanceReportQuerySchema = Joi.object({
 const createAttendanceSchema = Joi.object({
   employeeId: commonSchemas.uuid,
   type: Joi.string().valid('keldi', 'ketdi').required(),
-  recordedAt: Joi.date().required(),
+  // XAVFSIZLIK-AUDIT.md (6-pass, amaliy funksional audit, F4): hech qanday
+  // chegara yo'q edi — jonli sinovda 2030-yil sanasi bilan "keldi" yozuvi
+  // muammosiz qabul qilindi va hatto "kech qoldi" deb hisoblandi. Davomat —
+  // ta'rifi bo'yicha ALLAQACHON sodir bo'lgan voqeani yozadi; "now" — Joi
+  // tomonidan har bir so'rovda DINAMIK baholanadi (schema yuklanganda emas).
+  recordedAt: Joi.date().max('now').required().messages({
+    'date.max': "Davomat sanasi kelajakda bo'lishi mumkin emas",
+  }),
   notes: Joi.string().max(1000).allow('', null).optional(),
 });
 

@@ -5,6 +5,7 @@ import { asyncHandler } from '../../shared/middleware/errorHandler.js';
 import { successResponse, createdResponse, paginatedResponse, errorResponse } from '../../shared/utils/response.js';
 import { HTTP_STATUS, MESSAGES } from '../../config/constants.js';
 import * as employeesService from './employees.service.js';
+import { recordAuditEvent, actorIp } from '../../services/auditLogService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const employeePhotosDir = path.join(__dirname, '../../../uploads/employees');
@@ -14,6 +15,17 @@ const resumesDir = path.join(__dirname, '../../../uploads/resumes');
  * Employees Controller
  * Handles HTTP requests for employee management
  */
+
+/**
+ * POST /api/v1/employees/:id/telegram-link-code
+ * Generates a fresh, 10-minute one-time code HR relays to the employee so
+ * they can link their Telegram chat to their own record (see
+ * employees.service#generateTelegramLinkCode — XAVFSIZLIK-AUDIT.md K-4).
+ */
+export const createTelegramLinkCode = asyncHandler(async (req, res) => {
+  const { code, expiresAt } = await employeesService.generateTelegramLinkCode(req.params.id);
+  return successResponse(res, { code, expiresAt }, "Bog'lash kodi yaratildi");
+});
 
 /**
  * POST /api/v1/employees
@@ -83,6 +95,18 @@ export const getAllEmployees = asyncHandler(async (req, res) => {
 
   const result = await employeesService.getAllEmployees(filters, pagination);
 
+  // XAVFSIZLIK-AUDIT.md P-8: har bir sahifa PNFL/maosh kabi nozik
+  // maydonlarni o'z ichiga oladi — kim, qachon, qaysi filtr bilan
+  // ko'rgani qayd etiladi. Javobni kutmaymiz (best-effort).
+  recordAuditEvent({
+    actorUserId: req.user.id,
+    actorRole: req.user.role,
+    action: 'employee.sensitive_list_read',
+    resourceType: 'employee',
+    ipAddress: actorIp(req),
+    meta: { search: filters.search || null, page: pagination.page, resultCount: result.employees.length },
+  });
+
   return paginatedResponse(res, result.employees, result.pagination, 'Employees retrieved successfully');
 });
 
@@ -92,6 +116,17 @@ export const getAllEmployees = asyncHandler(async (req, res) => {
  */
 export const getEmployeeById = asyncHandler(async (req, res) => {
   const employee = await employeesService.getEmployeeById(req.params.id);
+
+  // XAVFSIZLIK-AUDIT.md P-8: bitta xodimning to'liq kartochkasi (PNFL,
+  // maosh, tug'ilgan sana) — eng nozik yagona o'qish nuqtasi.
+  recordAuditEvent({
+    actorUserId: req.user.id,
+    actorRole: req.user.role,
+    action: 'employee.sensitive_read',
+    resourceType: 'employee',
+    resourceId: req.params.id,
+    ipAddress: actorIp(req),
+  });
 
   return successResponse(res, { employee }, 'Employee retrieved successfully');
 });
@@ -202,6 +237,32 @@ export const uploadResume = asyncHandler(async (req, res) => {
 export const deleteEmployee = asyncHandler(async (req, res) => {
   const result = await employeesService.deleteEmployee(req.params.id);
 
-  return successResponse(res, result, 'Employee deleted successfully');
+  // XAVFSIZLIK-AUDIT.md (2-pass, data integrity #4): eng buzg'unchi amal,
+  // shuning uchun audit_logs'ga kim/qachon/kimni, qaysi rejimda
+  // (arxivlash yoki haqiqiy o'chirish) va nechta bog'liq yozuv saqlangani
+  // yoziladi. `action` ikki xil — jurnalni ko'rganda "nima yo'qoldi" va
+  // "nima saqlanib qoldi" darhol farqlanadi.
+  recordAuditEvent({
+    actorUserId: req.user.id,
+    actorRole: req.user.role,
+    action: result.mode === 'archived' ? 'employee.archive' : 'employee.delete',
+    resourceType: 'employee',
+    resourceId: req.params.id,
+    ipAddress: actorIp(req),
+    meta: {
+      employeeName: result.employeeName,
+      employeeNumber: result.employeeNumber,
+      mode: result.mode,
+      preservedCounts: result.preservedCounts,
+    },
+  });
+
+  return successResponse(
+    res,
+    result,
+    result.mode === 'archived'
+      ? "Xodim arxivlandi — moliyaviy va davomat tarixi saqlab qolindi"
+      : "Xodim o'chirildi"
+  );
 });
 

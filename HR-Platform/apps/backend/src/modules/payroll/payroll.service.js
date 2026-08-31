@@ -81,7 +81,9 @@ export async function listPayments({
 }
 
 export async function createPayment({ employeeId, amount, month, year, note, createdBy }) {
-  const employeeCheck = await query('SELECT id FROM employees WHERE id = $1', [employeeId]);
+  // Arxivlangan xodimga (migratsiya 060) yangi maosh to'lovi yozib
+  // bo'lmaydi; oldingi to'lovlari tarixda saqlanib qolaveradi.
+  const employeeCheck = await query('SELECT id FROM employees WHERE id = $1 AND deleted_at IS NULL', [employeeId]);
   if (employeeCheck.rows.length === 0) {
     const error = new Error('Xodim topilmadi');
     error.statusCode = HTTP_STATUS.NOT_FOUND;

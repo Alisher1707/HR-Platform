@@ -1,5 +1,5 @@
 import * as onboardingService from './onboarding.service.js';
-import { successResponse, errorResponse } from '../../shared/utils/response.js';
+import { successResponse, errorResponse, safeErrorMessage } from '../../shared/utils/response.js';
 import { HTTP_STATUS } from '../../config/constants.js';
 
 /**
@@ -12,7 +12,7 @@ export async function getPlans(req, res) {
     return successResponse(res, plans, 'Rejalar olindi');
   } catch (error) {
     console.error('Get onboarding plans error:', error);
-    return errorResponse(res, error.message || 'Rejalarni olishda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return errorResponse(res, safeErrorMessage(error, 'Rejalarni olishda xatolik'), error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }
 
@@ -22,7 +22,7 @@ export async function getPlanById(req, res) {
     return successResponse(res, plan, 'Reja olindi');
   } catch (error) {
     console.error('Get onboarding plan error:', error);
-    return errorResponse(res, error.message || 'Rejani olishda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return errorResponse(res, safeErrorMessage(error, 'Rejani olishda xatolik'), error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }
 
@@ -32,7 +32,7 @@ export async function createPlan(req, res) {
     return successResponse(res, plan, 'Reja yaratildi', HTTP_STATUS.CREATED);
   } catch (error) {
     console.error('Create onboarding plan error:', error);
-    return errorResponse(res, error.message || 'Reja yaratishda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return errorResponse(res, safeErrorMessage(error, 'Reja yaratishda xatolik'), error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }
 
@@ -42,7 +42,7 @@ export async function updatePlan(req, res) {
     return successResponse(res, plan, 'Reja yangilandi');
   } catch (error) {
     console.error('Update onboarding plan error:', error);
-    return errorResponse(res, error.message || 'Rejani yangilashda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return errorResponse(res, safeErrorMessage(error, 'Rejani yangilashda xatolik'), error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }
 
@@ -52,7 +52,7 @@ export async function deletePlan(req, res) {
     return successResponse(res, result, "Reja o'chirildi");
   } catch (error) {
     console.error('Delete onboarding plan error:', error);
-    return errorResponse(res, error.message || "Rejani o'chirishda xatolik", error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return errorResponse(res, safeErrorMessage(error, "Rejani o'chirishda xatolik"), error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }
 
@@ -71,7 +71,7 @@ export async function uploadDocument(req, res) {
     );
   } catch (error) {
     console.error('Upload onboarding document error:', error);
-    return errorResponse(res, error.message || 'Hujjat yuklashda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return errorResponse(res, safeErrorMessage(error, 'Hujjat yuklashda xatolik'), error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }
 
@@ -81,7 +81,7 @@ export async function getStats(req, res) {
     return successResponse(res, stats, 'Statistika olindi');
   } catch (error) {
     console.error('Get onboarding stats error:', error);
-    return errorResponse(res, error.message || 'Statistikani olishda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return errorResponse(res, safeErrorMessage(error, 'Statistikani olishda xatolik'), error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }
 
@@ -91,7 +91,7 @@ export async function getAssignmentDetail(req, res) {
     return successResponse(res, assignment, 'Biriktirish tafsilotlari olindi');
   } catch (error) {
     console.error('Get onboarding assignment detail error:', error);
-    return errorResponse(res, error.message || 'Tafsilotlarni olishda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return errorResponse(res, safeErrorMessage(error, 'Tafsilotlarni olishda xatolik'), error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }
 
@@ -112,7 +112,7 @@ export async function reviewTask(req, res) {
     );
   } catch (error) {
     console.error('Review onboarding task error:', error);
-    return errorResponse(res, error.message || 'Vazifani ko\'rib chiqishda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return errorResponse(res, safeErrorMessage(error, 'Vazifani ko\'rib chiqishda xatolik'), error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }
 
@@ -122,7 +122,7 @@ export async function getAssignments(req, res) {
     return successResponse(res, assignments, 'Biriktirishlar olindi');
   } catch (error) {
     console.error('Get onboarding assignments error:', error);
-    return errorResponse(res, error.message || 'Biriktirishlarni olishda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return errorResponse(res, safeErrorMessage(error, 'Biriktirishlarni olishda xatolik'), error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }
 
@@ -132,7 +132,7 @@ export async function createAssignment(req, res) {
     return successResponse(res, assignment, 'Xodimga reja biriktirildi', HTTP_STATUS.CREATED);
   } catch (error) {
     console.error('Create onboarding assignment error:', error);
-    return errorResponse(res, error.message || 'Reja biriktirishda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return errorResponse(res, safeErrorMessage(error, 'Reja biriktirishda xatolik'), error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }
 
@@ -142,7 +142,7 @@ export async function deleteAssignment(req, res) {
     return successResponse(res, result, "Biriktirish o'chirildi");
   } catch (error) {
     console.error('Delete onboarding assignment error:', error);
-    return errorResponse(res, error.message || "Biriktirishni o'chirishda xatolik", error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return errorResponse(res, safeErrorMessage(error, "Biriktirishni o'chirishda xatolik"), error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }
 
@@ -154,7 +154,7 @@ export async function getPublicAssignment(req, res) {
     return successResponse(res, assignment, 'Reja olindi');
   } catch (error) {
     console.error('Get public onboarding assignment error:', error);
-    return errorResponse(res, error.message || 'Havola topilmadi', error.statusCode || HTTP_STATUS.NOT_FOUND);
+    return errorResponse(res, safeErrorMessage(error, 'Havola topilmadi'), error.statusCode || HTTP_STATUS.NOT_FOUND);
   }
 }
 
@@ -174,6 +174,6 @@ export async function submitTask(req, res) {
     return successResponse(res, assignment, 'Vazifa topshirildi');
   } catch (error) {
     console.error('Submit onboarding task error:', error);
-    return errorResponse(res, error.message || 'Vazifani topshirishda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return errorResponse(res, safeErrorMessage(error, 'Vazifani topshirishda xatolik'), error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }

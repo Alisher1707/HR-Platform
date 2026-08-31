@@ -1,5 +1,8 @@
 import { query, getClient } from '../../config/database.js';
 import { HTTP_STATUS, MESSAGES } from '../../config/constants.js';
+import { generateLinkCode } from '../../shared/utils/crypto.js';
+
+const TELEGRAM_LINK_CODE_TTL_MS = 10 * 60 * 1000; // 10 daqiqa
 
 /**
  * Employees Service
@@ -33,6 +36,40 @@ export async function createEmployee(employeeData, createdBy) {
     // always auto-assigned, never accepted from the caller, so it can never
     // be typed in wrong or collide with what's actually on the device.
     const personId = await getNextAutoPersonId(client);
+    // XAVFSIZLIK-AUDIT.md (6-pass, amaliy funksional audit, #F2/F3):
+    // ommaviy import (bulkImportEmployees, pastda) PNFL/telefon
+    // dublikatini har doim tekshirgan - bitta xodim qo'shish esa hech
+    // qachon tekshirmagan edi. Jonli sinovda tasdiqlandi: bir xil PNFL
+    // bilan ikkita alohida xodim yozuvi muammosiz yaratilardi. Mavjud
+    // (demo) ma'lumotlarda allaqachon dublikat borligi sababli DB
+    // darajasidagi UNIQUE indeks qo'yib bo'lmadi (migratsiya eski
+    // qatorlarga qarab muvaffaqiyatsiz bo'lardi) - shuning uchun bulk-
+    // import bilan bir xil, servis darajasidagi tekshiruv qo'llanildi.
+    // Faqat FAOL (deleted_at IS NULL) xodimlar orasida - arxivlangan
+    // xodimning eski PNFL'i qayta ishga qabul qilinganda to'sqinlik
+    // qilmasligi kerak (migratsiya 060).
+    if (employeeData.pnfl) {
+      const dupe = await client.query(
+        'SELECT id FROM employees WHERE pnfl = $1 AND deleted_at IS NULL',
+        [employeeData.pnfl]
+      );
+      if (dupe.rows.length > 0) {
+        const error = new Error('Bu JSHSHIR (PNFL) bilan xodim allaqachon mavjud');
+        error.statusCode = HTTP_STATUS.CONFLICT;
+        throw error;
+      }
+    }
+    if (employeeData.phone) {
+      const dupe = await client.query(
+        'SELECT id FROM employees WHERE phone = $1 AND deleted_at IS NULL',
+        [employeeData.phone]
+      );
+      if (dupe.rows.length > 0) {
+        const error = new Error('Bu telefon raqami bilan xodim allaqachon mavjud');
+        error.statusCode = HTTP_STATUS.CONFLICT;
+        throw error;
+      }
+    }
 
     // Insert employee with all new fields
     let employeeResult;
@@ -264,6 +301,12 @@ export async function getAllEmployees(filters = {}, pagination = {}) {
   let params = [];
   let paramCount = 1;
 
+  // Arxivlangan (deleted_at) xodimlar faol ro'yxatda ko'rinmaydi —
+  // migratsiya 060 / XAVFSIZLIK-AUDIT.md (2-pass #4). Tarixiy hisobotlar
+  // (davomat, jarima, maosh) ataylab filtrlanmaydi: o'sha yozuvlar
+  // haqiqatan sodir bo'lgan va xodim nomi ular uchun hali ham kerak.
+  whereClause.push('e.deleted_at IS NULL');
+
   // Build WHERE clause
   if (filters.search) {
     whereClause.push(
@@ -379,7 +422,7 @@ export async function getEmployeeById(id) {
       EXTRACT(YEAR FROM AGE(CURRENT_DATE, e.birth_date))::INTEGER as age
     FROM employees e
     LEFT JOIN users u ON e.created_by = u.id
-    WHERE e.id = $1`,
+    WHERE e.id = $1 AND e.deleted_at IS NULL`,
     [id]
   );
 
@@ -468,11 +511,38 @@ export async function updateEmployee(id, updates) {
 
   // Add ID to params
   params.push(id);
+  // XAVFSIZLIK-AUDIT.md (6-pass, amaliy funksional audit, #F2/F3):
+  // createEmployee bilan bir xil bo'shliq — xodimni tahrirlab, uni
+  // boshqa faol xodimning PNFL/telefoniga o'zgartirib bo'lardi.
+  if (updates.pnfl) {
+    const dupe = await query(
+      'SELECT id FROM employees WHERE pnfl = $1 AND deleted_at IS NULL AND id <> $2',
+      [updates.pnfl, id]
+    );
+    if (dupe.rows.length > 0) {
+      const error = new Error('Bu JSHSHIR (PNFL) bilan xodim allaqachon mavjud');
+      error.statusCode = HTTP_STATUS.CONFLICT;
+      throw error;
+    }
+  }
+  if (updates.phone) {
+    const dupe = await query(
+      'SELECT id FROM employees WHERE phone = $1 AND deleted_at IS NULL AND id <> $2',
+      [updates.phone, id]
+    );
+    if (dupe.rows.length > 0) {
+      const error = new Error('Bu telefon raqami bilan xodim allaqachon mavjud');
+      error.statusCode = HTTP_STATUS.CONFLICT;
+      throw error;
+    }
+  }
 
+  // `deleted_at IS NULL` — arxivlangan xodimni (migratsiya 060)
+  // tahrirlab bo'lmaydi; 0 qator qaytsa chaqiruvchi 404 beradi.
   const sql = `
     UPDATE employees
     SET ${setClauses.join(', ')}
-    WHERE id = $${paramCount}
+    WHERE id = $${paramCount} AND deleted_at IS NULL
     RETURNING *
   `;
 
@@ -502,7 +572,8 @@ export async function updateEmployee(id, updates) {
  * Returns the updated employee row and the previous photo URL (for cleanup)
  */
 export async function updateEmployeePhoto(id, photoUrl) {
-  const currentResult = await query('SELECT photo_url FROM employees WHERE id = $1', [id]);
+  // Arxivlangan xodimni (migratsiya 060) tahrirlab bo'lmaydi.
+  const currentResult = await query('SELECT photo_url FROM employees WHERE id = $1 AND deleted_at IS NULL', [id]);
 
   if (currentResult.rows.length === 0) {
     const error = new Error(MESSAGES.EMPLOYEE_NOT_FOUND);
@@ -527,11 +598,63 @@ export async function updateEmployeePhoto(id, photoUrl) {
 }
 
 /**
+ * Generates a fresh, short-lived, one-time Telegram link code for an
+ * employee (XAVFSIZLIK-AUDIT.md K-4 fix). HR relays this code to the
+ * employee out-of-band (in person, phone, existing chat) — the employee
+ * then sends it to the bot, which links their chat_id only if the code
+ * matches AND hasn't expired. Generating a new code overwrites/invalidates
+ * any earlier unused one for the same employee (unique index on the
+ * column means a fresh collision would otherwise fail the UPDATE).
+ */
+export async function generateTelegramLinkCode(id) {
+  // Arxivlangan xodim (migratsiya 060) uchun yangi Telegram bog'lash
+  // kodi yaratib bo'lmaydi.
+  const employeeResult = await query('SELECT id, telegram_chat_id FROM employees WHERE id = $1 AND deleted_at IS NULL', [id]);
+  if (employeeResult.rows.length === 0) {
+    const error = new Error(MESSAGES.EMPLOYEE_NOT_FOUND);
+    error.statusCode = HTTP_STATUS.NOT_FOUND;
+    throw error;
+  }
+
+  const expiresAt = new Date(Date.now() + TELEGRAM_LINK_CODE_TTL_MS);
+
+  // A fresh code could theoretically collide with another employee's
+  // still-valid one (6 chars from a 32-symbol alphabet — astronomically
+  // unlikely, but the unique index would reject it outright rather than
+  // silently overwrite). Retry a handful of times instead of surfacing a
+  // confusing DB error to HR.
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const code = generateLinkCode(6);
+    try {
+      const result = await query(
+        `UPDATE employees
+         SET telegram_link_code = $1, telegram_link_code_expires_at = $2, updated_at = NOW()
+         WHERE id = $3
+         RETURNING id, telegram_link_code, telegram_link_code_expires_at`,
+        [code, expiresAt, id]
+      );
+      return {
+        code: result.rows[0].telegram_link_code,
+        expiresAt: result.rows[0].telegram_link_code_expires_at,
+      };
+    } catch (err) {
+      if (err.code === '23505') continue; // unique_violation — try another code
+      throw err;
+    }
+  }
+
+  const error = new Error("Bog'lash kodi yaratib bo'lmadi, qayta urinib ko'ring");
+  error.statusCode = HTTP_STATUS.INTERNAL_SERVER_ERROR;
+  throw error;
+}
+
+/**
  * Update employee resume
  * Returns the updated employee row and the previous resume URL (for cleanup)
  */
 export async function updateEmployeeResume(id, resumeUrl, resumeOriginalName) {
-  const currentResult = await query('SELECT resume_url FROM employees WHERE id = $1', [id]);
+  // Arxivlangan xodimni (migratsiya 060) tahrirlab bo'lmaydi.
+  const currentResult = await query('SELECT resume_url FROM employees WHERE id = $1 AND deleted_at IS NULL', [id]);
 
   if (currentResult.rows.length === 0) {
     const error = new Error(MESSAGES.EMPLOYEE_NOT_FOUND);
@@ -556,17 +679,73 @@ export async function updateEmployeeResume(id, resumeUrl, resumeOriginalName) {
 }
 
 /**
- * Delete employee (soft delete via application CASCADE)
+ * Remove an employee — archives rather than destroys whenever there is
+ * anything worth keeping.
+ *
+ * XAVFSIZLIK-AUDIT.md (2-pass, data integrity #4). This used to be a bare
+ * `DELETE FROM employees`, and every dependent table (employee_fines,
+ * salary_payments, attendance_records, applications, ...) hangs off it
+ * with `ON DELETE CASCADE` — so one click irreversibly destroyed an
+ * employee's whole financial and legal history. The 2-pass change only
+ * *recorded* what was destroyed; migration 060 + this function stop the
+ * destruction itself:
+ *
+ *  - has any history (fine / payment / attendance / application)
+ *      -> ARCHIVE: set `deleted_at`. The row and all its history stay in
+ *         the database; the employee disappears from the active roster and
+ *         from every "new action" path (see the `deleted_at IS NULL`
+ *         filters added alongside this), while past reports still resolve
+ *         their name correctly.
+ *  - has no history at all (a mis-typed candidate, a duplicate row)
+ *      -> HARD DELETE: nothing of value exists to preserve, and leaving
+ *         the row would only clutter the roster and hold its
+ *         employee_number / person_id unique index entries hostage.
+ *
+ * Which branch ran is returned to the caller so it can be written to
+ * audit_logs (see employees.controller.js#deleteEmployee).
  */
 export async function deleteEmployee(id) {
-  const result = await query('DELETE FROM employees WHERE id = $1 RETURNING id', [id]);
+  const existing = await query(
+    `SELECT
+       e.first_name, e.last_name, e.employee_number, e.deleted_at,
+       (SELECT COUNT(*) FROM employee_fines ef WHERE ef.employee_id = e.id) AS fines_count,
+       (SELECT COUNT(*) FROM salary_payments sp WHERE sp.employee_id = e.id) AS payments_count,
+       (SELECT COUNT(*) FROM attendance_records ar WHERE ar.employee_id = e.id) AS attendance_count,
+       (SELECT COUNT(*) FROM applications ap WHERE ap.employee_id = e.id) AS applications_count
+     FROM employees e
+     WHERE e.id = $1`,
+    [id]
+  );
 
-  if (result.rows.length === 0) {
+  if (existing.rows.length === 0 || existing.rows[0].deleted_at) {
+    // An already-archived employee is treated as gone — repeating the
+    // request must not look like it destroyed something a second time.
     const error = new Error(MESSAGES.EMPLOYEE_NOT_FOUND);
     error.statusCode = HTTP_STATUS.NOT_FOUND;
     throw error;
   }
 
-  return { id: result.rows[0].id };
+  const snapshot = existing.rows[0];
+  const preservedCounts = {
+    fines: Number(snapshot.fines_count),
+    salaryPayments: Number(snapshot.payments_count),
+    attendanceRecords: Number(snapshot.attendance_count),
+    applications: Number(snapshot.applications_count),
+  };
+  const hasHistory = Object.values(preservedCounts).some((n) => n > 0);
+
+  if (hasHistory) {
+    await query('UPDATE employees SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1', [id]);
+  } else {
+    await query('DELETE FROM employees WHERE id = $1', [id]);
+  }
+
+  return {
+    id,
+    mode: hasHistory ? 'archived' : 'deleted',
+    employeeName: `${snapshot.first_name} ${snapshot.last_name}`,
+    employeeNumber: snapshot.employee_number,
+    preservedCounts,
+  };
 }
 

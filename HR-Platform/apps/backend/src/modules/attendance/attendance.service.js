@@ -291,7 +291,10 @@ export async function recomputeEmployeePresence(employeeId) {
  * Create a manual attendance record (source='manual').
  */
 export async function createManualAttendance({ employeeId, type, recordedAt, notes, createdBy }) {
-  const employeeCheck = await query('SELECT id FROM employees WHERE id = $1', [employeeId]);
+  // `deleted_at IS NULL` — arxivlangan xodimga yangi davomat yozib
+  // bo'lmaydi (migratsiya 060). Mavjud tarixiy yozuvlari o'z joyida
+  // qoladi va hisobotlarda ko'rinaveradi.
+  const employeeCheck = await query('SELECT id FROM employees WHERE id = $1 AND deleted_at IS NULL', [employeeId]);
   if (employeeCheck.rows.length === 0) {
     const error = new Error('Xodim topilmadi');
     error.statusCode = HTTP_STATUS.NOT_FOUND;

@@ -15,7 +15,11 @@ const createFineTypeSchema = Joi.object({
 const templateSchema = Joi.object({
   violationType: Joi.string().valid('kech_kelish', 'erta_ketish', 'chiqish_yoq', 'kelmagan_kun').required(),
   timeLimit: Joi.string().max(5).allow('', null),
-  amount: Joi.number().min(0).default(0),
+  // XAVFSIZLIK-AUDIT.md (6-pass, F5): DB ustuni numeric(12,2) — chegarasiz
+  // Joi bilan undan katta qiymat Postgresga tushib, tushunarsiz xom xato
+  // (500) sifatida chiqib ketardi (jonli sinovda tasdiqlandi). Endi Joi
+  // o'zi aniq, foydalanuvchiga tushunarli xato bilan rad etadi.
+  amount: Joi.number().min(0).max(9999999999.99).default(0).messages({ 'number.max': "Summa juda katta (DB chegarasi: 9 999 999 999.99)" }),
   fineTypeId: Joi.string().uuid().allow('', null),
 });
 
@@ -38,7 +42,7 @@ const listAssignedFinesQuerySchema = Joi.object({
 
 const createAssignedFineSchema = Joi.object({
   employeeId: commonSchemas.uuid,
-  amount: Joi.number().positive().required(),
+  amount: Joi.number().positive().max(9999999999.99).required().messages({ 'number.max': "Summa juda katta (DB chegarasi: 9 999 999 999.99)" }),
   fineTypeId: Joi.string().uuid().allow('', null),
   note: Joi.string().max(500).allow('', null),
 });

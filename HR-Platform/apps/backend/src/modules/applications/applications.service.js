@@ -8,6 +8,26 @@ import { getNextAutoPersonId } from '../employees/employees.service.js';
  */
 
 /**
+ * XAVFSIZLIK-AUDIT.md (2-pass, workflow bypass #3 — QAYTA KO'RIB
+ * CHIQILDI, o'zgarish bekor qilindi): birinchi marta bu yerda bosqichlar
+ * orasida faqat QO'SHNI o'tishga ruxsat beruvchi qat'iy holat-mashinasi
+ * qo'yilgan edi. Frontend'ni (KanbanPage.jsx, "Bosqichni o'zgartirish"
+ * paneli, ~qator 635-679) tekshirganda ma'lum bo'ldiki, bu NOTO'G'RI
+ * taxmin edi: u yerda besh tugma — Yangi Keldi / Suhbatga chaqirish /
+ * Sinov Muddatiga chaqirish / Shartnoma imzolash / Rad etish — HAR DOIM
+ * FAOL (`disabled={changingStatus}` — faqat so'rov ketayotganda
+ * o'chadi, joriy statusdan qat'iy nazar EMAS). Ya'ni istalgan bosqichdan
+ * istalgan bosqichga bitta tugma bilan o'tish — HR uchun ATAYLAB
+ * qilingan, faol ishlatiladigan funksiya (masalan: to'g'ridan-to'g'ri
+ * qabul qilinadigan nomzodni sinov muddatisiz "Shartnoma"ga o'tkazish).
+ * Qat'iy holat-mashinasi shu haqiqiy funksiyani buzgan bo'lardi —
+ * shuning uchun olib tashlandi. Status o'tishi hali ham Joi orqali
+ * faqat 5 ta haqiqiy qiymatdan biri ekanligi tekshiriladi
+ * (applications.routes.js#updateStatusSchema) — bundan ortig'i HR'ning
+ * o'z ixtiyoriga qoldirilgan, dizayn bo'yicha.
+ */
+
+/**
  * Get all applications grouped by status (for Kanban board)
  */
 export async function getAllApplications(filters = {}) {

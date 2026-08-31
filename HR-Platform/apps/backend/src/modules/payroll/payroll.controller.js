@@ -1,6 +1,7 @@
 import * as payrollService from './payroll.service.js';
-import { successResponse, errorResponse } from '../../shared/utils/response.js';
+import { successResponse, errorResponse, safeErrorMessage } from '../../shared/utils/response.js';
 import { HTTP_STATUS } from '../../config/constants.js';
+import { recordAuditEvent, actorIp } from '../../services/auditLogService.js';
 
 /**
  * Payroll Controller
@@ -24,10 +25,22 @@ export async function getPayments(req, res) {
       endDate: endDate || null,
     });
 
+    // XAVFSIZLIK-AUDIT.md P-8: maosh to'lovlari — nozik moliyaviy
+    // ma'lumot. Kim, qachon, qaysi filtr bilan ko'rgani qayd etiladi.
+    recordAuditEvent({
+      actorUserId: req.user.id,
+      actorRole: req.user.role,
+      action: 'payroll.sensitive_read',
+      resourceType: 'payroll_payment',
+      resourceId: employeeId || null,
+      ipAddress: actorIp(req),
+      meta: { month: month || null, year: year || null },
+    });
+
     return successResponse(res, payments, "To'lovlar olindi");
   } catch (error) {
     console.error('Get payments error:', error);
-    return errorResponse(res, error.message || "To'lovlarni olishda xatolik", error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return errorResponse(res, safeErrorMessage(error, "To'lovlarni olishda xatolik"), error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }
 
@@ -47,7 +60,7 @@ export async function createPayment(req, res) {
     return successResponse(res, payment, "To'lov qo'shildi", HTTP_STATUS.CREATED);
   } catch (error) {
     console.error('Create payment error:', error);
-    return errorResponse(res, error.message || "To'lov qo'shishda xatolik", error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return errorResponse(res, safeErrorMessage(error, "To'lov qo'shishda xatolik"), error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }
 
@@ -57,6 +70,6 @@ export async function deletePayment(req, res) {
     return successResponse(res, result, "To'lov o'chirildi");
   } catch (error) {
     console.error('Delete payment error:', error);
-    return errorResponse(res, error.message || "To'lovni o'chirishda xatolik", error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return errorResponse(res, safeErrorMessage(error, "To'lovni o'chirishda xatolik"), error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }

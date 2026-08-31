@@ -165,9 +165,15 @@ export async function processDailyAutoFines() {
     const violationDate = businessDateOnly(yesterday);
 
     const { rows: candidates } = await client.query(
+      // `JOIN employees ... deleted_at IS NULL` MAJBURIY (migratsiya 060):
+      // bu sweep "kelmagan_kun" jarimasini xodimda davomat yozuvi YO'QLIGI
+      // asosida yozadi. Arxivlangan xodimda esa ta'rifi bo'yicha yangi
+      // davomat bo'lmaydi — filtr bo'lmasa u har kuni, cheksiz muddat
+      // "kelmadi" jarimasini olib turardi.
       `SELECT DISTINCT fpe.employee_id, fpt.id AS template_id, fpt.violation_type,
               fpt.amount, fpt.fine_type_id
        FROM fine_policy_employees fpe
+       JOIN employees e ON e.id = fpe.employee_id AND e.deleted_at IS NULL
        JOIN fine_policies fp ON fp.id = fpe.policy_id AND fp.enabled = true
        JOIN fine_policy_templates fpt ON fpt.policy_id = fp.id
        WHERE fpt.violation_type IN ('kelmagan_kun', 'chiqish_yoq')`

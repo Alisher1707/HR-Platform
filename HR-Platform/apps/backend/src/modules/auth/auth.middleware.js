@@ -2,6 +2,7 @@ import { verifyAccessToken } from '../../shared/utils/token.js';
 import { errorResponse } from '../../shared/utils/response.js';
 import { HTTP_STATUS, MESSAGES, USER_ROLES } from '../../config/constants.js';
 import { query } from '../../config/database.js';
+import { recordAuditEvent, actorIp } from '../../services/auditLogService.js';
 
 /**
  * Authentication Middleware
@@ -62,8 +63,25 @@ export function authorize(...allowedRoles) {
       return errorResponse(res, MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED);
     }
 
-    // Bypass check for SUPER_ADMIN role
+    // Bypass check for SUPER_ADMIN role.
+    // XAVFSIZLIK-AUDIT.md O-12: bu bypass dizayn bo'yicha to'g'ri, lekin
+    // ilgari hech qayerda qayd etilmasdi. Faqat SO'ROVCHI SUPER_ADMIN
+    // bo'lib, marshrut boshqa rol(lar)ni talab qilgan holatlarda
+    // (haqiqiy "imtiyoz ishlatildi" hodisasi) log yoziladi — SUPER_ADMIN
+    // o'ziga ochiq marshrutga kirganda emas, shuning uchun jurnal shovqin
+    // bilan to'lib ketmaydi.
     if (req.user.role === USER_ROLES.SUPER_ADMIN) {
+      if (!allowedRoles.includes(USER_ROLES.SUPER_ADMIN)) {
+        recordAuditEvent({
+          actorUserId: req.user.id,
+          actorRole: req.user.role,
+          action: 'auth.super_admin_bypass',
+          resourceType: 'route',
+          resourceId: `${req.method} ${req.baseUrl}${req.route?.path || req.path}`,
+          ipAddress: actorIp(req),
+          meta: { requiredRoles: allowedRoles },
+        });
+      }
       return next();
     }
 

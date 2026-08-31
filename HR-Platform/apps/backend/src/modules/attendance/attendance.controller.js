@@ -1,5 +1,5 @@
 import * as attendanceService from './attendance.service.js';
-import { successResponse, errorResponse } from '../../shared/utils/response.js';
+import { successResponse, errorResponse, safeErrorMessage } from '../../shared/utils/response.js';
 import { HTTP_STATUS } from '../../config/constants.js';
 
 /**
@@ -20,7 +20,7 @@ export async function getAttendance(req, res) {
     console.error('Get attendance error:', error);
     return errorResponse(
       res,
-      error.message || 'Davomat yozuvlarini olishda xatolik',
+      safeErrorMessage(error, 'Davomat yozuvlarini olishda xatolik'),
       error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR
     );
   }
@@ -48,7 +48,7 @@ export async function getAttendanceReport(req, res) {
     console.error('Get attendance report error:', error);
     return errorResponse(
       res,
-      error.message || 'Hisobotni tayyorlashda xatolik',
+      safeErrorMessage(error, 'Hisobotni tayyorlashda xatolik'),
       error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR
     );
   }
@@ -67,7 +67,7 @@ export async function getDepartmentSummary(req, res) {
     console.error('Get department attendance summary error:', error);
     return errorResponse(
       res,
-      error.message || "Bo'limlar bo'yicha davomatni olishda xatolik",
+      safeErrorMessage(error, "Bo'limlar bo'yicha davomatni olishda xatolik"),
       error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR
     );
   }
@@ -93,7 +93,7 @@ export async function createAttendance(req, res) {
     console.error('Create attendance error:', error);
     return errorResponse(
       res,
-      error.message || 'Davomat yozuvini qo\'shishda xatolik',
+      safeErrorMessage(error, 'Davomat yozuvini qo\'shishda xatolik'),
       error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR
     );
   }
@@ -112,7 +112,7 @@ export async function deleteAttendance(req, res) {
     console.error('Delete attendance error:', error);
     return errorResponse(
       res,
-      error.message || 'Davomat yozuvini o\'chirishda xatolik',
+      safeErrorMessage(error, 'Davomat yozuvini o\'chirishda xatolik'),
       error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR
     );
   }

@@ -1,5 +1,5 @@
 import * as schedulesService from './schedules.service.js';
-import { successResponse, errorResponse } from '../../shared/utils/response.js';
+import { successResponse, errorResponse, safeErrorMessage } from '../../shared/utils/response.js';
 import { HTTP_STATUS } from '../../config/constants.js';
 
 /**
@@ -12,7 +12,7 @@ export async function getSchedules(req, res) {
     return successResponse(res, schedules, 'Jadvallar olindi');
   } catch (error) {
     console.error('Get schedules error:', error);
-    return errorResponse(res, error.message || 'Jadvallarni olishda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return errorResponse(res, safeErrorMessage(error, 'Jadvallarni olishda xatolik'), error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }
 
@@ -22,7 +22,7 @@ export async function getScheduleById(req, res) {
     return successResponse(res, schedule, 'Jadval olindi');
   } catch (error) {
     console.error('Get schedule error:', error);
-    return errorResponse(res, error.message || 'Jadvalni olishda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return errorResponse(res, safeErrorMessage(error, 'Jadvalni olishda xatolik'), error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }
 
@@ -32,7 +32,7 @@ export async function createSchedule(req, res) {
     return successResponse(res, schedule, "Yangi jadval qo'shildi", HTTP_STATUS.CREATED);
   } catch (error) {
     console.error('Create schedule error:', error);
-    return errorResponse(res, error.message || 'Jadval yaratishda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return errorResponse(res, safeErrorMessage(error, 'Jadval yaratishda xatolik'), error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }
 
@@ -42,7 +42,7 @@ export async function updateSchedule(req, res) {
     return successResponse(res, schedule, 'Jadval yangilandi');
   } catch (error) {
     console.error('Update schedule error:', error);
-    return errorResponse(res, error.message || 'Jadvalni yangilashda xatolik', error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return errorResponse(res, safeErrorMessage(error, 'Jadvalni yangilashda xatolik'), error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }
 
@@ -52,7 +52,7 @@ export async function setEmployeeSchedule(req, res) {
     return successResponse(res, schedule, 'Xodimning jadvali yangilandi');
   } catch (error) {
     console.error('Set employee schedule error:', error);
-    return errorResponse(res, error.message || "Xodimga jadval biriktirishda xatolik", error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return errorResponse(res, safeErrorMessage(error, "Xodimga jadval biriktirishda xatolik"), error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }
 
@@ -62,6 +62,6 @@ export async function deleteSchedule(req, res) {
     return successResponse(res, result, "Jadval o'chirildi");
   } catch (error) {
     console.error('Delete schedule error:', error);
-    return errorResponse(res, error.message || "Jadvalni o'chirishda xatolik", error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return errorResponse(res, safeErrorMessage(error, "Jadvalni o'chirishda xatolik"), error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }

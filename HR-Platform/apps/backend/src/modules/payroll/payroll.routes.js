@@ -21,7 +21,8 @@ const listPaymentsQuerySchema = Joi.object({
 
 const createPaymentSchema = Joi.object({
   employeeId: commonSchemas.uuid,
-  amount: Joi.number().positive().required(),
+  // XAVFSIZLIK-AUDIT.md (6-pass, F5): DB ustuni numeric(12,2) bilan mos.
+  amount: Joi.number().positive().max(9999999999.99).required().messages({ 'number.max': "Summa juda katta (DB chegarasi: 9 999 999 999.99)" }),
   month: Joi.number().integer().min(1).max(12).required(),
   year: Joi.number().integer().min(2000).max(2100).required(),
   note: Joi.string().max(500).allow('', null),

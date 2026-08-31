@@ -366,9 +366,29 @@ async function seedFines(hrId) {
   }, hrId);
 }
 
+// XAVFSIZLIK-AUDIT.md P-1: this script's very first step TRUNCATEs every
+// business table, unconditionally, with no confirmation prompt — the
+// existing doc comment above already warns never to point it at
+// production, but nothing in the code actually enforced that. A `pnpm
+// seed:demo` run against the wrong DATABASE_URL (wrong terminal tab, wrong
+// .env loaded, copy-pasted onto the wrong host) would silently and
+// irreversibly wipe production. Requires an explicit, easy-to-grep opt-in
+// whenever NODE_ENV=production, rather than trusting every future
+// operator to have read the comment.
+function assertNotAccidentallyProduction() {
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_DEMO_SEED !== 'yes-i-am-sure') {
+    throw new Error(
+      "seed:demo NODE_ENV=production'da bloklandi (bu skript BARCHA biznes jadvallarini TRUNCATE qiladi). " +
+      "Bu haqiqatan demo baza ekanligiga 100% ishonchingiz komil bo'lsa, " +
+      "ALLOW_DEMO_SEED=yes-i-am-sure bilan qayta ishga tushiring."
+    );
+  }
+}
+
 async function main() {
   console.log("🌱 Demo ma'lumotlari to'ldirilmoqda...\n");
   try {
+    assertNotAccidentallyProduction();
     await testConnection();
     await wipeDemoData();
 
