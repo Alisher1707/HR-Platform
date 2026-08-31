@@ -32,6 +32,7 @@ import {
   Undo2,
 } from 'lucide-react';
 import onboardingService from '../../services/onboardingService';
+import { withAuthToken } from '../../services/api';
 import employeeService from '../../services/employeeService';
 import departmentService from '../../services/departmentService';
 import { useAuthStore } from '../../store/authStore';
@@ -1583,7 +1584,11 @@ export function OnboardingPage() {
                                 </a>
                               )}
                               {completion.submissionType === 'file' && (
-                                <a href={onboardingService.getDocumentUrl(completion.submissionFileUrl)} target="_blank" rel="noreferrer">
+                                /* XAVFSIZLIK-AUDIT.md O-1: submission files now require proof of a
+                                   live session/link (see app.js) — HR's own staff access token is
+                                   attached here the same way every other authenticated file link in
+                                   this app already does it (withAuthToken, api.js). */
+                                <a href={withAuthToken(onboardingService.getDocumentUrl(completion.submissionFileUrl))} target="_blank" rel="noreferrer">
                                   <FileText size={13} strokeWidth={2.25} /> {completion.submissionFileName || 'Fayl'}
                                 </a>
                               )}

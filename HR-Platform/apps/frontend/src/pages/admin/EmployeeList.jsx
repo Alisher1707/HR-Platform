@@ -106,11 +106,19 @@ export function EmployeeList() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Haqiqatan ham ushbu xodim ma\'lumotlarini o\'chirmoqchimisiz? Bu nomzod arizasini ham o\'chirib tashlaydi.')) return;
-    
+    if (!window.confirm(
+      "Haqiqatan ham ushbu xodimni ro'yxatdan olib tashlamoqchimisiz?\n\n"
+      + "Agar xodimning jarima, maosh to'lovi yoki davomat tarixi bo'lsa, u ARXIVLANADI — "
+      + "ro'yxatdan yo'qoladi, lekin barcha tarixi hisobotlarda saqlanib qoladi. "
+      + "Tarixi umuman bo'lmasa (masalan xato kiritilgan nomzod), yozuv butunlay o'chiriladi."
+    )) return;
+
     try {
-      await employeeService.deleteEmployee(id);
-      toast.success('Xodim ma\'lumotlari muvaffaqiyatli o\'chirildi');
+      // Backend arxivlash va haqiqiy o'chirishni o'zi hal qiladi
+      // (employees.service.js#deleteEmployee) — qaysi biri bo'lganini
+      // faqat u biladi, shuning uchun xabar ham o'shandan olinadi.
+      const res = await employeeService.deleteEmployee(id);
+      toast.success(res?.message || 'Xodim ro\'yxatdan olib tashlandi');
       fetchEmployees(pagination.page, search);
     } catch (err) {
       toast.error('Xodimni o\'chirishda xatolik yuz berdi');

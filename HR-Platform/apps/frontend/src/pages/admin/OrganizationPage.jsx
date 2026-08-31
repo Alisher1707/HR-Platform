@@ -660,8 +660,10 @@ export function OrganizationPage() {
 
   const handleDelete = async (id) => {
     try {
-      await employeeService.deleteEmployee(id);
-      toast.success("Xodim ma'lumotlari muvaffaqiyatli o'chirildi");
+      // Backend arxivlash yoki haqiqiy o'chirishni o'zi tanlaydi (tarixi
+      // bor xodim arxivlanadi) — xabarni o'shandan olamiz.
+      const res = await employeeService.deleteEmployee(id);
+      toast.success(res?.message || "Xodim ro'yxatdan olib tashlandi");
       fetchEmployees();
     } catch (err) {
       toast.error("Xodimni o'chirishda xatolik yuz berdi");
@@ -1190,6 +1192,30 @@ export function OrganizationPage() {
           </Button>
         }
       >
+        {/*
+          XAVFSIZLIK-AUDIT.md (2-pass, Geolocation #5): bu butun forma —
+          filial nomi, manzil, geofence (lat/lng/radius) — hozircha faqat
+          shu sahifaning local state'ida yashaydi (setBranches), hech
+          qanday backend'ga saqlanmaydi va davomat tekshiruvida hech
+          qayerda ishlatilmaydi. "Saqlash" bosilgach sahifa yangilansa
+          hammasi yo'qoladi. To'liq backend (branches jadvali + CRUD +
+          attendance'ga bog'lash) alohida, kattaroq funksiya — bu audit
+          topilmasi doirasida qurilmadi; hozircha faqat foydalanuvchini
+          chalg'itmaslik uchun ogohlantirish qo'shildi.
+        */}
+        <p className="org-map-unsaved-note" style={{
+          fontSize: '0.82rem',
+          color: 'var(--warning, #b45309)',
+          background: 'var(--warning-soft, #fdf3e3)',
+          border: '1px solid var(--warning-line, #f0d3ac)',
+          borderRadius: '8px',
+          padding: '0.6rem 0.85rem',
+          marginBottom: '1.2rem',
+          lineHeight: 1.5,
+        }}>
+          ⚠️ Diqqat: bu filial ma'lumotlari (jumladan geofence) hozircha faqat shu sahifada, vaqtincha
+          saqlanadi — backend'ga yozilmaydi va davomatni tekshirishda ishlatilmaydi. Sahifa yangilansa yo'qoladi.
+        </p>
         <Input
           label="Filial nomi"
           name="branchName"

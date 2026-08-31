@@ -298,7 +298,7 @@ export function OnboardingPublicPage() {
                 )}
                 {existingCompletion.submissionType === 'file' && (
                   <a
-                    href={onboardingService.getDocumentUrl(existingCompletion.submissionFileUrl)}
+                    href={onboardingService.getDocumentUrl(existingCompletion.submissionFileUrl, token)}
                     target="_blank"
                     rel="noreferrer"
                     className="onboarding-public-doc"

@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="same-origin">
 <title>EJM - Xodim bilan ishlash jarayoni (Tahrirlash imkoniyati bilan)</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <style>
@@ -190,16 +191,19 @@ function getUserRole() {
   const params = new URLSearchParams(window.location.search);
   const employeeId = params.get('employeeId');
   const employeeName = params.get('employeeName');
-  const token = params.get('token');
 
+  // XAVFSIZLIK-AUDIT.md Y-3(b): a `?token=` in the URL used to be written
+  // straight into localStorage.accessToken — meaning a link crafted by an
+  // attacker (`ejm.html?...&token=<attackers-own-valid-token>`) could
+  // silently plant THEIR session in a victim's browser (session
+  // fixation): anything the victim then entered/uploaded here would be
+  // attributed to the attacker's account, not the victim's own. This page
+  // is same-origin with the React SPA and already reads accessToken from
+  // localStorage on its own — there is no legitimate reason to accept one
+  // from the URL at all.
   if (employeeId) {
     currentEmployeeId = employeeId;
     currentEmployeeName = employeeName || '';
-
-    // Store token in localStorage if provided via URL
-    if (token) {
-      localStorage.setItem('accessToken', token);
-    }
 
     console.log('Employee context from URL params:', {
       employeeId: currentEmployeeId,
@@ -209,7 +213,7 @@ function getUserRole() {
     // Update header with employee name
     const header = document.querySelector('header h1');
     if (header && currentEmployeeName) {
-      header.innerHTML = `👥 EJM - ${currentEmployeeName} (48 Bosqich)`;
+      header.textContent = `👥 EJM - ${currentEmployeeName} (48 Bosqich)`;
     }
 
     // Load employee-specific EJM data after DOM is ready
@@ -226,6 +230,14 @@ function getUserRole() {
 
 // Listen for employee context from parent window (React app iframe)
 window.addEventListener('message', function(event) {
+  // XAVFSIZLIK-AUDIT.md Y-4: origin was never checked — this page was
+  // (until this fix) also embeddable in an iframe on ANY external site
+  // (nginx explicitly omitted X-Frame-Options for it), which could then
+  // postMessage a crafted employeeName straight into innerHTML. The SPA's
+  // own iframe is always same-origin, so this is not a functional
+  // restriction for the real caller — only for a forged message from
+  // elsewhere.
+  if (event.origin !== window.location.origin) return;
   if (event.data.type === 'EMPLOYEE_CONTEXT') {
     currentEmployeeId = event.data.employeeId;
     currentEmployeeName = event.data.employeeName || '';
@@ -237,7 +249,7 @@ window.addEventListener('message', function(event) {
     // Update header with employee name
     const header = document.querySelector('header h1');
     if (header && currentEmployeeName) {
-      header.innerHTML = `👥 EJM - ${currentEmployeeName} (48 Bosqich)`;
+      header.textContent = `👥 EJM - ${currentEmployeeName} (48 Bosqich)`;
     }
 
     // Load employee-specific EJM data and files
@@ -461,7 +473,21 @@ function render() {
 
     const titleDiv = document.createElement('div');
     titleDiv.className = 'phase-header-title';
-    titleDiv.innerHTML = `<span id="arr-${phase.id}">▼</span> <span>${phase.label}</span>`;
+    // XAVFSIZLIK-AUDIT.md (3-pass qayta-audit, #14): bu yagona qolgan
+    // interpolatsiyali innerHTML edi. Hozir `data` — qattiq kodlangan
+    // const va serverga hech qachon saqlanmaydi, ya'ni bu faqat self-XSS
+    // (foydalanuvchi o'z prompt'iga o'zi yozadi) — haqiqiy zaiflik emas.
+    // Lekin backend'da POST /api/v1/ejm saqlash endpoint'i ALLAQACHON
+    // mavjud: kimdir uni bosqichlarni saqlashga ulasa, bu qator o'sha
+    // zahoti saqlanadigan, HR'dan HR'ga o'tadigan XSS'ga aylanardi.
+    // Y-5 tuzatishida qolgan barcha joy DOM+textContent'ga o'tkazilgan
+    // edi — bu bittasi o'tkazib yuborilgan.
+    const arrowSpan = document.createElement('span');
+    arrowSpan.id = 'arr-' + phase.id;
+    arrowSpan.textContent = '▼';
+    const labelSpan = document.createElement('span');
+    labelSpan.textContent = phase.label;
+    titleDiv.append(arrowSpan, document.createTextNode(' '), labelSpan);
     titleDiv.onclick = () => togglePhase(phase.id);
 
     header.appendChild(titleDiv);
@@ -506,22 +532,53 @@ function renderNode(node, pi, ni, branchIndex) {
 
   const el = document.createElement('div');
   el.className = 'node ' + node.type;
-  let html = `<div class="label">${node.label}</div>`;
-  if (node.sub) html += `<div class="sub">${node.sub}</div>`;
-  if (node.issue) html += `<div class="issue">${node.issue}</div>`;
-  if (node.fix) html += `<div class="fix">${node.fix}</div>`;
+
+  // XAVFSIZLIK-AUDIT.md Y-5: node.label/sub/issue/fix (edited by any HR
+  // user) and file.name (an UPLOADED FILE'S NAME — fully attacker-chosen,
+  // e.g. `"><img src=x onerror=alert(1)>.pdf`, never sanitized server-side)
+  // used to be concatenated straight into an HTML string and assigned via
+  // innerHTML — a stored-XSS payload in either one would execute in the
+  // browser of every admin who opens the EJM page. Built as real DOM nodes
+  // with textContent instead, so nothing here is ever parsed as markup.
+  const labelDiv = document.createElement('div');
+  labelDiv.className = 'label';
+  labelDiv.textContent = node.label;
+  el.appendChild(labelDiv);
+
+  if (node.sub) {
+    const subDiv = document.createElement('div');
+    subDiv.className = 'sub';
+    subDiv.textContent = node.sub;
+    el.appendChild(subDiv);
+  }
+  if (node.issue) {
+    const issueDiv = document.createElement('div');
+    issueDiv.className = 'issue';
+    issueDiv.textContent = node.issue;
+    el.appendChild(issueDiv);
+  }
+  if (node.fix) {
+    const fixDiv = document.createElement('div');
+    fixDiv.className = 'fix';
+    fixDiv.textContent = node.fix;
+    el.appendChild(fixDiv);
+  }
 
   // Fayllarni ko'rsatish
   if (node.files && node.files.length > 0) {
-    html += '<div class="node-files">';
+    const filesDiv = document.createElement('div');
+    filesDiv.className = 'node-files';
     node.files.forEach((file, fi) => {
       const icon = getFileIcon(file.name);
-      html += `<span class="node-file-badge" onclick="downloadFile(${pi}, ${ni}, ${fi})" title="${file.name} (${file.size})">${icon} ${truncateFileName(file.name, 15)}</span>`;
+      const badge = document.createElement('span');
+      badge.className = 'node-file-badge';
+      badge.onclick = () => downloadFile(pi, ni, fi);
+      badge.title = `${file.name} (${file.size})`;
+      badge.textContent = `${icon} ${truncateFileName(file.name, 15)}`;
+      filesDiv.appendChild(badge);
     });
-    html += '</div>';
+    el.appendChild(filesDiv);
   }
-
-  el.innerHTML = html;
 
   // Fayl yuklash tugmasi va input (to'g'ridan fayl tanlash)
   const uploadWrapper = document.createElement('div');
@@ -829,23 +886,48 @@ async function handleFileSelect(e) {
 
 function renderModalFiles() {
   const container = document.getElementById('mFilesList');
+  container.innerHTML = '';
+
   if (tempFiles.length === 0) {
-    container.innerHTML = '<div style="font-size:10px;color:#999;padding:4px 0;">Hali fayl yuklanmagan</div>';
+    const empty = document.createElement('div');
+    empty.style.cssText = 'font-size:10px;color:#999;padding:4px 0;';
+    empty.textContent = 'Hali fayl yuklanmagan';
+    container.appendChild(empty);
     return;
   }
 
   const canDeleteFiles = getUserRole() !== 'HR';
 
-  container.innerHTML = tempFiles.map((file, i) => {
+  // XAVFSIZLIK-AUDIT.md Y-5 — same reasoning as renderNode: file.name is
+  // the uploaded file's original filename, entirely attacker-controlled,
+  // and used to be interpolated straight into an HTML string.
+  tempFiles.forEach((file, i) => {
     const icon = getFileIcon(file.name);
-    return `
-      <div class="file-item">
-        <span class="file-item-name" style="cursor:pointer; color:#0d47a1; text-decoration:underline;" onclick="downloadModalFile(${i})">${icon} ${file.name}</span>
-        <span class="file-item-size">${file.size}</span>
-        ${canDeleteFiles ? `<button class="file-item-del" onclick="removeModalFile(${i})">✕</button>` : ''}
-      </div>
-    `;
-  }).join('');
+    const item = document.createElement('div');
+    item.className = 'file-item';
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'file-item-name';
+    nameSpan.style.cssText = 'cursor:pointer; color:#0d47a1; text-decoration:underline;';
+    nameSpan.onclick = () => downloadModalFile(i);
+    nameSpan.textContent = `${icon} ${file.name}`;
+    item.appendChild(nameSpan);
+
+    const sizeSpan = document.createElement('span');
+    sizeSpan.className = 'file-item-size';
+    sizeSpan.textContent = file.size;
+    item.appendChild(sizeSpan);
+
+    if (canDeleteFiles) {
+      const delBtn = document.createElement('button');
+      delBtn.className = 'file-item-del';
+      delBtn.textContent = '✕';
+      delBtn.onclick = () => removeModalFile(i);
+      item.appendChild(delBtn);
+    }
+
+    container.appendChild(item);
+  });
 }
 
 function downloadModalFile(index) {

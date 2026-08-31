@@ -6,6 +6,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="HR Platform - Recruiting Management System with Kanban Board" />
     <meta name="theme-color" content="#4f46e5" />
+    <!-- XAVFSIZLIK-AUDIT.md Y-8: several file URLs carry ?token=... (see
+         app.js#authenticateFromQuery). Without this, navigating away to an
+         external site from a page that had such a URL open could leak the
+         full URL — token included — in that site's Referer header. -->
+    <meta name="referrer" content="same-origin" />
     <title>HR Platform - Recruiting System</title>
     <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />

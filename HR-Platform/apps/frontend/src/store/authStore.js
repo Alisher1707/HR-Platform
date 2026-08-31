@@ -12,7 +12,11 @@ export const useAuthStore = create(
     (set, get) => ({
       user: null,
       isAuthenticated: false,
-      isLoading: false,
+      // Starts true (not false) so the very first render never briefly
+      // trusts stale/persisted auth state before loadUser()'s real
+      // /auth/me response lands — see the `partialize` comment below for
+      // the full XAVFSIZLIK-AUDIT.md O-11 reasoning this pairs with.
+      isLoading: true,
       error: null,
 
       /**
@@ -101,10 +105,19 @@ export const useAuthStore = create(
     }),
     {
       name: 'auth-storage',
-      partialize: (state) => ({
-        user: state.user,
-        isAuthenticated: state.isAuthenticated,
-      }),
+      // XAVFSIZLIK-AUDIT.md O-11: `user` (role included) and
+      // `isAuthenticated` used to be persisted straight into localStorage
+      // — editable in DevTools (`role: "SUPER_ADMIN"`) with zero
+      // protection beyond every backend route consistently remembering to
+      // call authorize() (which they do today, but that's an invariant to
+      // maintain forever across every future route, not a guarantee).
+      // Nothing is persisted now: every load goes through loadUser()'s
+      // real /auth/me response instead (see AppRouter.jsx's useEffect +
+      // the isLoading default above, which together ensure nothing ever
+      // renders off stale/tampered state first). The backend was always
+      // the actual authority — this only removes a client-side surface
+      // that never needed to exist.
+      partialize: () => ({}),
     }
   )
 );

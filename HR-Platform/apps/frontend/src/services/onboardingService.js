@@ -91,9 +91,18 @@ export const onboardingService = {
     return response.data.data;
   },
 
-  getDocumentUrl(documentUrl) {
+  // `assignmentToken` is only needed (and only used server-side) for
+  // /uploads/onboarding/submissions/* — the employee's own uploaded files,
+  // which now require proving the onboarding link is still live
+  // (XAVFSIZLIK-AUDIT.md O-1). Task reference documents stay public and
+  // ignore the param.
+  getDocumentUrl(documentUrl, assignmentToken) {
     if (!documentUrl) return null;
-    return documentUrl.startsWith('http') ? documentUrl : `${API_ORIGIN}${documentUrl}`;
+    const full = documentUrl.startsWith('http') ? documentUrl : `${API_ORIGIN}${documentUrl}`;
+    if (assignmentToken && documentUrl.includes('/uploads/onboarding/submissions/')) {
+      return `${full}?assignmentToken=${encodeURIComponent(assignmentToken)}`;
+    }
+    return full;
   },
 };
 
