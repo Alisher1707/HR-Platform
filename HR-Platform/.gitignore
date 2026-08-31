@@ -56,3 +56,7 @@ apps/backend/uploads/
 # XAVFSIZLIK-AUDIT.md P-2: stray backup of an old, unpatched service file
 # left tracked in git.
 **/*.service.js.bak
+
+# Deploy runbook zaxiralari — DB dump va yangi generatsiya qilingan sirlarni
+# saqlaydi (deploy-production.sh yaratadi). Hech qachon commit qilinmasin.
+.deploy-backups/
