@@ -8,6 +8,7 @@ import { checkLateArrivalFine } from '../../services/autoFineService.js';
 import { generateRandomString } from '../../shared/utils/crypto.js';
 import { businessDayStart } from '../../shared/utils/timezone.js';
 import { randomFilename } from '../../shared/utils/safeUpload.js';
+import { recordAuditEvent, actorIp } from '../../services/auditLogService.js';
 
 // Only image mimetypes a Hikvision snapshot can legitimately be — the saved
 // extension is derived from this map, never from the client-supplied
@@ -557,7 +558,13 @@ export async function receiveDeviceEvent(req, res) {
     if (driftMs > DEVICE_CLOCK_DRIFT_WARNING_MS) {
       console.warn(
         `⚠️  DIQQAT: Qurilma soati serverdan ${Math.round(driftMs / 60000)} daqiqaga farq qilyapti ` +
-        `(token: ${deviceToken}) — kameraning soati/vaqt zonasi tekshirilishi tavsiya etiladi.`
+        // XAVFSIZLIK-AUDIT.md (4-pass, Z-4): bu yerda token TO'LIQ chop
+        // etilardi — holbuki shu funksiyaning yuqorisidagi izoh (maskedToken
+        // ta'rifiga qarang) buni aynan taqiqlaydi: token — bearer hisob
+        // ma'lumoti, uni maskalamasdan log qilish oshkoralikni loglarni
+        // yig'adigan har bir tizimga va zaxiraga ko'chiradi. Soat siljishi
+        // esa kamdan-kam emas — bu ogohlantirish muntazam chiqadi.
+        `(token: ${maskedToken}) — kameraning soati/vaqt zonasi tekshirilishi tavsiya etiladi.`
       );
     }
   }
@@ -639,6 +646,32 @@ export async function getTerminals(req, res) {
        SELECT * FROM unregistered
        ORDER BY last_seen DESC NULLS LAST`
     );
+
+    // XAVFSIZLIK-AUDIT.md (4-pass, Z-3): bu javob TIRIK qurilma
+    // tokenlarini o'z ichiga oladi. Token — bearer hisob ma'lumoti: kim
+    // uni bilsa, /api/v1/devices/:token/events ga istalgan xodim uchun,
+    // 30 kungacha orqaga sanalgan davomat yozishi mumkin, va bu yozuv
+    // haqiqiy kamera skanidan farq qilmaydi hamda HECH KIMGA bog'lanmaydi
+    // (qo'lda kiritilgan davomatda `created_by` bor, qurilmanikida yo'q).
+    //
+    // Tokenni maskalash BU YERDA to'g'ri yechim emas: HR uni kamerani
+    // sozlash uchun nusxa oladi (frontend'dagi "nusxalash" tugmasi) va
+    // ro'yxatdan o'tmagan qurilmani o'chirish ham aynan shu qiymatga
+    // tayanadi — ya'ni to'liq token mahsulotning haqiqiy ehtiyoji.
+    //
+    // Shuning uchun teshik oshkoralik tomonidan emas, KUZATUV tomonidan
+    // yopiladi: tokenlarni kim, qachon, qaysi IP'dan o'qigani qayd
+    // etiladi. Soxta davomat paydo bo'lsa, endi uni kim yoza olgani
+    // aniqlanadigan bo'ladi.
+    recordAuditEvent({
+      actorUserId: req.user?.id,
+      actorRole: req.user?.role,
+      action: 'device.tokens_read',
+      resourceType: 'device_terminals',
+      resourceId: null,
+      ipAddress: actorIp(req),
+      meta: { terminalCount: result.rows.length },
+    });
 
     const now = Date.now();
     const terminals = result.rows.map((row) => ({

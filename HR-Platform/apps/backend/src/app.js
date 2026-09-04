@@ -9,6 +9,7 @@ import { testConnection, query } from './config/database.js';
 import { generalLimiter } from './shared/middleware/rateLimiter.js';
 import { errorHandler, notFoundHandler } from './shared/middleware/errorHandler.js';
 import { serveUploadedFile } from './shared/middleware/serveUploads.js';
+import { cleanupOrphanedUploads } from './shared/middleware/upload.js';
 import { authenticateFromQuery, authorize } from './modules/auth/auth.middleware.js';
 import { USER_ROLES } from './config/constants.js';
 import { startAutoPromotionCron } from './services/autoPromotionService.js';
@@ -101,6 +102,18 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' })); // Parse URL-enco
  * Cookie Parser Middleware
  */
 app.use(cookieParser());
+
+/**
+ * XAVFSIZLIK-AUDIT.md (4-pass, T-1): multer faylni marshrutning boshida,
+ * validatsiyadan OLDIN diskka yozadi — so'rov keyinroq rad etilsa
+ * (Joi 422, ruxsat 403, ...) fayl hech kim o'chirmaydigan yetim bo'lib
+ * qolardi. Bu middleware har qanday yuklash marshrutidan keyin, javob
+ * xato bilan tugagan bo'lsa, saqlangan faylni o'chiradi. Barcha
+ * marshrutlardan OLDIN o'rnatiladi, chunki u ishini `res.on('finish')`
+ * orqali, ya'ni javob yakunlangandan keyin bajaradi.
+ * Batafsil izoh: shared/middleware/upload.js#cleanupOrphanedUploads
+ */
+app.use(cleanupOrphanedUploads);
 
 /**
  * Uploaded Files

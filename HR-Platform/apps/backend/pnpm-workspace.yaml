@@ -1,0 +1,22 @@
+# XAVFSIZLIK-AUDIT.md (4-pass, T-2)
+#
+# `qs` — Express'ning so'rov satri (query string) parseri. U body-parser
+# orqali HAR BIR HTTP so'rovda, autentifikatsiyadan OLDIN ishlaydi, ya'ni
+# to'liq tashqi, hisob ma'lumotisiz hujum yuzasida turadi.
+#
+# express@4.22.2 (bu paketning eng yangi 4.x versiyasi) hamon zaif
+# oraliqdagi qs'ni tortadi:
+#   GHSA-4mjr-xmp4-gh2g — hujumchi nazoratidagi `isBuffer` orqali DoS
+#   GHSA-x5fp-wj9c-mxmx — qavsli kalitlarda massiv chegarasini chetlab o'tish
+# Zaif oraliq: qs 2.2.5 – 6.15.3. Tuzatilgani: 6.16.0.
+#
+# Express o'zi yangilanmagani uchun yagona yo'l — bog'liqlikni majburan
+# tuzatilgan versiyaga ko'tarish. `overrides` ilgari package.json ichida
+# bo'lardi; pnpm 10+ dan boshlab u shu faylga ko'chdi (pnpm v12 esa
+# package.json'dagisini butunlay e'tiborsiz qoldiradi — ogohlantirish
+# beradi va davom etadi, ya'ni xato SEZILMASDAN o'tib ketishi mumkin edi).
+#
+# Express 4.x zaif bo'lmagan qs bilan chiqqanda bu override'ni olib
+# tashlash mumkin — lekin uni qoldirish ham zarar qilmaydi.
+overrides:
+  qs: ^6.16.0

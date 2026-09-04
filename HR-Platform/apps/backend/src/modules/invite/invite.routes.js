@@ -4,7 +4,7 @@ import * as inviteController from './invite.controller.js';
 import { authenticate, authorize } from '../auth/auth.middleware.js';
 import { validate, validateParams, validateQuery, commonSchemas } from '../../shared/middleware/validate.js';
 import { uploadResume, handleMulterError } from '../../shared/middleware/upload.js';
-import { inviteLimiter } from '../../shared/middleware/rateLimiter.js';
+import { inviteLimiter, applyLimiter } from '../../shared/middleware/rateLimiter.js';
 import { USER_ROLES } from '../../config/constants.js';
 
 const router = express.Router();
@@ -48,8 +48,19 @@ const applyInviteSchema = Joi.object({
  */
 
 // POST /api/v1/invites/apply - Candidate application (public, multipart: resume file)
+//
+// XAVFSIZLIK-AUDIT.md (4-pass, T-1): `applyLimiter` multer'dan OLDIN
+// turishi shart. Aks holda cheklovga yetib borilganda ham fayl allaqachon
+// diskka yozilgan bo'lardi — ya'ni limiter diskni to'ldirishdan
+// saqlamasdi, faqat bazaga yozishni to'xtatardi. Endi 429 qaytganda hech
+// narsa o'qilmaydi va saqlanmaydi.
+//
+// Ikkinchi himoya qatlami — app.js dagi `cleanupOrphanedUploads`: quyidagi
+// `validate` so'rovni rad etsa (422), servisning o'z tozalash kodiga
+// yetib borilmaydi, shuning uchun faylni o'sha middleware o'chiradi.
 router.post(
   '/apply',
+  applyLimiter,
   uploadResume,
   handleMulterError,
   validate(applyInviteSchema),

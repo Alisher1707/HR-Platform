@@ -123,6 +123,37 @@ export const inviteLimiter = rateLimit({
 });
 
 /**
+ * Nomzod arizasi limiteri (10 so'rov/soat har bir IP uchun).
+ *
+ * XAVFSIZLIK-AUDIT.md (4-pass, T-1/T-3): bu marshrutda umuman alohida
+ * cheklov yo'q edi — faqat generalLimiter (600/15 daqiqa). Har bir so'rov
+ * 10 MB gacha rezyume faylini diskka yozadi va muvaffaqiyatli bo'lsa
+ * ikkita doimiy qator (employees + applications) yaratadi. 600 x 10 MB =
+ * bitta IP'dan 15 daqiqada ~6 GB.
+ *
+ * Aynan shu mulohaza pastdagi onboardingSubmitLimiter izohida allaqachon
+ * yozilgan edi ("umumiy limiterning yuqori chegarasi diskni to'ldirishdan
+ * saqlaydigan yagona narsa edi"), lekin bu marshrutga qo'llanmagandi —
+ * holbuki taklifnoma havolasi ATAYLAB ommaviy e'lon qilinadi (ish
+ * e'lonlari, Telegram kanallari), onboarding havolasi esa bitta odamga
+ * yuboriladi. Ya'ni bu yerda xavf kattaroq, cheklov esa yo'q edi.
+ *
+ * 10/soat haqiqiy nomzod uchun mo'l-ko'l: odam bitta arizani bir marta
+ * topshiradi, bir necha marta emas.
+ */
+export const applyLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 soat
+  max: 10,
+  message: {
+    success: false,
+    message: 'Juda ko\'p ariza yuborildi. Iltimos, birozdan so\'ng qayta urinib ko\'ring.',
+  },
+  skip: () => process.env.NODE_ENV === 'development',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
  * Onboarding public-submission limiter (30 requests per hour per IP).
  * This route needs its own, tighter limiter — unlike the rest of the
  * onboarding API it takes no auth token at all (an employee reaches it via

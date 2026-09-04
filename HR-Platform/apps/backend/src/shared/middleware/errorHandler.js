@@ -97,9 +97,16 @@ export function errorHandler(err, req, res, next) {
  * Handles 404 errors for undefined routes
  */
 export function notFoundHandler(req, res) {
+  // XAVFSIZLIK-AUDIT.md (4-pass, qattiqlashtirish): javob ilgari
+  // `req.originalUrl` ni, ya'ni chaqiruvchi yuborgan xom matnni qaytarardi.
+  // JSON + `nosniff` (helmet) tufayli bu brauzerda bajarilmaydi, shuning
+  // uchun haqiqiy XSS emas edi — lekin foydalanuvchi kiritgan matnni
+  // javobga qaytarish uchun hech qanday sabab ham yo'q. Yo'lning o'zi
+  // server logida (errorHandler#logPayload) qoladi, ya'ni nosozlikni
+  // aniqlash imkoniyati yo'qolmaydi.
   res.status(HTTP_STATUS.NOT_FOUND).json({
     success: false,
-    message: `Route ${req.method} ${req.originalUrl} not found`,
+    message: 'Not found',
     timestamp: new Date().toISOString(),
   });
 }

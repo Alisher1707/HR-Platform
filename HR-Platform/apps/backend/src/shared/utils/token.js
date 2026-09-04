@@ -9,9 +9,21 @@ import { config } from '../../config/env.js';
 /**
  * Generate access token (short-lived)
  */
+/**
+ * XAVFSIZLIK-AUDIT.md (4-pass, qattiqlashtirish): imzo va tekshiruv
+ * algoritmi ochiq belgilanadi. jsonwebtoken@9 matnli kalit bilan
+ * o'zi ham faqat HMAC'ni qabul qiladi (ya'ni `alg:none` va RS256'ga
+ * almashtirish hujumlari allaqachon yopiq), lekin bu himoya kutubxona
+ * STANDARTIGA bog'liq. Uni ochiq yozib qo'yish himoyani versiya
+ * o'zgarishidan mustaqil qiladi — kutubxona standarti kelajakda
+ * o'zgarsa ham, bu yerda qabul qilinadigan algoritm o'zgarmaydi.
+ */
+const JWT_ALGORITHM = 'HS256';
+
 export function generateAccessToken(payload) {
   return jwt.sign(payload, config.jwt.accessSecret, {
     expiresIn: config.jwt.accessExpiresIn,
+    algorithm: JWT_ALGORITHM,
   });
 }
 
@@ -21,6 +33,7 @@ export function generateAccessToken(payload) {
 export function generateRefreshToken(payload) {
   return jwt.sign(payload, config.jwt.refreshSecret, {
     expiresIn: config.jwt.refreshExpiresIn,
+    algorithm: JWT_ALGORITHM,
   });
 }
 
@@ -29,7 +42,7 @@ export function generateRefreshToken(payload) {
  */
 export function verifyAccessToken(token) {
   try {
-    return jwt.verify(token, config.jwt.accessSecret);
+    return jwt.verify(token, config.jwt.accessSecret, { algorithms: [JWT_ALGORITHM] });
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
       throw new Error('Access token expired');
@@ -46,7 +59,7 @@ export function verifyAccessToken(token) {
  */
 export function verifyRefreshToken(token) {
   try {
-    return jwt.verify(token, config.jwt.refreshSecret);
+    return jwt.verify(token, config.jwt.refreshSecret, { algorithms: [JWT_ALGORITHM] });
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
       throw new Error('Refresh token expired');

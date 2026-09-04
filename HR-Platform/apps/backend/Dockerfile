@@ -11,7 +11,11 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 RUN npm install -g pnpm
-COPY package.json pnpm-lock.yaml ./
+# pnpm-workspace.yaml — bog'liqlik override'lari shu yerda (XAVFSIZLIK-AUDIT.md
+# 4-pass, T-2: `qs` majburan tuzatilgan versiyaga ko'tariladi). pnpm 10+ dan
+# beri overrides package.json'da EMAS, shu faylda o'qiladi — u nusxalanmasa,
+# build ogohlantirish ham bermasdan zaif versiyani o'rnatib qo'yardi.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 # Full (dev+prod) install here only — needed for nothing in this project
 # today (no build/compile step), kept as a stage so a future build step
 # (TypeScript, bundling, etc.) has somewhere to run without touching the
@@ -23,7 +27,11 @@ FROM node:20-alpine AS runtime
 WORKDIR /app
 RUN npm install -g pnpm
 
-COPY package.json pnpm-lock.yaml ./
+# pnpm-workspace.yaml — bog'liqlik override'lari shu yerda (XAVFSIZLIK-AUDIT.md
+# 4-pass, T-2: `qs` majburan tuzatilgan versiyaga ko'tariladi). pnpm 10+ dan
+# beri overrides package.json'da EMAS, shu faylda o'qiladi — u nusxalanmasa,
+# build ogohlantirish ham bermasdan zaif versiyani o'rnatib qo'yardi.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 # --prod: no devDependencies in the image that actually runs in production.
 RUN pnpm install --frozen-lockfile --prod
 

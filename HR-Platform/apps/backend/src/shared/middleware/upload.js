@@ -259,6 +259,61 @@ export const uploadFineFile = multer({
 }).single('file'); // Field name: 'file'
 
 // Error handler middleware
+/**
+ * XAVFSIZLIK-AUDIT.md (4-pass, T-1) — YETIM QOLGAN FAYLLARNI TOZALASH.
+ *
+ * Multer `diskStorage` bilan faylni marshrutning ENG BOSHIDA, hali hech
+ * qanday tekshiruvdan o'tmasdan diskka yozadi. Marshrut tartibi, masalan,
+ * /api/v1/invites/apply da shunday edi:
+ *
+ *   uploadResume -> handleMulterError -> validate(Joi) -> controller -> service
+ *
+ * Fayl 1-qadamda yoziladi. Agar 3-qadamdagi Joi so'rovni rad etsa (422),
+ * oqim servisgacha YETIB BORMAYDI — holbuki faylni o'chiradigan yagona
+ * kod (invite.service.js#submitApplication ning catch bloki) aynan o'sha
+ * servisning ichida. Natijada 10 MB fayl `uploads/resumes/` ichida
+ * abadiy qolardi, va bunga na haqiqiy taklifnoma tokeni, na to'g'ri forma
+ * ma'lumoti kerak edi — istalgan odam, internetdan, cheksiz.
+ *
+ * Bu middleware muammoni bitta marshrutda emas, BUTUN ILOVADA yopadi:
+ * javob yakunlanganda (`finish` — xato qaytarilgan holatlarni ham
+ * qamrab oladi) status >= 400 bo'lsa, shu so'rov davomida saqlangan har
+ * qanday faylni o'chiradi. Muvaffaqiyatli so'rovlarga tegmaydi.
+ *
+ * `res.on('finish')` ataylab tanlangan: u javob mijozga to'liq
+ * jo'natilgandan keyin ishlaydi, ya'ni tozalash hech qachon javobni
+ * kechiktirmaydi va xato bersa ham so'rovni buzmaydi.
+ */
+export function cleanupOrphanedUploads(req, res, next) {
+  res.on('finish', () => {
+    if (res.statusCode < 400) return;
+
+    // memoryStorage ishlatadigan marshrutlarda (devices) `path` bo'lmaydi —
+    // ular diskka hech narsa yozmaydi, shuning uchun o'tkazib yuboriladi.
+    const files = [];
+    if (req.file?.path) files.push(req.file.path);
+    if (Array.isArray(req.files)) {
+      for (const f of req.files) if (f?.path) files.push(f.path);
+    } else if (req.files && typeof req.files === 'object') {
+      for (const group of Object.values(req.files)) {
+        if (Array.isArray(group)) for (const f of group) if (f?.path) files.push(f.path);
+      }
+    }
+
+    for (const filePath of files) {
+      fs.unlink(filePath, (err) => {
+        // ENOENT — fayl allaqachon o'chirilgan (masalan servisning o'z
+        // catch bloki tomonidan). Bu kutilgan holat, xato emas.
+        if (err && err.code !== 'ENOENT') {
+          console.error('Yetim faylni o\'chirishda xatolik:', filePath, err.message);
+        }
+      });
+    }
+  });
+
+  next();
+}
+
 export function handleMulterError(err, req, res, next) {
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
