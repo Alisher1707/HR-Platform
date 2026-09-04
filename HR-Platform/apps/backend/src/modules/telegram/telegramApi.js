@@ -117,13 +117,24 @@ export async function ensureWebhookRegistered() {
   // XAVFSIZLIK-AUDIT.md O-2). `setWebhook` below still tells Telegram which
   // secret to send back in that header.
   const targetUrl = `${config.telegram.webhookBaseUrl}/api/v1/telegram/webhook`;
+  // XAVFSIZLIK-AUDIT.md (4-pass, Z-2 tuzatishida ochilgan xato):
+  // bu yerda ilgari "URL allaqachon to'g'ri bo'lsa — hech narsa qilma"
+  // degan optimizatsiya bor edi. U SIRNI umuman hisobga olmasdi, holbuki
+  // getWebhookInfo sirni qaytarmaydi ham — Telegram uni hech qachon oshkor
+  // qilmaydi. Ya'ni "to'g'ri o'rnatilgan" degan xulosa faqat URL asosida
+  // chiqarilardi.
+  //
+  // Oqibati jiddiy: TELEGRAM_WEBHOOK_SECRET .env da yangilangach backend
+  // qayta ishga tushsa, URL o'zgarmagani uchun setWebhook CHAQIRILMASDI.
+  // Telegram eski sirni yuborishda davom etardi, backend esa yangisini
+  // kutardi — har bir yangilanish 404 bilan rad etilib, bot butunlay
+  // ishlamay qolardi. Bu jonli deploy paytida AYNAN shunday sodir bo'ldi.
+  //
+  // setWebhook idempotent va arzon (ishga tushishda bir marta), shuning
+  // uchun shartsiz chaqiriladi. Tekshirib bo'lmaydigan qiymat haqida
+  // "o'zgarmagan bo'lsa kerak" deb taxmin qilib bo'lmaydi.
 
   try {
-    const info = await getWebhookInfo();
-    if (info && info.url === targetUrl) {
-      console.log('✅ Telegram bot: webhook allaqachon to\'g\'ri o\'rnatilgan.');
-      return;
-    }
     await setWebhook(targetUrl, config.telegram.webhookSecret);
     console.log(`✅ Telegram bot: webhook o'rnatildi -> ${targetUrl}`);
   } catch (err) {
