@@ -101,6 +101,56 @@ const SELECT_POLICY_WITH_TEMPLATES = `
   FROM fine_policies fp
 `;
 
+/**
+ * SIYOSATLAR KESISHUVI — xodim bir nechta yoqilgan siyosatga biriktirilgan
+ * va ular BIR XIL qoidabuzarlik turini qamrab olgan holatlar.
+ *
+ * Nega alohida kerak: jarima yozilganda tizim xodim biriktirilgan BARCHA
+ * siyosatlarning shablonlarini birlashtiradi va ulardan bittasini tanlaydi
+ * (autoFineService.js#pickApplicableTemplate). Ya'ni "test" siyosatidagi
+ * 10 000 va "Kech qolish" siyosatidagi 30 000 bir xodim uchun raqobatga
+ * kirishadi.
+ *
+ * Bu interfeysda KO'RINMASDI: siyosatni tahrirlash oynasi faqat o'sha
+ * siyosatning shablonlarini ko'rsatadi. HR "test" siyosatini ochib
+ * "5 daqiqadan ortiq -> 10 000" deb ko'radi va shu bo'ladi deb o'ylaydi —
+ * holbuki o'sha xodim boshqa siyosat tufayli 30 000 oladi.
+ *
+ * 2026-09-07 da productionda aynan shu holat aniqlandi: 5 xodim ikkitadan
+ * siyosatda edi va hammasida `kech_kelish` ustma-ust tushardi. Bu
+ * so'rov shunday holatlarni ochib beradi, HR esa ularni ko'rib ataylab
+ * qoldirishi yoki tuzatishi mumkin.
+ *
+ * Bu XATO emas — tizim uni aniq va monoton hal qiladi. Bu KO'RINMASLIK
+ * muammosi, shuning uchun bloklamaydi, faqat ogohlantiradi.
+ */
+export async function listPolicyOverlaps() {
+  const result = await query(
+    `SELECT
+       e.id                       AS employee_id,
+       e.first_name,
+       e.last_name,
+       fpt.violation_type,
+       json_agg(DISTINCT fp.name ORDER BY fp.name) AS policy_names
+     FROM fine_policy_employees fpe
+     JOIN fine_policies fp          ON fp.id = fpe.policy_id AND fp.enabled = true
+     JOIN fine_policy_templates fpt ON fpt.policy_id = fp.id
+     -- Arxivlangan xodim (migratsiya 060) uchun jarima yozilmaydi,
+     -- shuning uchun uning kesishuvi ham ogohlantirishga tushmasligi kerak.
+     JOIN employees e               ON e.id = fpe.employee_id AND e.deleted_at IS NULL
+     GROUP BY e.id, e.first_name, e.last_name, fpt.violation_type
+     HAVING COUNT(DISTINCT fp.id) > 1
+     ORDER BY e.first_name, e.last_name, fpt.violation_type`
+  );
+
+  return result.rows.map((row) => ({
+    employeeId: row.employee_id,
+    employeeName: `${row.first_name} ${row.last_name}`,
+    violationType: row.violation_type,
+    policyNames: row.policy_names || [],
+  }));
+}
+
 export async function listFinePolicies() {
   const result = await query(`${SELECT_POLICY_WITH_TEMPLATES} ORDER BY fp.created_at DESC`);
   return result.rows.map(mapPolicy);

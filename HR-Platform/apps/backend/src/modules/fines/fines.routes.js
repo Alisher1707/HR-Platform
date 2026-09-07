@@ -39,7 +39,7 @@ const TIME_BASED_VIOLATIONS = new Set(['kech_kelish', 'erta_ketish']);
  * BIR XIL TUR + BIR XIL VAQT CHEGARASI = QO'SH YOZUV.
  *
  * Jarima shablonlari bosqichli ishlaydi (autoFineService.js#pickApplicableTemplate):
- * bitta qoidabuzarlik uchun unga mos keladigan eng qat'iy bosqich qo'llanadi.
+ * bitta qoidabuzarlik uchun unga mos keladiganlardan ENG QIMMATI qo'llanadi.
  * Ya'ni bular to'g'ri va foydali:
  *
  *     Kech kelish, 5 daqiqadan ortiq  -> 10 000
@@ -152,6 +152,10 @@ router.delete(
 
 // "Jarima" siyosatlari
 router.get('/policies', authenticate, canManage, finesController.getFinePolicies);
+
+// Bir nechta siyosatga tushgan xodimlar — interfeys buni ko'rsata olmasdi
+// (tahrir oynasi faqat bitta siyosatni biladi), shuning uchun alohida.
+router.get('/policy-overlaps', authenticate, canManage, finesController.getPolicyOverlaps);
 router.get('/policies/:id', authenticate, canManage, validateParams(uuidParamSchema), finesController.getFinePolicyById);
 router.post('/policies', authenticate, canManage, validate(policySchema), finesController.createFinePolicy);
 router.put(

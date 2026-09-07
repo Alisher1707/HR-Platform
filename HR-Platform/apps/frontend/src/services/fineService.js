@@ -34,6 +34,21 @@ export const fineService = {
     return response.data.data;
   },
 
+  /**
+   * Bir nechta yoqilgan siyosatga biriktirilgan va ular bir xil
+   * qoidabuzarlik turini qamrab olgan xodimlar.
+   *
+   * Nega kerak: siyosatni tahrirlash oynasi faqat O'SHA siyosatning
+   * shablonlarini ko'rsatadi, lekin jarima yozilganda tizim xodim
+   * biriktirilgan BARCHA siyosatlarni birlashtiradi. Ya'ni ekrandagi
+   * bosqichlar bir xodim uchun to'liq manzara bo'lmasligi mumkin.
+   * Bu ro'yxat aynan shunday holatlarni ochib beradi.
+   */
+  async getPolicyOverlaps() {
+    const response = await api.get('/fines/policy-overlaps');
+    return response.data.data;
+  },
+
   async getFinePolicyById(id) {
     const response = await api.get(`/fines/policies/${id}`);
     return response.data.data;

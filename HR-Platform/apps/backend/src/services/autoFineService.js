@@ -52,12 +52,41 @@ function parseTimeLimitMinutes(timeLimit) {
  * violation_date) bo'yicha ishlaydi, ya'ni HAR SHABLON uchun alohida —
  * takroriy chaqiruvdan saqlaydi, lekin ikki xil shablondan emas.
  *
- * To'g'ri semantika — bosqichli jazo: qoidabuzarlik tushgan ENG QAT'IY
- * bosqich qo'llanadi, hammasi emas. Shuning uchun eng katta `time_limit`
- * (uni qoidabuzarlik oshib o'tgan) tanlanadi; teng bo'lsa — kattaroq summa.
+ * To'g'ri semantika — bosqichli jazo: qoidabuzarlik tushgan bosqichlardan
+ * BITTASI qo'llanadi, hammasi emas.
+ *
+ * TANLOV MEZONI — ENG KATTA SUMMA (chegara emas). Buni tushuntirish
+ * muhim, chunki intuitiv ravishda "eng qat'iy chegara" to'g'riroqdek
+ * ko'rinadi, lekin u BUZILADI.
+ *
+ * Sabab: `getMatchingTemplates` xodim biriktirilgan BARCHA siyosatlardan
+ * shablonlarni birlashtiradi. Bitta siyosat ichida bosqichlar odatda
+ * o'sib boradi (kech qolgan sari qimmatroq), lekin ikki ALOHIDA siyosat
+ * birlashganda bunday kafolat yo'q. Jonli productionda aynan shunday
+ * holat bor edi:
+ *
+ *     "Kech qolish" siyosati:  10 daqiqadan ortiq -> 30 000
+ *     "Sotuv" siyosati:        15 daqiqadan ortiq -> 15 000
+ *
+ * "Eng qat'iy chegara" qoidasi bilan: 12 daqiqa kechikkan xodim 30 000,
+ * 20 daqiqa kechikkan esa 15 000 to'lardi — ko'proq kechikkan kishi
+ * KAMROQ jarima olardi.
+ *
+ * "Eng katta summa" qoidasi bu xatoni tuzilishi bilan yo'q qiladi:
+ * qoidabuzarlik og'irlashgani sari mos keluvchi shablonlar to'plami
+ * faqat KENGAYADI (shart `minutesOver > chegara`), kengayayotgan
+ * to'plamdagi maksimum esa hech qachon kamaymaydi. Ya'ni jarima
+ * qoidabuzarlik bilan birga monoton o'sadi — matematik kafolat.
+ *
+ * To'g'ri sozlangan yagona siyosat uchun ikkala qoida bir xil natija
+ * beradi (u yerda eng yuqori bosqich ayni paytda eng qimmati), shuning
+ * uchun bu o'zgarish oddiy holatga ta'sir qilmaydi.
+ *
+ * Teng summada — kattaroq chegarali (aniqroq) shablon olinadi.
  *
  * `minutesOver` null bo'lsa (kelmagan_kun/chiqish_yoq — vaqt chegarasi
- * ma'noga ega emas) shunchaki eng katta summali shablon olinadi.
+ * ma'noga ega emas) barcha shablonlar mos deb qaraladi va yana eng
+ * katta summalisi tanlanadi.
  */
 function pickApplicableTemplate(templates, minutesOver, logContext = null) {
   const applicable = minutesOver === null
@@ -67,10 +96,10 @@ function pickApplicableTemplate(templates, minutesOver, logContext = null) {
   if (applicable.length === 0) return null;
 
   const picked = applicable.reduce((best, t) => {
-    const bestLimit = parseTimeLimitMinutes(best.time_limit);
-    const tLimit = parseTimeLimitMinutes(t.time_limit);
-    if (tLimit !== bestLimit) return tLimit > bestLimit ? t : best;
-    return Number(t.amount) > Number(best.amount) ? t : best;
+    const bestAmount = Number(best.amount);
+    const tAmount = Number(t.amount);
+    if (tAmount !== bestAmount) return tAmount > bestAmount ? t : best;
+    return parseTimeLimitMinutes(t.time_limit) > parseTimeLimitMinutes(best.time_limit) ? t : best;
   });
 
   // Bir nechta bosqich mos kelgan holat — bu NORMAL (aynan shu uchun
@@ -84,7 +113,7 @@ function pickApplicableTemplate(templates, minutesOver, logContext = null) {
       .join(', ');
     console.log(
       `ℹ️  Avto-jarima (${logContext}): ${applicable.length} ta bosqich mos keldi [${variants}] — ` +
-      `eng qat'iysi tanlandi: ${picked.time_limit || '—'}/${Number(picked.amount).toLocaleString('ru-RU')}`
+      `eng qimmati tanlandi: ${picked.time_limit || '—'}/${Number(picked.amount).toLocaleString('ru-RU')}`
     );
   }
 

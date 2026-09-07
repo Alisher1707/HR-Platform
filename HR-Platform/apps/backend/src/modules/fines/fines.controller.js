@@ -217,3 +217,19 @@ export async function forwardAppealToManager(req, res) {
     return errorResponse(res, safeErrorMessage(error, 'Rahbarga yuborishda xatolik'), error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 }
+
+/**
+ * GET /api/v1/fines/policy-overlaps
+ * Bir nechta siyosatga tushib qolgan va shu sababli qaysi jarima
+ * qo'llanishi interfeysdan ko'rinmaydigan xodimlar
+ * (izoh: fines.service.js#listPolicyOverlaps).
+ */
+export async function getPolicyOverlaps(req, res) {
+  try {
+    const overlaps = await finesService.listPolicyOverlaps();
+    return successResponse(res, overlaps, 'Siyosat kesishuvlari olindi');
+  } catch (error) {
+    console.error('Get policy overlaps error:', error);
+    return errorResponse(res, safeErrorMessage(error, 'Siyosat kesishuvlarini olishda xatolik'), error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);
+  }
+}

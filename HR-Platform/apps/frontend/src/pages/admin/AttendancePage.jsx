@@ -291,17 +291,68 @@ function describeTemplateBrackets(templates) {
     }
 
     const verb = type === 'kech_kelish' ? 'kechikkanda' : 'erta ketganda';
-    const sorted = [...group].sort(
-      (a, b) => parseLimitMinutes(a.timeLimit) - parseLimitMinutes(b.timeLimit)
-    );
+    // Chegara bo'yicha o'sish, TENG chegarada esa summa bo'yicha kamayish.
+    // Ikkinchi mezon muhim: bir xil chegarali ikkita shablon bir vaqtda
+    // mos keladi va ular orasidan qimmatrog'i yutadi — demak kichigi
+    // o'lik. Qimmatrog'ini oldinga qo'yish quyidagi "runningMax" yurishida
+    // kichigini avtomatik o'lik deb belgilaydi.
+    const sorted = [...group].sort((a, b) => {
+      const byLimit = parseLimitMinutes(a.timeLimit) - parseLimitMinutes(b.timeLimit);
+      if (byLimit !== 0) return byLimit;
+      return (Number(b.amount) || 0) - (Number(a.amount) || 0);
+    });
 
-    sorted.forEach((t, i) => {
+    // Qaysi shablon HAQIQATDA ishlaydi — backend qoidasini aynan takrorlaydi
+    // (autoFineService.js#pickApplicableTemplate): qoidabuzarlikka mos
+    // keluvchilardan ENG QIMMATI qo'llanadi.
+    //
+    // Buning muhim oqibati bor: chegarasi kattaroq, lekin summasi kichikroq
+    // shablon HECH QACHON ishlamaydi. Masalan
+    //     00:05 -> 30 000
+    //     00:10 -> 10 000
+    // da ikkinchisi o'lik: 11 daqiqada ikkalasi ham mos keladi va 30 000
+    // yutadi, 6 daqiqada esa faqat birinchisi mos keladi. Bunday shablonni
+    // ro'yxatda jimgina qoldirish — HR'ni chalg'itish, shuning uchun u
+    // ochiq belgilanadi.
+    //
+    // Algoritm: chegara bo'yicha o'sish tartibida yurib, shu paytgacha
+    // ko'rilgan eng katta summani eslab boramiz. Shablon faqat o'z summasi
+    // o'shandan KATTA bo'lsagina tirik.
+    let runningMax = -Infinity;
+    const live = [];
+    const status = new Map();
+
+    for (const t of sorted) {
+      const amount = Number(t.amount) || 0;
+      const isLive = amount > runningMax;
+      status.set(t.id, isLive);
+      if (isLive) live.push(t);
+      runningMax = Math.max(runningMax, amount);
+    }
+
+    sorted.forEach((t) => {
       const from = parseLimitMinutes(t.timeLimit);
-      const next = sorted[i + 1];
-      const nextFrom = next ? parseLimitMinutes(next.timeLimit) : null;
       const isDuplicate = sorted.some(
         (o) => o.id !== t.id && parseLimitMinutes(o.timeLimit) === from
       );
+
+      if (!status.get(t.id)) {
+        result.set(t.id, {
+          range: 'Hech qachon ishlamaydi',
+          problem: isDuplicate
+            ? "Bir xil vaqt chegarali yana shablon bor va uning summasi katta — bu hech qachon qo'llanmaydi."
+            : "Chegarasi kattaroq, lekin summasi kichikroq: bunga yetib kelgan har qanday holatda qimmatroq shablon yutadi. " +
+              "Summani oshiring yoki bu shablonni o'chiring.",
+        });
+        return;
+      }
+
+      // Tirik shablonning oralig'i keyingi TIRIK shablongacha davom etadi
+      // (o'lik shablonlar oraliqni bo'lmaydi — ular hech narsani
+      // o'zgartirmaydi).
+      const idx = live.findIndex((l) => l.id === t.id);
+      const next = live[idx + 1];
+      const nextFrom = next ? parseLimitMinutes(next.timeLimit) : null;
 
       const range = nextFrom !== null && nextFrom > from
         ? `${from}–${nextFrom} daqiqa ${verb}`
@@ -310,7 +361,7 @@ function describeTemplateBrackets(templates) {
       result.set(t.id, {
         range,
         problem: isDuplicate
-          ? "Bir xil vaqt chegarali yana shablon bor — ulardan biri hech qachon ishlamaydi."
+          ? "Bir xil vaqt chegarali yana shablon bor — chalkashlikka olib keladi."
           : null,
       });
     });
@@ -2330,6 +2381,9 @@ export function AttendancePage() {
   const getPunishmentTypeIcon = (opt) => ({ Icon: AlertTriangle, color: getFineTypeColor(opt.value, fineTypes) });
 
   const [finePolicies, setFinePolicies] = useState([]);
+  // Bir nechta siyosatga tushib qolgan xodimlar — ular uchun ekrandagi
+  // bosqichlar to'liq manzara emas (izoh: fineService#getPolicyOverlaps).
+  const [policyOverlaps, setPolicyOverlaps] = useState([]);
   const [isLoadingFinePolicies, setIsLoadingFinePolicies] = useState(false);
 
   const refreshFineTypes = async () => {
@@ -2350,6 +2404,17 @@ export function AttendancePage() {
       toast.error('Jarima siyosatlarini yuklashda xatolik');
     } finally {
       setIsLoadingFinePolicies(false);
+    }
+
+    // Kesishuvlar alohida olinadi va xatosi ALOHIDA yutiladi: bu
+    // ma'lumot foydali, lekin ikkinchi darajali — u kelmasa ham
+    // siyosatlar ro'yxati ishlashda davom etishi kerak, va HR'ga
+    // ortiqcha xato xabari ko'rsatilmasligi kerak.
+    try {
+      const overlaps = await fineService.getPolicyOverlaps();
+      setPolicyOverlaps(overlaps || []);
+    } catch (err) {
+      setPolicyOverlaps([]);
     }
   };
 
@@ -4521,6 +4586,49 @@ export function AttendancePage() {
                 <div style={{ padding: '2rem' }}><LoadingSpinner /></div>
               ) : (
                 <>
+                  {/*
+                    Bir nechta siyosatga tushib qolgan xodimlar.
+
+                    Nega alohida ko'rsatiladi: pastdagi siyosat kartasi
+                    faqat O'SHA siyosatning bosqichlarini biladi, lekin
+                    jarima yozilganda tizim xodim biriktirilgan BARCHA
+                    siyosatlarni birlashtiradi va ulardan eng qimmatini
+                    qo'llaydi. Ya'ni bunday xodim uchun bitta siyosatga
+                    qarab "u qancha to'laydi?" degan savolga javob berib
+                    bo'lmaydi. Bu xato emas — tizim uni aniq hal qiladi —
+                    lekin HR buni BILISHI kerak.
+                  */}
+                  {policyOverlaps.length > 0 && (
+                    <div className="fine-overlap-banner">
+                      <div className="fine-overlap-banner-head">
+                        <AlertTriangle size={16} strokeWidth={2.2} />
+                        <strong>
+                          {policyOverlaps.length} ta holatda xodim bir nechta siyosatga tushgan
+                        </strong>
+                      </div>
+                      <p>
+                        Bunday xodimga jarima yozilganda barcha siyosatlaridagi mos bosqichlar
+                        solishtiriladi va <strong>eng qimmati</strong> qo'llanadi. Quyidagi qatorlar uchun
+                        pastdagi siyosat sozlamasi to'liq manzarani ko'rsatmaydi.
+                      </p>
+                      <ul>
+                        {policyOverlaps.map((o) => {
+                          const label = FINE_TEMPLATE_TYPES.find((t) => t.value === o.violationType)?.label
+                            || o.violationType;
+                          return (
+                            <li key={`${o.employeeId}-${o.violationType}`}>
+                              <span className="fine-overlap-emp">{o.employeeName}</span>
+                              <span className="fine-overlap-sep">·</span>
+                              <span className="fine-overlap-type">{label}</span>
+                              <span className="fine-overlap-sep">·</span>
+                              <span className="fine-overlap-pols">{o.policyNames.join(' + ')}</span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
+
                   <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
                     <table className="table">
                       <thead>
