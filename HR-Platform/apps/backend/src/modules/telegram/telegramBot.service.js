@@ -140,11 +140,65 @@ function escapeHtml(text) {
   return String(text ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function formatFineLine(fine) {
+/**
+ * XABAR DIZAYNI — umumiy qoidalar.
+ *
+ * Telegram'da rang, shrift yoki chegara yo'q. Ixtiyorimizdagi vositalar
+ * faqat: qalin/kursiv matn, emoji, qatorlar va bo'sh joy. Shuning uchun
+ * "chiroyli" qilish emas, O'QILADIGAN qilish maqsad — xodim telefonida,
+ * ko'pincha shoshib, bir qarashda uchta savolga javob topishi kerak:
+ * qancha, nima uchun, qanday jazo.
+ *
+ * Shuning uchun:
+ *  - Summa — yagona qalin element va doim birinchi. U asosiy ma'lumot,
+ *    qolgani izoh.
+ *  - Har bir satr bitta faktdan iborat va doim bir xil emoji bilan
+ *    boshlanadi, shunda ko'z ularni o'qimasdan ham ajratadi.
+ *  - Ustun/jadval qilinmaydi: Telegram proportsional shrift ishlatadi,
+ *    probel bilan tekislangan "jadval" turli qurilmalarda buziladi.
+ *  - Barcha dinamik matn escapeHtml'dan o'tadi (jazo nomi va izohni HR
+ *    erkin yozadi — ichida < > & bo'lsa Telegram xabarni rad etadi).
+ */
+
+const FINE_ICON = {
+  amount: '💰',
+  reason: '📌',
+  punishment: '⚖️',
+  date: '📅',
+};
+
+/**
+ * Izohdan "(avtomatik)" qo'shimchasini olib tashlaydi.
+ *
+ * Bazadagi izoh "Kech kelish — 11 daqiqa (avtomatik)" ko'rinishida
+ * saqlanadi va bu HR paneli uchun to'g'ri — u yerda jarima qo'lda
+ * qo'yilganmi yoki tizim yozganmi, farqi bor. Lekin xodim uchun bu
+ * ortiqcha shovqin: u baribir botdan xabar olyapti, ya'ni tizim
+ * yozgani ayon. Baza o'zgarmaydi — faqat ko'rsatish tozalanadi.
+ */
+function cleanFineNote(note) {
+  return String(note || '').replace(/\s*\(avtomatik\)\s*$/i, '').trim();
+}
+
+/** Bitta jarimaning tanasi — ro'yxatda ham, bildirishnomada ham bir xil. */
+function fineDetailLines(fine) {
+  const lines = [`${FINE_ICON.amount} <b>${Number(fine.amount).toLocaleString('ru-RU')} so'm</b>`];
+
+  const reason = cleanFineNote(fine.note);
+  if (reason) lines.push(`${FINE_ICON.reason} ${escapeHtml(reason)}`);
+
+  // Jazo turi shablonda tanlanmagan bo'lishi mumkin — u holda satr
+  // umuman chiqmaydi ("Jazo: —" kabi bo'sh satr foydasiz).
+  if (fine.fineTypeName) lines.push(`${FINE_ICON.punishment} ${escapeHtml(fine.fineTypeName)}`);
+
   const date = formatDateLabel(fine.violationDate || fine.createdAt);
-  const type = fine.fineTypeName || 'Jarima';
-  const line = `🧾 ${Number(fine.amount).toLocaleString('ru-RU')} so'm — ${type} — ${date}`;
-  return fine.note ? `${line}\n   ↳ ${fine.note}` : line;
+  if (date) lines.push(`${FINE_ICON.date} ${date}`);
+
+  return lines;
+}
+
+function formatFineLine(fine) {
+  return fineDetailLines(fine).join('\n');
 }
 
 async function sendMainMenu(chatId, employee, greeting) {
@@ -217,12 +271,40 @@ async function handleFinesListRequest(chatId, employee) {
   const active = fines.filter((f) => f.status === 'faol');
 
   if (active.length === 0) {
-    await telegramApi.sendMessage(chatId, "Sizda hozircha faol jarima yo'q. ✅");
+    await telegramApi.sendMessage(
+      chatId,
+      "✅ <b>Faol jarimangiz yo'q</b>\n\nHozircha to'lanmagan jarima yozilmagan.",
+      { parseMode: 'HTML' }
+    );
     return;
   }
 
-  const text = ['🧾 Faol jarimalaringiz:', ...active.slice(0, 20).map(formatFineLine)].join('\n\n');
-  await telegramApi.sendMessage(chatId, text);
+  // Jami summa sarlavhada beriladi: xodim birinchi navbatda "qancha
+  // qarzim bor?" deb qaraydi, alohida jarimalarni esa keyin ko'radi.
+  // Jami HAMMASI bo'yicha hisoblanadi, ko'rsatilgan 20 tasi bo'yicha
+  // emas — aks holda ro'yxat kesilganda raqam yolg'on bo'lardi.
+  const total = active.reduce((sum, f) => sum + Number(f.amount), 0);
+  const shown = active.slice(0, 20);
+
+  // "Jami" faqat bir nechta jarima bo'lgandagina ma'noga ega — bitta
+  // jarimada u pastdagi summani so'zma-so'z takrorlaydi va xabarni
+  // uzaytirishdan boshqa hech narsa qilmaydi.
+  const header = active.length > 1
+    ? [
+        '🧾 <b>Faol jarimalaringiz</b>',
+        `Jami: <b>${total.toLocaleString('ru-RU')} so'm</b> · ${active.length} ta`,
+      ].join('\n')
+    : '🧾 <b>Faol jarimangiz</b>';
+
+  const blocks = [header, ...shown.map(formatFineLine)];
+
+  if (active.length > shown.length) {
+    blocks.push(`<i>… va yana ${active.length - shown.length} ta. To'liq ro'yxat uchun HR bilan bog'laning.</i>`);
+  }
+
+  blocks.push("Rozi bo'lmasangiz «✍️ Ariza yuborish» tugmasi orqali tushuntirish xati yuborishingiz mumkin.");
+
+  await telegramApi.sendMessage(chatId, blocks.join('\n\n'), { parseMode: 'HTML' });
 }
 
 function arizaCategoryButton(category) {
@@ -550,12 +632,19 @@ export async function notifyAppealReviewed(employeeId, { status, note }) {
 
     // Tasdiqlash endi bog'liq jarimani avtomatik bekor qilmaydi — shuning
     // uchun xabar ham buni da'vo qilmaydi, faqat arizaning o'zi
-    // qabul qilinganini bildiradi.
+    // qabul qilinganini bildiradi. Bu farq xodim uchun muhim, shuning
+    // uchun tasdiqlash xabarida ochiq yozib qo'yiladi.
     const text = status === 'tasdiqlandi'
-      ? '✅ Arizangiz tasdiqlandi.'
-      : `❌ Arizangiz rad etildi.${note ? `\nSabab: ${note}` : ''}`;
+      ? [
+          '✅ <b>Arizangiz tasdiqlandi</b>',
+          'Rahbar arizangizni qabul qildi. Jarimaning bekor qilinishi alohida hal qilinadi — HR sizga xabar beradi.',
+        ].join('\n\n')
+      : [
+          '❌ <b>Arizangiz rad etildi</b>',
+          ...(note ? [`💬 ${escapeHtml(note)}`] : []),
+        ].join('\n\n');
 
-    await telegramApi.sendMessage(chatId, text);
+    await telegramApi.sendMessage(chatId, text, { parseMode: 'HTML' });
   } catch (err) {
     console.error('Telegram bot: apellatsiya natijasini xabar qilishda xatolik:', err.message);
   }
@@ -569,15 +658,19 @@ export async function notifyAppealReviewed(employeeId, { status, note }) {
  * Best-effort, never throws: a missed notification must never block or
  * fail the fine-creation request/cron run itself.
  */
-export async function notifyFineCreated(employeeId, { amount, note }) {
+export async function notifyFineCreated(employeeId, { amount, note, fineTypeName, violationDate }) {
   try {
     const { rows } = await query('SELECT telegram_chat_id FROM employees WHERE id = $1', [employeeId]);
     const chatId = rows[0] && rows[0].telegram_chat_id;
     if (!chatId) return;
 
-    const amountLabel = Number(amount).toLocaleString('ru-RU');
-    const text = `⚠️ Sizga yangi jarima yozildi:\n🧾 ${amountLabel} so'm${note ? ` — ${note}` : ''}`;
-    await telegramApi.sendMessage(chatId, text);
+    const text = [
+      '⚠️ <b>Sizga yangi jarima yozildi</b>',
+      fineDetailLines({ amount, note, fineTypeName, violationDate }).join('\n'),
+      "Rozi bo'lmasangiz «✍️ Ariza yuborish» tugmasi orqali tushuntirish xati yuborishingiz mumkin.",
+    ].join('\n\n');
+
+    await telegramApi.sendMessage(chatId, text, { parseMode: 'HTML' });
   } catch (err) {
     console.error('Telegram bot: jarima xabarini yuborishda xatolik:', err.message);
   }
@@ -599,15 +692,31 @@ export async function notifyFineCreated(employeeId, { amount, note }) {
  * notifyFineCreated bilan bir xil "best-effort" xulq: xatoni o'zi
  * yutadi, chaqiruvchi so'rovni hech qachon to'xtatmaydi.
  */
-export async function notifyFineCancelled(employeeId, { amount, note }) {
+export async function notifyFineCancelled(employeeId, { amount, note, fineTypeName, violationDate }) {
   try {
     const { rows } = await query('SELECT telegram_chat_id FROM employees WHERE id = $1', [employeeId]);
     const chatId = rows[0] && rows[0].telegram_chat_id;
     if (!chatId) return;
 
-    const amountLabel = Number(amount).toLocaleString('ru-RU');
-    const text = `✅ Jarima bekor qilindi:\n🧾 ${amountLabel} so'm${note ? ` — ${note}` : ''}`;
-    await telegramApi.sendMessage(chatId, text);
+    // Summa o'chirilgan (<s>) ko'rinishda — xodim eski xabarini qayta
+    // o'qimasdan ham, aynan qaysi jarima bekor bo'lganini bir qarashda
+    // taniydi. Jazo turi bu yerda ataylab ko'rsatilmaydi: jazo ham
+    // bekor bo'ldi, uni takrorlash chalkashtiradi.
+    const lines = [`${FINE_ICON.amount} <s>${Number(amount).toLocaleString('ru-RU')} so'm</s>`];
+
+    const reason = cleanFineNote(note);
+    if (reason) lines.push(`${FINE_ICON.reason} ${escapeHtml(reason)}`);
+
+    const date = formatDateLabel(violationDate);
+    if (date) lines.push(`${FINE_ICON.date} ${date}`);
+
+    const text = [
+      '✅ <b>Jarima bekor qilindi</b>',
+      lines.join('\n'),
+      "Bu jarima hisobingizdan olib tashlandi — to'lash shart emas.",
+    ].join('\n\n');
+
+    await telegramApi.sendMessage(chatId, text, { parseMode: 'HTML' });
   } catch (err) {
     console.error('Telegram bot: jarima bekor qilinganini xabar qilishda xatolik:', err.message);
   }

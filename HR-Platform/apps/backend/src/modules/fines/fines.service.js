@@ -395,8 +395,15 @@ export async function updateFinePunishmentStatus(id, { status, note, recordedBy 
 export async function deleteEmployeeFine(id) {
   // Xodim va summa O'CHIRISHDAN OLDIN olinadi — keyin bu ma'lumot
   // yo'qoladi va kimga xabar berishni bilib bo'lmaydi.
+  // Jazo turi nomi jadvalda emas, fine_types'da — Telegram xabari uni
+  // ko'rsatishi uchun o'chirish paytida birga olinadi (keyin bog'lanish
+  // yo'qoladi).
   const result = await query(
-    'DELETE FROM employee_fines WHERE id = $1 RETURNING id, employee_id, amount, note',
+    `DELETE FROM employee_fines ef
+      USING (SELECT id, fine_type_id FROM employee_fines WHERE id = $1) src
+      LEFT JOIN fine_types ft ON ft.id = src.fine_type_id
+      WHERE ef.id = src.id
+      RETURNING ef.id, ef.employee_id, ef.amount, ef.note, ef.violation_date, ft.name AS fine_type_name`,
     [id]
   );
   if (result.rows.length === 0) {
@@ -419,6 +426,8 @@ export async function deleteEmployeeFine(id) {
     employeeId: removed.employee_id,
     amount: removed.amount,
     note: removed.note,
+    fineTypeName: removed.fine_type_name,
+    violationDate: removed.violation_date,
   };
 }
 

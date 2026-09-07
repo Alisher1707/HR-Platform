@@ -122,7 +122,12 @@ export async function createAssignedFine(req, res) {
       createdBy: req.user.id,
     });
 
-    notifyFineCreated(fine.employeeId, { amount: fine.amount, note: fine.note });
+    notifyFineCreated(fine.employeeId, {
+      amount: fine.amount,
+      note: fine.note,
+      fineTypeName: fine.fineTypeName,
+      violationDate: fine.violationDate,
+    });
 
     return successResponse(res, fine, 'Jarima tayinlandi', HTTP_STATUS.CREATED);
   } catch (error) {
@@ -157,7 +162,12 @@ export async function deleteAssignedFine(req, res) {
     // jarima haqidagi xabar qolib ketardi va u o'zini hamon qarzdor deb
     // hisoblardi. Fire-and-forget: xabar ketmasa ham o'chirish bajarildi,
     // shuning uchun javob kutilmaydi (funksiya xatosini o'zi yutadi).
-    notifyFineCancelled(result.employeeId, { amount: result.amount, note: result.note });
+    notifyFineCancelled(result.employeeId, {
+      amount: result.amount,
+      note: result.note,
+      fineTypeName: result.fineTypeName,
+      violationDate: result.violationDate,
+    });
 
     return successResponse(res, { success: true, id: result.id }, 'Jarima o\'chirildi');
   } catch (error) {

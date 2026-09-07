@@ -122,10 +122,13 @@ function pickApplicableTemplate(templates, minutesOver, logContext = null) {
 
 async function getMatchingTemplates(employeeId, violationType) {
   const result = await query(
-    `SELECT fpt.id, fpt.time_limit, fpt.amount, fpt.fine_type_id
+    // ft.name (jazo turi) ham olinadi — u Telegram xabarida ko'rsatiladi.
+    // LEFT JOIN, chunki shablonda jazo turi tanlanmagan bo'lishi mumkin.
+    `SELECT fpt.id, fpt.time_limit, fpt.amount, fpt.fine_type_id, ft.name AS fine_type_name
      FROM fine_policy_templates fpt
      JOIN fine_policies fp ON fp.id = fpt.policy_id AND fp.enabled = true
      JOIN fine_policy_employees fpe ON fpe.policy_id = fp.id AND fpe.employee_id = $1
+     LEFT JOIN fine_types ft ON ft.id = fpt.fine_type_id
      WHERE fpt.violation_type = $2`,
     [employeeId, violationType]
   );
@@ -135,7 +138,7 @@ async function getMatchingTemplates(employeeId, violationType) {
 // `run` is a callable (sql, params) => Promise<QueryResult> — either the
 // pool's `query` directly, or `client.query.bind(client)` inside a
 // transaction (see processDailyAutoFines).
-async function insertAutoFine(run, { employeeId, amount, fineTypeId, policyTemplateId, violationDate, note }) {
+async function insertAutoFine(run, { employeeId, amount, fineTypeId, fineTypeName, policyTemplateId, violationDate, note }) {
   const result = await run(
     `INSERT INTO employee_fines (employee_id, amount, fine_type_id, note, source, policy_template_id, violation_date)
      VALUES ($1, $2, $3, $4, 'auto', $5, $6)
@@ -148,7 +151,10 @@ async function insertAutoFine(run, { employeeId, amount, fineTypeId, policyTempl
   // Fire-and-forget — this can run inside processDailyAutoFines' DB
   // transaction, so it must never be awaited (would hold the transaction
   // open for a network round-trip) and never throw (already self-catches).
-  if (created) notifyFineCreated(employeeId, { amount, note });
+  // fineTypeName va violationDate xabarni to'liq tuzish uchun uzatiladi
+  // (jazo turi va sana) — xodim Telegram'da nima uchun, qancha va qanday
+  // jazo olganini bir qarashda ko'rishi kerak.
+  if (created) notifyFineCreated(employeeId, { amount, note, fineTypeName, violationDate });
 
   return created;
 }
@@ -188,6 +194,7 @@ export async function checkLateArrivalFine(employeeId, recordedAt, isLate) {
       employeeId,
       amount: template.amount,
       fineTypeId: template.fine_type_id,
+      fineTypeName: template.fine_type_name,
       policyTemplateId: template.id,
       violationDate,
       note: `Kech kelish — ${minutesLate} daqiqa (avtomatik)`,
@@ -225,6 +232,7 @@ export async function checkEarlyLeaveFine(employeeId, recordedAt, isEarly) {
       employeeId,
       amount: template.amount,
       fineTypeId: template.fine_type_id,
+      fineTypeName: template.fine_type_name,
       policyTemplateId: template.id,
       violationDate,
       note: `Erta ketish — ${minutesEarly} daqiqa (avtomatik)`,
@@ -257,11 +265,12 @@ export async function processDailyAutoFines() {
       // davomat bo'lmaydi — filtr bo'lmasa u har kuni, cheksiz muddat
       // "kelmadi" jarimasini olib turardi.
       `SELECT DISTINCT fpe.employee_id, fpt.id AS template_id, fpt.violation_type,
-              fpt.amount, fpt.fine_type_id
+              fpt.amount, fpt.fine_type_id, ft.name AS fine_type_name
        FROM fine_policy_employees fpe
        JOIN employees e ON e.id = fpe.employee_id AND e.deleted_at IS NULL
        JOIN fine_policies fp ON fp.id = fpe.policy_id AND fp.enabled = true
        JOIN fine_policy_templates fpt ON fpt.policy_id = fp.id
+       LEFT JOIN fine_types ft ON ft.id = fpt.fine_type_id
        WHERE fpt.violation_type IN ('kelmagan_kun', 'chiqish_yoq')`
     );
 
@@ -313,6 +322,7 @@ export async function processDailyAutoFines() {
           employeeId: candidate.employee_id,
           amount: candidate.amount,
           fineTypeId: candidate.fine_type_id,
+          fineTypeName: candidate.fine_type_name,
           policyTemplateId: candidate.template_id,
           violationDate,
           note,
