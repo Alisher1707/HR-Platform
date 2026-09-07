@@ -227,6 +227,98 @@ function getFineTypeColor(id, fineTypes) {
 const FINE_TIME_LIMIT_OPTIONS = ['00:05', '00:10', '00:15', '00:20', '00:30', '00:45', '01:00']
   .map((v) => ({ value: v, label: v }));
 
+// Faqat shu ikki turda "necha daqiqa" degan tushuncha bor — ya'ni faqat
+// ular bosqichlarga bo'linishi mumkin. "Kelmagan kun" va "Chiqish yo'q"
+// kun tugagach baholanadi va vaqt chegarasini umuman ishlatmaydi
+// (backend: autoFineService.js#processDailyAutoFines).
+const TIME_BASED_VIOLATIONS = new Set(['kech_kelish', 'erta_ketish']);
+
+function parseLimitMinutes(limit) {
+  if (!limit) return 0;
+  const [h, m] = String(limit).split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+function formatMinutesLabel(total) {
+  if (total < 60) return `${total} daqiqa`;
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return m ? `${h} soat ${m} daqiqa` : `${h} soat`;
+}
+
+/**
+ * Har bir shablon HAQIQATDA qachon ishlashini hisoblaydi.
+ *
+ * Nega kerak: jarima shablonlari bosqichli ishlaydi — bitta qoidabuzarlikka
+ * unga mos keladigan ENG QAT'IY bosqich qo'llanadi, hammasi emas
+ * (backend: autoFineService.js#pickApplicableTemplate). Ya'ni shunday
+ * sozlamada:
+ *
+ *     Kech kelish, 00:05 -> 10 000
+ *     Kech kelish, 00:10 -> 30 000
+ *
+ * 11 daqiqalik kechikish uchun FAQAT 30 000 yoziladi. Lekin ro'yxatda
+ * ikkala qator ham bir xil, mustaqil qoidaga o'xshab turadi — HR ularning
+ * bir-biriga qanday ta'sir qilishini ko'rmaydi. Bu funksiya har bir
+ * qatorning haqiqiy oralig'ini matn qilib beradi ("5–10 daqiqa kechikkanda"),
+ * shunda ekranda ko'ringan narsa bajariladigan narsaga mos bo'ladi.
+ *
+ * Tarixi: 2026-09-07 gacha backend'da bosqich mantiqi yo'q edi va mos
+ * keluvchi HAR BIR shablon uchun alohida jarima yozilardi — bitta 11
+ * daqiqalik kechikish uchun xodim 10 000 VA 30 000 so'm olgan. Runtime
+ * tuzatildi, bu esa noaniqlikni ekranda ham yo'q qiladi.
+ */
+function describeTemplateBrackets(templates) {
+  const result = new Map();
+  const byType = new Map();
+
+  for (const t of templates) {
+    if (!byType.has(t.type)) byType.set(t.type, []);
+    byType.get(t.type).push(t);
+  }
+
+  for (const [type, group] of byType) {
+    if (!TIME_BASED_VIOLATIONS.has(type)) {
+      for (const t of group) {
+        result.set(t.id, {
+          range: 'Kun tugagach baholanadi — vaqt chegarasi hisobga olinmaydi',
+          problem: group.length > 1
+            ? "Bu turda faqat bitta shablon ishlaydi (eng katta summali). Ortiqchasini o'chiring."
+            : null,
+        });
+      }
+      continue;
+    }
+
+    const verb = type === 'kech_kelish' ? 'kechikkanda' : 'erta ketganda';
+    const sorted = [...group].sort(
+      (a, b) => parseLimitMinutes(a.timeLimit) - parseLimitMinutes(b.timeLimit)
+    );
+
+    sorted.forEach((t, i) => {
+      const from = parseLimitMinutes(t.timeLimit);
+      const next = sorted[i + 1];
+      const nextFrom = next ? parseLimitMinutes(next.timeLimit) : null;
+      const isDuplicate = sorted.some(
+        (o) => o.id !== t.id && parseLimitMinutes(o.timeLimit) === from
+      );
+
+      const range = nextFrom !== null && nextFrom > from
+        ? `${from}–${nextFrom} daqiqa ${verb}`
+        : `${formatMinutesLabel(from)}dan ortiq ${verb}`;
+
+      result.set(t.id, {
+        range,
+        problem: isDuplicate
+          ? "Bir xil vaqt chegarali yana shablon bor — ulardan biri hech qachon ishlamaydi."
+          : null,
+      });
+    });
+  }
+
+  return result;
+}
+
 function getDefaultManualForm() {
   const now = new Date();
   const hh = String(now.getHours()).padStart(2, '0');
@@ -2212,6 +2304,15 @@ export function AttendancePage() {
   const violationTypeOptions = useMemo(
     () => FINE_TEMPLATE_TYPES.map((t) => ({ value: t.value, label: t.label })),
     []
+  );
+
+  // Har bir shablonning haqiqiy qamrovi ("5–10 daqiqa kechikkanda") va
+  // muammosi (bir xil chegarali dublikat). Har tahrirdan keyin qayta
+  // hisoblanadi, shunda HR chegarani o'zgartirganda oraliqlar darhol
+  // yangilanadi. Izoh: describeTemplateBrackets.
+  const templateBrackets = useMemo(
+    () => describeTemplateBrackets(fineForm.templates),
+    [fineForm.templates]
   );
   const getViolationTypeIcon = (opt) => {
     const type = FINE_TEMPLATE_TYPES.find((t) => t.value === opt.value);
@@ -5404,6 +5505,7 @@ export function AttendancePage() {
                 <div className="fine-template-list">
                   {fineForm.templates.map((tpl) => {
                     const typeMeta = FINE_TEMPLATE_TYPES.find((t) => t.value === tpl.type);
+                    const bracket = templateBrackets.get(tpl.id);
                     return (
                       <div key={tpl.id} className="fine-template-card" style={{ '--fine-pill-color': typeMeta.color }}>
                         <span className="fine-template-card-tag">{typeMeta.label}</span>
@@ -5471,6 +5573,29 @@ export function AttendancePage() {
                         >
                           <Trash2 size={16} strokeWidth={2} />
                         </button>
+
+                        {/*
+                          Shablonning HAQIQIY qamrovi. Bosqichlar bir-biriga
+                          ta'sir qiladi (eng qat'iysi yutadi), shuning uchun
+                          bitta qatorga qarab "bu qachon ishlaydi?" degan
+                          savolga javob berib bo'lmaydi — bu qator o'sha
+                          javobni beradi.
+                        */}
+                        {bracket && (
+                          <div
+                            className={`fine-template-card-effect${bracket.problem ? ' has-problem' : ''}`}
+                          >
+                            <span className="fine-template-card-effect-range">
+                              {bracket.range}
+                            </span>
+                            {bracket.problem && (
+                              <span className="fine-template-card-effect-problem">
+                                <AlertTriangle size={13} strokeWidth={2.2} />
+                                {bracket.problem}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}

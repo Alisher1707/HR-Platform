@@ -1,5 +1,5 @@
 import * as finesService from './fines.service.js';
-import { notifyAppealReviewed, notifyFineCreated, sendAppealToManager } from '../telegram/telegramBot.service.js';
+import { notifyAppealReviewed, notifyFineCreated, notifyFineCancelled, sendAppealToManager } from '../telegram/telegramBot.service.js';
 import { successResponse, errorResponse, safeErrorMessage } from '../../shared/utils/response.js';
 import { HTTP_STATUS } from '../../config/constants.js';
 
@@ -151,7 +151,15 @@ export async function updatePunishmentStatus(req, res) {
 export async function deleteAssignedFine(req, res) {
   try {
     const result = await finesService.deleteEmployeeFine(req.params.id);
-    return successResponse(res, result, 'Jarima o\'chirildi');
+
+    // Xodim jarima yozilganda xabar oladi (notifyFineCreated), lekin
+    // bekor qilinganda olmasdi — telefonida allaqachon mavjud bo'lmagan
+    // jarima haqidagi xabar qolib ketardi va u o'zini hamon qarzdor deb
+    // hisoblardi. Fire-and-forget: xabar ketmasa ham o'chirish bajarildi,
+    // shuning uchun javob kutilmaydi (funksiya xatosini o'zi yutadi).
+    notifyFineCancelled(result.employeeId, { amount: result.amount, note: result.note });
+
+    return successResponse(res, { success: true, id: result.id }, 'Jarima o\'chirildi');
   } catch (error) {
     console.error('Delete assigned fine error:', error);
     return errorResponse(res, safeErrorMessage(error, 'Jarimani o\'chirishda xatolik'), error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR);

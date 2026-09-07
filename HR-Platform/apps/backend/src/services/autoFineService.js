@@ -59,19 +59,36 @@ function parseTimeLimitMinutes(timeLimit) {
  * `minutesOver` null bo'lsa (kelmagan_kun/chiqish_yoq — vaqt chegarasi
  * ma'noga ega emas) shunchaki eng katta summali shablon olinadi.
  */
-function pickApplicableTemplate(templates, minutesOver) {
+function pickApplicableTemplate(templates, minutesOver, logContext = null) {
   const applicable = minutesOver === null
     ? templates
     : templates.filter((t) => minutesOver > parseTimeLimitMinutes(t.time_limit));
 
   if (applicable.length === 0) return null;
 
-  return applicable.reduce((best, t) => {
+  const picked = applicable.reduce((best, t) => {
     const bestLimit = parseTimeLimitMinutes(best.time_limit);
     const tLimit = parseTimeLimitMinutes(t.time_limit);
     if (tLimit !== bestLimit) return tLimit > bestLimit ? t : best;
     return Number(t.amount) > Number(best.amount) ? t : best;
   });
+
+  // Bir nechta bosqich mos kelgan holat — bu NORMAL (aynan shu uchun
+  // bosqich qilingan), lekin tanlov jimgina bo'lmasligi kerak: keyinroq
+  // "nega bu xodimga 10 000 emas, 30 000 yozildi?" degan savol chiqsa,
+  // javob logda bo'lishi shart. Bitta bosqich mos kelganda log yozilmaydi
+  // (shovqin bo'lmasligi uchun) — u yerda tushuntiriladigan narsa yo'q.
+  if (logContext && applicable.length > 1) {
+    const variants = applicable
+      .map((t) => `${t.time_limit || '—'}/${Number(t.amount).toLocaleString('ru-RU')}`)
+      .join(', ');
+    console.log(
+      `ℹ️  Avto-jarima (${logContext}): ${applicable.length} ta bosqich mos keldi [${variants}] — ` +
+      `eng qat'iysi tanlandi: ${picked.time_limit || '—'}/${Number(picked.amount).toLocaleString('ru-RU')}`
+    );
+  }
+
+  return picked;
 }
 
 async function getMatchingTemplates(employeeId, violationType) {
@@ -134,7 +151,7 @@ export async function checkLateArrivalFine(employeeId, recordedAt, isLate) {
 
     // Bitta kechikish — bitta jarima: mos bosqichlardan eng qat'iysi
     // (izohga qarang: pickApplicableTemplate).
-    const template = pickApplicableTemplate(templates, minutesLate);
+    const template = pickApplicableTemplate(templates, minutesLate, `kech kelish, xodim ${employeeId}`);
     if (!template) return;
 
     const violationDate = businessDateOnly(recordedAt);
@@ -171,7 +188,7 @@ export async function checkEarlyLeaveFine(employeeId, recordedAt, isEarly) {
     if (minutesEarly <= 0) return;
 
     // Bitta erta ketish — bitta jarima (checkLateArrivalFine bilan bir xil).
-    const template = pickApplicableTemplate(templates, minutesEarly);
+    const template = pickApplicableTemplate(templates, minutesEarly, `erta ketish, xodim ${employeeId}`);
     if (!template) return;
 
     const violationDate = businessDateOnly(recordedAt);
@@ -235,7 +252,7 @@ export async function processDailyAutoFines() {
     for (const group of grouped.values()) {
       // Vaqt chegarasi kelmagan_kun/chiqish_yoq uchun ma'noga ega emas —
       // shuning uchun eng katta summali shablon olinadi.
-      const picked = pickApplicableTemplate(group, null);
+      const picked = pickApplicableTemplate(group, null, `${group[0].violation_type}, xodim ${group[0].employee_id}`);
       if (picked) deduped.push(picked);
     }
 

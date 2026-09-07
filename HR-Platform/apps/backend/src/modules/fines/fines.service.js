@@ -75,7 +75,15 @@ const SELECT_POLICY_WITH_TEMPLATES = `
           'amount', fpt.amount,
           'fineTypeId', fpt.fine_type_id
         )
-        ORDER BY fpt.created_at
+        -- Shablonlar BOSQICH tartibida qaytadi (turi, so'ng vaqt chegarasi
+        -- o'sish bo'yicha), yaratilish vaqti bo'yicha emas. Sabab: bitta
+        -- qoidabuzarlikka mos keladigan eng qat'iy bosqich qo'llanadi
+        -- (autoFineService.js#pickApplicableTemplate), shuning uchun HR
+        -- ularni oraliq sifatida ko'rishi kerak: "5–10 daqiqa -> 10 000",
+        -- "10 daqiqadan ortiq -> 30 000". Aralash tartibda bu o'qilmaydi.
+        -- time_limit 'HH:MM' formatida saqlanadi, ya'ni matn sifatida
+        -- tartiblash ham to'g'ri ishlaydi.
+        ORDER BY fpt.violation_type, fpt.time_limit NULLS FIRST, fpt.created_at
       ) FROM fine_policy_templates fpt WHERE fpt.policy_id = fp.id),
       '[]'
     ) AS templates,
@@ -335,13 +343,33 @@ export async function updateFinePunishmentStatus(id, { status, note, recordedBy 
 }
 
 export async function deleteEmployeeFine(id) {
-  const result = await query('DELETE FROM employee_fines WHERE id = $1 RETURNING id', [id]);
+  // Xodim va summa O'CHIRISHDAN OLDIN olinadi — keyin bu ma'lumot
+  // yo'qoladi va kimga xabar berishni bilib bo'lmaydi.
+  const result = await query(
+    'DELETE FROM employee_fines WHERE id = $1 RETURNING id, employee_id, amount, note',
+    [id]
+  );
   if (result.rows.length === 0) {
     const error = new Error('Jarima topilmadi');
     error.statusCode = HTTP_STATUS.NOT_FOUND;
     throw error;
   }
-  return { success: true, id };
+
+  const removed = result.rows[0];
+
+  // O'chirilgan qator chaqiruvchiga qaytariladi, chunki xodimga Telegram
+  // xabarini KONTROLLER yuboradi (fines.controller.js#deleteAssignedFine),
+  // bu servis emas. Sabab — halqali import: telegramBot.service.js
+  // allaqachon shu faylni import qiladi, teskarisini qo'shsak
+  // fines.service <-> telegramBot.service halqasi hosil bo'lardi.
+  // Kontroller esa ikkalasini ham bemalol import qila oladi.
+  return {
+    success: true,
+    id,
+    employeeId: removed.employee_id,
+    amount: removed.amount,
+    note: removed.note,
+  };
 }
 
 /**

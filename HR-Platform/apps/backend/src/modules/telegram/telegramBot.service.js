@@ -584,6 +584,36 @@ export async function notifyFineCreated(employeeId, { amount, note }) {
 }
 
 /**
+ * Jarima o'chirilganda xodimga xabar beradi.
+ *
+ * Nega kerak: jarima yozilganda xodim darhol Telegram'ga xabar oladi
+ * (notifyFineCreated), lekin HR uni bekor qilganda hech narsa
+ * yuborilmasdi. Natijada xodimning telefonida allaqachon mavjud
+ * bo'lmagan jarima haqidagi xabar qolib ketardi va u o'zini hamon
+ * qarzdor deb hisoblardi — tizim esa buni tuzatish imkonini bermasdi.
+ *
+ * Bu, ayniqsa, ommaviy tuzatishlarda muhim: 2026-09-07 da bosqichli
+ * jarima xatosi tufayli noto'g'ri yozilgan jarimalar o'chirilganda,
+ * xodimlar bu haqda hech qanday xabar olishmagan edi.
+ *
+ * notifyFineCreated bilan bir xil "best-effort" xulq: xatoni o'zi
+ * yutadi, chaqiruvchi so'rovni hech qachon to'xtatmaydi.
+ */
+export async function notifyFineCancelled(employeeId, { amount, note }) {
+  try {
+    const { rows } = await query('SELECT telegram_chat_id FROM employees WHERE id = $1', [employeeId]);
+    const chatId = rows[0] && rows[0].telegram_chat_id;
+    if (!chatId) return;
+
+    const amountLabel = Number(amount).toLocaleString('ru-RU');
+    const text = `✅ Jarima bekor qilindi:\n🧾 ${amountLabel} so'm${note ? ` — ${note}` : ''}`;
+    await telegramApi.sendMessage(chatId, text);
+  } catch (err) {
+    console.error('Telegram bot: jarima bekor qilinganini xabar qilishda xatolik:', err.message);
+  }
+}
+
+/**
  * Shu xodim oxirgi 30 kunda TURIDAN qatʼi nazar (Javob so'rash, Kechikib
  * qolish va h.k. — barchasi birga) jami nechta ariza yuborganini sanaydi.
  * Joriy ariza ham shu ichiga kiradi (u chaqirilish vaqtida allaqachon

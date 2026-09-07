@@ -6686,6 +6686,58 @@ button.attendance-pill {
   background: rgba(239, 68, 68, 0.2);
 }
 
+/*
+  Shablonning HAQIQIY qamrovi — kartaning butun kengligi bo'ylab, oxirgi
+  qator. Jarima bosqichlari bir-biriga ta'sir qiladi (eng qat'iysi
+  qo'llanadi), shuning uchun bitta qatorga qarab "bu qachon ishlaydi?"
+  degan savolga javob berib bo'lmasdi. Bu chiziq o'sha javobni beradi.
+*/
+.fine-template-card-effect {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-top: 0.125rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--border);
+}
+
+.fine-template-card-effect-range {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1875rem 0.5rem;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--fine-pill-color) 12%, transparent);
+  color: color-mix(in srgb, var(--fine-pill-color) 88%, var(--text-primary));
+  font-size: 0.75rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.fine-template-card-effect-problem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--error);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.fine-template-card-effect-problem svg {
+  flex-shrink: 0;
+}
+
+/* Muammoli shablon kartasining o'zi ham ajralib tursin. */
+.fine-template-card:has(.fine-template-card-effect.has-problem) {
+  border-color: color-mix(in srgb, var(--error) 55%, var(--border));
+}
+
+.fine-template-card-effect.has-problem {
+  border-top-color: color-mix(in srgb, var(--error) 40%, var(--border));
+}
+
 @media (max-width: 900px) {
   .fine-template-card {
     grid-template-columns: 1fr;

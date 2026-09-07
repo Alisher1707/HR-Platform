@@ -23,10 +23,85 @@ const templateSchema = Joi.object({
   fineTypeId: Joi.string().uuid().allow('', null),
 });
 
+const VIOLATION_LABELS = {
+  kech_kelish: 'Kech kelish',
+  erta_ketish: 'Erta ketish',
+  chiqish_yoq: 'Chiqish belgilanmagan',
+  kelmagan_kun: 'Kelmagan kun',
+};
+
+// Faqat shu ikkisida "necha daqiqa" degan tushuncha bor, ya'ni faqat
+// ular bosqichlarga bo'linishi mumkin. Qolgan ikkitasi kun tugagandan
+// keyin baholanadi va vaqt chegarasini umuman ishlatmaydi.
+const TIME_BASED_VIOLATIONS = new Set(['kech_kelish', 'erta_ketish']);
+
+/**
+ * BIR XIL TUR + BIR XIL VAQT CHEGARASI = QO'SH YOZUV.
+ *
+ * Jarima shablonlari bosqichli ishlaydi (autoFineService.js#pickApplicableTemplate):
+ * bitta qoidabuzarlik uchun unga mos keladigan eng qat'iy bosqich qo'llanadi.
+ * Ya'ni bular to'g'ri va foydali:
+ *
+ *     Kech kelish, 5 daqiqadan ortiq  -> 10 000
+ *     Kech kelish, 10 daqiqadan ortiq -> 30 000
+ *
+ * Lekin bir xil turda IKKI XIL summa bilan BIR XIL chegara qo'yilsa, ikkalasi
+ * bir xil shartga mos keladi va biri ikkinchisini jimgina "yeb qo'yadi" —
+ * HR ro'yxatda ikkala qatorni ko'rib turadi, lekin ulardan biri hech qachon
+ * ishlamaydi. Bu har doim xato, shuning uchun saqlashga yo'l qo'yilmaydi.
+ *
+ * Tarixi: 2026-09-07 gacha bosqich mantiqi umuman yo'q edi — mos keluvchi
+ * HAR BIR shablon uchun alohida jarima yozilardi, ya'ni 11 daqiqalik bitta
+ * kechikish uchun xodim 10 000 VA 30 000 so'm olardi (Telegram'ga ikkita
+ * xabar). Runtime tuzatildi; bu tekshiruv esa noaniq sozlamaning o'zini
+ * manbada to'xtatadi.
+ */
+function validateTemplateBrackets(value, helpers) {
+  const seen = new Map();
+
+  for (const tpl of value) {
+    const label = VIOLATION_LABELS[tpl.violationType] || tpl.violationType;
+
+    if (TIME_BASED_VIOLATIONS.has(tpl.violationType)) {
+      // Vaqtga bog'liq turlar — bosqich qilish MUMKIN, faqat chegaralar
+      // farqli bo'lishi shart.
+      const limit = tpl.timeLimit || '';
+      const key = `${tpl.violationType}|${limit}`;
+      if (seen.has(key)) {
+        return helpers.message(
+          `"${label}" turi uchun ${limit || 'chegarasiz'} bir xil vaqt chegarasi bilan ikkita shablon bor. ` +
+          `Bitta qoidabuzarlikka bitta jarima yoziladi, shuning uchun ulardan biri hech qachon ishlamaydi. ` +
+          `Chegaralarni farqli qiling (masalan 00:05 va 00:10) yoki ortiqchasini o'chiring.`
+        );
+      }
+      seen.set(key, true);
+    } else {
+      // "Kelmagan kun" va "Chiqish belgilanmagan" — bu holatlarda vaqt
+      // chegarasi ish vaqtida UMUMAN hisobga olinmaydi (kun tugagach
+      // baholanadi, "necha daqiqa" degan tushuncha yo'q — qarang:
+      // autoFineService.js#processDailyAutoFines, u pickApplicableTemplate'ga
+      // minutesOver=null uzatadi). Shuning uchun bu turda ikkita shablon
+      // qo'yilsa, chegaralari boshqa bo'lsa ham, faqat kattaroq summalisi
+      // ishlaydi — ikkinchisi jimgina o'lik qoladi.
+      const key = tpl.violationType;
+      if (seen.has(key)) {
+        return helpers.message(
+          `"${label}" turi uchun ikkita shablon bor. Bu turda vaqt chegarasi hisobga olinmaydi ` +
+          `(kun tugagach baholanadi), shuning uchun ulardan faqat bittasi ishlaydi. ` +
+          `Bitta shablon qoldiring.`
+        );
+      }
+      seen.set(key, true);
+    }
+  }
+
+  return value;
+}
+
 const policySchema = Joi.object({
   name: Joi.string().trim().min(1).max(150).required(),
   enabled: Joi.boolean().default(true),
-  templates: Joi.array().items(templateSchema).default([]),
+  templates: Joi.array().items(templateSchema).default([]).custom(validateTemplateBrackets),
   employeeIds: Joi.array().items(commonSchemas.uuid).default([]),
 });
 
