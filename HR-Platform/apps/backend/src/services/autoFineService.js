@@ -35,6 +35,45 @@ function parseTimeLimitMinutes(timeLimit) {
   return (hour || 0) * 60 + (minute || 0);
 }
 
+/**
+ * BITTA QOIDABUZARLIK — BITTA JARIMA.
+ *
+ * Xato (2026-09-07 da jonli aniqlandi): bu yerda ilgari mos keluvchi HAR
+ * BIR shablon uchun alohida jarima yozilardi. Vaqt chegarasi (`time_limit`)
+ * — bu bosqich chegarasi, ya'ni HR tabiiy ravishda shunday sozlaydi:
+ *
+ *     5 daqiqadan ortiq  -> 10 000 so'm
+ *     10 daqiqadan ortiq -> 30 000 so'm
+ *
+ * 11 daqiqa kechikish IKKALA shartga ham mos keladi, shuning uchun xodimga
+ * bitta kechikish uchun ikkita jarima yozilib, Telegram'ga ikkita xabar
+ * ketardi (10 000 va 30 000, bir xil "Kech kelish — 11 daqiqa" izohi bilan).
+ * Dedup indeksi buni ushlay olmasdi: u (employee_id, policy_template_id,
+ * violation_date) bo'yicha ishlaydi, ya'ni HAR SHABLON uchun alohida —
+ * takroriy chaqiruvdan saqlaydi, lekin ikki xil shablondan emas.
+ *
+ * To'g'ri semantika — bosqichli jazo: qoidabuzarlik tushgan ENG QAT'IY
+ * bosqich qo'llanadi, hammasi emas. Shuning uchun eng katta `time_limit`
+ * (uni qoidabuzarlik oshib o'tgan) tanlanadi; teng bo'lsa — kattaroq summa.
+ *
+ * `minutesOver` null bo'lsa (kelmagan_kun/chiqish_yoq — vaqt chegarasi
+ * ma'noga ega emas) shunchaki eng katta summali shablon olinadi.
+ */
+function pickApplicableTemplate(templates, minutesOver) {
+  const applicable = minutesOver === null
+    ? templates
+    : templates.filter((t) => minutesOver > parseTimeLimitMinutes(t.time_limit));
+
+  if (applicable.length === 0) return null;
+
+  return applicable.reduce((best, t) => {
+    const bestLimit = parseTimeLimitMinutes(best.time_limit);
+    const tLimit = parseTimeLimitMinutes(t.time_limit);
+    if (tLimit !== bestLimit) return tLimit > bestLimit ? t : best;
+    return Number(t.amount) > Number(best.amount) ? t : best;
+  });
+}
+
 async function getMatchingTemplates(employeeId, violationType) {
   const result = await query(
     `SELECT fpt.id, fpt.time_limit, fpt.amount, fpt.fine_type_id
@@ -93,19 +132,20 @@ export async function checkLateArrivalFine(employeeId, recordedAt, isLate) {
     const minutesLate = scanMinutes - startMinutes;
     if (minutesLate <= 0) return;
 
+    // Bitta kechikish — bitta jarima: mos bosqichlardan eng qat'iysi
+    // (izohga qarang: pickApplicableTemplate).
+    const template = pickApplicableTemplate(templates, minutesLate);
+    if (!template) return;
+
     const violationDate = businessDateOnly(recordedAt);
-    for (const template of templates) {
-      if (minutesLate > parseTimeLimitMinutes(template.time_limit)) {
-        await insertAutoFine(query, {
-          employeeId,
-          amount: template.amount,
-          fineTypeId: template.fine_type_id,
-          policyTemplateId: template.id,
-          violationDate,
-          note: `Kech kelish — ${minutesLate} daqiqa (avtomatik)`,
-        });
-      }
-    }
+    await insertAutoFine(query, {
+      employeeId,
+      amount: template.amount,
+      fineTypeId: template.fine_type_id,
+      policyTemplateId: template.id,
+      violationDate,
+      note: `Kech kelish — ${minutesLate} daqiqa (avtomatik)`,
+    });
   } catch (error) {
     console.error(`Auto-fine (kech kelish) check failed for employee ${employeeId}:`, error);
   }
@@ -130,19 +170,19 @@ export async function checkEarlyLeaveFine(employeeId, recordedAt, isEarly) {
     const minutesEarly = endMinutes - scanMinutes;
     if (minutesEarly <= 0) return;
 
+    // Bitta erta ketish — bitta jarima (checkLateArrivalFine bilan bir xil).
+    const template = pickApplicableTemplate(templates, minutesEarly);
+    if (!template) return;
+
     const violationDate = businessDateOnly(recordedAt);
-    for (const template of templates) {
-      if (minutesEarly > parseTimeLimitMinutes(template.time_limit)) {
-        await insertAutoFine(query, {
-          employeeId,
-          amount: template.amount,
-          fineTypeId: template.fine_type_id,
-          policyTemplateId: template.id,
-          violationDate,
-          note: `Erta ketish — ${minutesEarly} daqiqa (avtomatik)`,
-        });
-      }
-    }
+    await insertAutoFine(query, {
+      employeeId,
+      amount: template.amount,
+      fineTypeId: template.fine_type_id,
+      policyTemplateId: template.id,
+      violationDate,
+      note: `Erta ketish — ${minutesEarly} daqiqa (avtomatik)`,
+    });
   } catch (error) {
     console.error(`Auto-fine (erta ketish) check failed for employee ${employeeId}:`, error);
   }
@@ -179,8 +219,28 @@ export async function processDailyAutoFines() {
        WHERE fpt.violation_type IN ('kelmagan_kun', 'chiqish_yoq')`
     );
 
+    // Bitta qoidabuzarlik — bitta jarima (checkLateArrivalFine'dagi bilan
+    // bir xil xato shu yerda ham bor edi): `candidates` har bir SHABLON
+    // uchun alohida qator qaytaradi, ya'ni bir xodimda ikkita
+    // "kelmagan_kun" shabloni bo'lsa, bitta kelmagan kun uchun ikkita
+    // jarima yozilardi. Endi (xodim + qoidabuzarlik turi) bo'yicha
+    // guruhlab, har guruhdan bitta shablon tanlanadi.
+    const grouped = new Map();
+    for (const c of candidates) {
+      const key = `${c.employee_id}|${c.violation_type}`;
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(c);
+    }
+    const deduped = [];
+    for (const group of grouped.values()) {
+      // Vaqt chegarasi kelmagan_kun/chiqish_yoq uchun ma'noga ega emas —
+      // shuning uchun eng katta summali shablon olinadi.
+      const picked = pickApplicableTemplate(group, null);
+      if (picked) deduped.push(picked);
+    }
+
     let processed = 0;
-    for (const candidate of candidates) {
+    for (const candidate of deduped) {
       try {
         const schedule = await getActiveScheduleForEmployee(candidate.employee_id);
         if (!schedule) continue;
@@ -218,7 +278,7 @@ export async function processDailyAutoFines() {
     }
 
     await client.query('COMMIT');
-    return { processed, checked: candidates.length };
+    return { processed, checked: deduped.length };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
