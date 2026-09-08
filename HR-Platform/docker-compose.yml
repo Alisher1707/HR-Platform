@@ -1,5 +1,23 @@
 name: hr-platform
 
+# LOG ROTATSIYASI — barcha xizmatlar uchun.
+#
+# Docker'ning standart `json-file` drayveri HAJM CHEGARASISIZ ishlaydi:
+# konteyner log fayli hech qachon kesilmaydi va faqat konteyner qayta
+# yaratilgandagina nolga tushadi. Bu yerda sozlanmagan edi.
+#
+# Bu ko'p ijarali serverda muhim: disk to'lsa, o'sha mashinadagi BOSHQA
+# loyihalarning tizimlari ham to'xtaydi. Backend eng ko'p yozadi (kamera
+# hodisalari), lekin chegara hammasiga qo'yiladi — bitta xizmatning
+# kutilmagan xato tsikli ham diskni to'ldira olmasligi kerak.
+#
+# 20 MB x 5 fayl = xizmat boshiga eng ko'pi 100 MB.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 services:
   # XAVFSIZLIK-AUDIT.md P-6: postgres:16-alpine image'ida `openssl` CLI yo'q
   # (faqat busybox'ning cheklangan ssl_client'i), shuning uchun sertifikatni
@@ -10,6 +28,7 @@ services:
   pg-certs:
     image: alpine:3.20
     container_name: hr_platform_pg_certs
+    logging: *default-logging
     entrypoint:
       - sh
       - -c
@@ -32,6 +51,7 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: hr_platform_db
+    logging: *default-logging
     command:
       - postgres
       - -c
@@ -66,6 +86,7 @@ services:
   backend:
     build: ./apps/backend
     container_name: hr_platform_backend
+    logging: *default-logging
     ports:
       - "127.0.0.1:5000:5000"
     environment:
@@ -110,6 +131,7 @@ services:
       args:
         VITE_API_URL: ${VITE_API_URL:-/api/v1}
     container_name: hr_platform_frontend
+    logging: *default-logging
     ports:
       - "127.0.0.1:5173:5173"
     networks:

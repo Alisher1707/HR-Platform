@@ -461,12 +461,38 @@ export async function receiveDeviceEvent(req, res) {
     ? `${deviceToken.slice(0, 4)}…${deviceToken.slice(-4)} (${deviceToken.length} belgi)`
     : '(yo\'q)';
 
-  console.log('\n========== DEVICE EVENT RECEIVED ==========');
-  console.log('Time:', receivedAt);
-  console.log('Method:', req.method);
-  console.log('Device token (URL param, maskalangan):', maskedToken);
-  console.log('From IP:', req.ip);
-  console.log('Content-Type:', req.headers['content-type']);
+  // HEARTBEAT LOGLARINI QISQARTIRISH.
+  //
+  // Kamera har ~30 soniyada "men tirikman" degan heartbeat yuboradi. Unda
+  // hech qanday foydali ma'lumot yo'q — na xodim, na hodisa — lekin u
+  // quyidagi batafsil blok orqali ~13 qator va to'liq JSON payload bo'lib
+  // logga tushardi. Bitta kamera uchun bu sutkasiga taxminan 2.5 MB, va
+  // docker-compose.yml da log rotatsiyasi umuman sozlanmagan edi (endi
+  // qo'shildi).
+  //
+  // Amaliy zarari o'lchangan: `docker compose logs --tail 200` bir necha
+  // daqiqadan narini ko'rsatmasdi, ya'ni ishga tushish satrini (masalan
+  // "Telegram bot: webhook o'rnatildi") topib bo'lmasdi — aynan shu,
+  // nosozlikni aniqlashda kerak bo'ladigan satr.
+  //
+  // Heartbeat endi bitta qatorga sig'adi. Haqiqiy hodisalar (skan, xato,
+  // noma'lum token) avvalgidek to'liq log qilinadi — ular kamdan-kam
+  // uchraydi va aynan ular tekshirishga arziydi.
+  const isHeartbeatEvent = isHeartbeat(getCandidateTexts(req));
+
+  // Heartbeat'da jim, boshqa hodisalarda avvalgidek batafsil.
+  const log = (...args) => { if (!isHeartbeatEvent) console.log(...args); };
+
+  if (isHeartbeatEvent) {
+    console.log('♥ heartbeat — ' + maskedToken + ', ' + receivedAt);
+  }
+
+  log('\n========== DEVICE EVENT RECEIVED ==========');
+  log('Time:', receivedAt);
+  log('Method:', req.method);
+  log('Device token (URL param, maskalangan):', maskedToken);
+  log('From IP:', req.ip);
+  log('Content-Type:', req.headers['content-type']);
 
   // Reject any request whose :token doesn't belong to a registered device
   // BEFORE touching the filesystem or the database any further — this is
@@ -484,13 +510,13 @@ export async function receiveDeviceEvent(req, res) {
   const device = req.device || (await findDeviceByToken(deviceToken));
   if (!device) {
     console.log(`(!) Noma'lum device token bilan so'rov rad etildi: ${maskedToken}`);
-    console.log('=============================================\n');
+    log('=============================================\n');
     return res.status(404).json({ success: false, message: 'Noma\'lum qurilma' });
   }
 
   if (req.body && Object.keys(req.body).length > 0) {
-    console.log('Parsed body fields:');
-    console.log(JSON.stringify(req.body, null, 2));
+    log('Parsed body fields:');
+    log(JSON.stringify(req.body, null, 2));
   }
 
   if (req.rawBody) {
@@ -525,13 +551,12 @@ export async function receiveDeviceEvent(req, res) {
   const personId = extractPersonId(candidates);
 
   if (!personId) {
-    const heartbeat = isHeartbeat(candidates);
-    console.log(
-      heartbeat
-        ? '(heartbeat)'
-        : "(bu hodisada employeeNo/person_id topilmadi — ehtimol boshqa turdagi voqea)"
-    );
-    console.log('=============================================\n');
+    // Heartbeat yuqorida allaqachon bitta qator bilan qayd etilgan —
+    // uni bu yerda takrorlash keraksiz. Person_id topilmagan BOSHQA
+    // hodisalar esa haqiqiy tashxis ma'lumoti, shuning uchun qoladi.
+    const heartbeat = isHeartbeatEvent;
+    log("(bu hodisada employeeNo/person_id topilmadi — ehtimol boshqa turdagi voqea)");
+    log('=============================================\n');
     await logDeviceEvent(deviceToken, heartbeat ? 'heartbeat' : 'boshqa', null, null);
     return res.status(200).json({ success: true });
   }
@@ -574,7 +599,7 @@ export async function receiveDeviceEvent(req, res) {
 
     if (!employee) {
       console.log(`Person_id="${personId}" bo'yicha xodim topilmadi (employees.person_id mos kelmadi)`);
-      console.log('=============================================\n');
+      log('=============================================\n');
       await logDeviceEvent(deviceToken, 'unmatched', personId, null);
       return res.status(200).json({ success: true });
     }
@@ -594,7 +619,7 @@ export async function receiveDeviceEvent(req, res) {
     await logDeviceEvent(deviceToken, 'access', personId, null);
   }
 
-  console.log('=============================================\n');
+  log('=============================================\n');
   res.status(200).json({ success: true });
 }
 
